@@ -5,5 +5,8 @@
   "workspaces": [
     "shared",
     "ideas/*"
-  ]
+  ],
+  "devDependencies": {
+    "playwright": "^1.61.1"
+  }
 }

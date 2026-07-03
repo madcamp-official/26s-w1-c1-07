@@ -74,7 +74,7 @@
 - 게임 장면: 매칭 모달 — 극장 커튼 느낌의 다크 패널, 상단 'MADPUMP ARENA' 네온 사인, 4자리 코드가 슬롯머신처럼 한 글자씩 굴러 나오고, 상대 조인 시 두 아바타가 스포트라이트를 받으며 'VS' 스탬프가 쾅. 결과 화면은 승자 아바타 단상 점프, 패자 회색 스포트라이트, 분반 순위 카운트업.
 - 참고: https://www.abtach.ae/blog/how-to-build-a-game-like-jackbox/ , https://www.gameuidatabase.com/index.php?scrn=43 , https://dinogame.gg/blog/best-browser-party-games/
 
-### P10. Neo-Brutal Duel Arena [출처: web] [상태: 미사용] (병합: Neo-Brutal Duel HUD + Neo-Brutalist Arena + Neo-Brutal Arcade)
+### P10. Neo-Brutal Duel Arena [출처: web] [상태: 사용 - 루프 1] (병합: Neo-Brutal Duel HUD + Neo-Brutalist Arena + Neo-Brutal Arcade)
 - 축: 밝음(크림) / 밀도 중~맥시멀 / 현대 트렌드 / 도발적 장난
 - 컨셉: 2025-26 웹 트렌드 네오브루탈리즘(Gumroad·Figma Config 2025 아이덴티티) — 두꺼운 검정 아웃라인, blur 없는 하드 드롭섀도, 충돌하는 원색 블록, 과대한 타이포 — 를 격투게임 HUD 문법(상단 양쪽에서 중앙으로 마주보며 드레인되는 대칭 게이지 + 중앙 VS 타이머)과 결합. '버튼 2개짜리 초간단 게임'이라는 정체성과 톤이 정확히 맞고, 스크린샷 한 장으로 레딧에 각인되는 밈 친화 룩. 세 게임이 공통 HUD 프레임을 쓰면 룩이 달라도 플랫폼이 한 시스템으로 묶인다. 리더보드는 굵은 괘선 브루탈리즘 테이블 그대로 노출해 데이터가 곧 장식. 옵션으로 8bit 스프라이트/CRT 인용을 섞은 '오락실 캐비닛 3대' 메인 화면 변주(구 Neo-Brutal Arcade) 가능.
 - 비주얼 토큰: 배경 크림 #FDF6E3/오프화이트. 배색: P1=일렉트릭 블루/시안 vs P2=핫핑크 #FF2E88/레드 좌우 고정 + #FF5C00, #FFD600 포인트, 경고는 옐로-블랙 해저드 스트라이프. 라인: 3-4px solid #000 보더, radius 0-8px. 섀도: box-shadow 6px 6px 0 #000, press 시 섀도 소멸 + 본체 이동(물리적 눌림). 타이포: Archivo Black/Lexend Mega 초고밀도 대문자 + Space Mono 라벨, 숫자 타뷸러. 승패: WIN/LOSE 기울어진 스티커 스탬프. hover 시 translate(-2px,-2px) + 그림자 확대.
@@ -136,3 +136,4 @@
 
 | 루프 | 선정 아이디어 | 선정 사유 | 결과 폴더 |
 |---|---|---|---|
+| 1 | P10 Neo-Brutal Duel Arena | 자체 발상+웹 리서치 3개 후보가 독립적으로 수렴한 최강 신호. 두꺼운 보더·하드 섀도·고대비 팔레트가 1:1 대결의 긴장감과 정합하고 구현 리스크가 낮아 파이프라인 첫 검증에 최적 | ideas/01-neo-brutal |

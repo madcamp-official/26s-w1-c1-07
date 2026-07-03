@@ -1,0 +1,626 @@
+/**
+ * S12 게임3 "펜싱" 전용 스타일 [OWNER: game3 에이전트]
+ * PLAN §2-S12 / §3.3 — 피스트(칸 눈금 플랫폼) + 지그재그 바다 + 기하 도형 검객.
+ * 전역 오염 방지를 위해 전 클래스 .g3- 프리픽스.
+ */
+
+.g3-root {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* --- 상단: 1초 틱 진행 미터 --- */
+.g3-meterwrap {
+  display: flex;
+  justify-content: center;
+  padding: 14px 0 0;
+}
+
+.g3-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 3px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--ink);
+  padding: 6px 12px;
+}
+
+.g3-meter__label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.g3-meter__bar {
+  width: 150px;
+  height: 12px;
+  border: 2px solid var(--ink);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.g3-meter__fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.g3-meter__count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 34px;
+  text-align: right;
+}
+
+/* --- 장면 --- */
+.g3-scene {
+  position: relative;
+  flex: 1;
+}
+
+/* --- 바다 (3톤 지그재그 파도, steps 출렁임) --- */
+.g3-sea {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 24%;
+  min-height: 90px;
+}
+
+.g3-wave {
+  position: absolute;
+  left: -28px;
+  right: -28px;
+  bottom: 0;
+  --c: #2b5bff;
+  background:
+    linear-gradient(135deg, var(--c) 25%, transparent 25%) 0 0 / 28px 28px repeat-x,
+    linear-gradient(225deg, var(--c) 25%, transparent 25%) 0 0 / 28px 28px repeat-x,
+    linear-gradient(var(--c), var(--c)) 0 14px / 100% calc(100% - 14px) no-repeat;
+  animation: g3-wave-step 1.8s steps(1) infinite;
+}
+
+.g3-wave--1 {
+  --c: #7d9bff;
+  top: 0;
+  animation-duration: 2.6s;
+}
+
+.g3-wave--2 {
+  --c: #2b5bff;
+  height: 62%;
+  animation-duration: 2s;
+  animation-delay: 0.4s;
+}
+
+.g3-wave--3 {
+  --c: #1d3faf;
+  height: 34%;
+  animation-duration: 1.4s;
+}
+
+@keyframes g3-wave-step {
+  0% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-14px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+/* --- 플랫폼 (피스트): 상판 크림 + 옆면 ink + 칸 눈금 + 해저드 끝단 --- */
+.g3-platform {
+  position: absolute;
+  bottom: 18%;
+  height: 96px;
+  border: 4px solid var(--ink);
+  background: var(--ink);
+  z-index: 1;
+}
+
+.g3-platform__top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  display: flex;
+  background: var(--bg);
+  border-bottom: 4px solid var(--ink);
+}
+
+.g3-cell {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border-right: 2px solid rgba(10, 10, 10, 0.45);
+}
+
+.g3-cell:last-child {
+  border-right: none;
+}
+
+.g3-cell--p1 {
+  background: var(--p1-tint);
+}
+
+.g3-cell--p2 {
+  background: var(--p2-tint);
+}
+
+.g3-cell__num {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-muted);
+  line-height: 1;
+  padding-bottom: 3px;
+}
+
+.g3-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 14px;
+  z-index: 2;
+}
+
+.g3-edge--l {
+  left: 0;
+  border-right: 3px solid var(--ink);
+}
+
+.g3-edge--r {
+  right: 0;
+  border-left: 3px solid var(--ink);
+}
+
+/* --- 검객 (기하 도형 조합, 3px 아웃라인) --- */
+.g3-fencer {
+  position: absolute;
+  bottom: calc(18% + 92px);
+  width: 96px;
+  margin-left: -48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 3;
+  transition: left 120ms var(--ease-snap);
+}
+
+.g3-figwrap {
+  position: relative;
+}
+
+.g3-fencer--p2 .g3-figwrap {
+  transform: scaleX(-1);
+}
+
+.g3-figure {
+  position: relative;
+  width: 72px;
+  height: 92px;
+  transition: transform 140ms var(--ease-snap);
+}
+
+.g3-head {
+  position: absolute;
+  top: 0;
+  left: 18px;
+  width: 22px;
+  height: 26px;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.g3-torso {
+  position: absolute;
+  top: 24px;
+  left: 22px;
+  width: 16px;
+  height: 34px;
+  border: 3px solid var(--ink);
+}
+
+.g3-fencer--p1 .g3-torso {
+  background: var(--p1);
+}
+
+.g3-fencer--p2 .g3-torso {
+  background: var(--p2);
+}
+
+.g3-sword {
+  position: absolute;
+  top: 34px;
+  left: 38px;
+  width: 34px;
+  height: 5px;
+  background: var(--ink);
+  transform-origin: left center;
+  transform: rotate(-14deg);
+  transition: transform 140ms var(--ease-snap), opacity 140ms;
+}
+
+.g3-sword::after {
+  /* 검 손잡이 가드 */
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: -4px;
+  width: 3px;
+  height: 13px;
+  background: var(--ink);
+}
+
+.g3-shield {
+  position: absolute;
+  top: 26px;
+  left: 38px;
+  width: 18px;
+  height: 28px;
+  border: 3px solid var(--ink);
+  border-radius: 0 14px 14px 0;
+  background: var(--highlight);
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 140ms, transform 140ms var(--ease-snap);
+}
+
+.g3-leg {
+  position: absolute;
+  top: 56px;
+  width: 5px;
+  height: 32px;
+  background: var(--ink);
+  transform-origin: top center;
+}
+
+.g3-leg--a {
+  left: 23px;
+  transform: rotate(16deg);
+}
+
+.g3-leg--b {
+  left: 32px;
+  transform: rotate(-14deg);
+}
+
+/* 포즈: 공격=런지 / 회피=상체 뒤로+방패 / 무행동=중립 겨눔 */
+.g3-pose--attack {
+  transform: translateX(12px) rotate(7deg);
+}
+
+.g3-pose--attack .g3-sword {
+  transform: rotate(0deg) scaleX(1.35);
+}
+
+.g3-pose--dodge {
+  transform: translateX(-10px) rotate(-9deg);
+}
+
+.g3-pose--dodge .g3-sword {
+  transform: rotate(52deg) scaleX(0.65);
+  opacity: 0.45;
+}
+
+.g3-pose--dodge .g3-shield {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* 링아웃 낙하 */
+.g3-fencer--fell {
+  transition: left 260ms var(--ease-snap);
+  z-index: 2;
+}
+
+.g3-fencer--fell .g3-figwrap {
+  animation: g3-fall 700ms var(--ease-snap) forwards;
+}
+
+@keyframes g3-fall {
+  40% {
+    transform: translateY(70px) rotate(80deg);
+  }
+  100% {
+    transform: translateY(200px) rotate(176deg);
+    opacity: 0.85;
+  }
+}
+
+/* --- 말풍선 칩 (틱마다 행동 동시 공개) --- */
+.g3-bubble {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 66px;
+  border: 3px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--ink);
+  padding: 4px 10px 3px;
+  margin-bottom: 8px;
+  animation: g3-pop 160ms var(--ease-snap);
+}
+
+.g3-bubble--p1 {
+  background: var(--p1-tint);
+}
+
+.g3-bubble--p2 {
+  background: var(--p2-tint);
+}
+
+.g3-bubble__icon {
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.g3-bubble__label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+@keyframes g3-pop {
+  from {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* --- 밀림 먼지 --- */
+.g3-dust {
+  position: absolute;
+  bottom: calc(18% + 92px);
+  width: 0;
+  z-index: 2;
+}
+
+.g3-dust span {
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--ink);
+  background: var(--surface-sunken);
+  animation: g3-dust 420ms var(--ease-snap) forwards;
+}
+
+.g3-dust span:first-child {
+  left: -20px;
+  --dx: -18px;
+}
+
+.g3-dust span:last-child {
+  left: 10px;
+  --dx: 18px;
+  animation-delay: 40ms;
+}
+
+@keyframes g3-dust {
+  from {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--dx, 16px), -24px);
+    opacity: 0;
+  }
+}
+
+/* --- 물기둥 스플래시 (링아웃) --- */
+.g3-splash {
+  position: absolute;
+  bottom: 21%;
+  width: 0;
+  z-index: 2;
+}
+
+.g3-splash span {
+  position: absolute;
+  bottom: 0;
+  width: 9px;
+  border: 2px solid var(--ink);
+  background: #7d9bff;
+  animation: g3-splash 600ms var(--ease-snap) forwards;
+}
+
+.g3-splash span:nth-child(1) {
+  left: -22px;
+  height: 34px;
+  animation-delay: 80ms;
+}
+
+.g3-splash span:nth-child(2) {
+  left: -5px;
+  height: 58px;
+}
+
+.g3-splash span:nth-child(3) {
+  left: 13px;
+  height: 28px;
+  animation-delay: 130ms;
+}
+
+@keyframes g3-splash {
+  from {
+    transform: translateY(60px);
+    opacity: 0;
+  }
+  55% {
+    transform: translateY(-10px);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 0.9;
+  }
+}
+
+/* --- 중앙 판정 연출 (TOUCHÉ / CLASH / RING OUT / TIME'S UP) --- */
+.g3-fx {
+  position: absolute;
+  left: 50%;
+  top: 24%;
+  transform: translateX(-50%);
+  z-index: 5;
+  animation: g3-fx-out 900ms forwards;
+}
+
+.g3-fx--clash {
+  animation-duration: 700ms;
+}
+
+.g3-fx--clash .g3-clash-swords {
+  display: block;
+  text-align: center;
+  font-size: 30px;
+  animation: g3-clash-shake 120ms steps(2) 3;
+}
+
+.g3-fx--end {
+  animation: none;
+  top: 20%;
+}
+
+@keyframes g3-fx-out {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes g3-clash-shake {
+  from {
+    transform: translateX(-4px);
+  }
+  to {
+    transform: translateX(4px);
+  }
+}
+
+/* --- 좌우 코너 패널: 남은 칸 칩 + 입력 잠금 표시 --- */
+.g3-panel {
+  position: absolute;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  z-index: 4;
+}
+
+.g3-panel--p1 {
+  left: 16px;
+}
+
+.g3-panel--p2 {
+  right: 16px;
+  align-items: flex-end;
+}
+
+.g3-panel__label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  font-weight: 700;
+}
+
+.g3-panel__chips {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.g3-cellchip {
+  width: 18px;
+  height: 18px;
+  border: 3px solid var(--ink);
+  background: var(--surface);
+  transition: transform 140ms var(--ease-snap), background 140ms;
+}
+
+.g3-cellchip--p1 {
+  background: var(--p1);
+}
+
+.g3-cellchip--p2 {
+  background: var(--p2);
+}
+
+.g3-cellchip--lost {
+  background: var(--surface-sunken);
+  border-color: var(--ink-muted);
+  transform: rotate(9deg) scale(0.82);
+  opacity: 0.55;
+}
+
+.g3-locked {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: var(--highlight);
+  border: 2px solid var(--ink);
+  padding: 2px 7px;
+  animation: g3-pop 120ms var(--ease-snap);
+}
+
+/* --- 라운드 시작 인트로 (3·2·1·EN GARDE) --- */
+.g3-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  background: rgba(253, 246, 227, 0.75);
+}
+
+.g3-intro__hint {
+  background: var(--surface);
+  border: 2px solid var(--ink);
+  padding: 4px 12px;
+}
+
+/* --- 접근성 --- */
+@media (prefers-reduced-motion: reduce) {
+  .g3-wave,
+  .g3-fx--clash .g3-clash-swords,
+  .g3-bubble,
+  .g3-locked {
+    animation: none;
+  }
+
+  .g3-fencer,
+  .g3-figure,
+  .g3-sword,
+  .g3-shield,
+  .g3-cellchip {
+    transition: none;
+  }
+}
