@@ -54,7 +54,18 @@
 
 > 필요한 테이블, 주요 필드, 데이터 타입, 테이블 간 관계를 정리
 
-<!-- ERD 이미지 또는 테이블 정의 -->
+- **엔진/구성**: MySQL 8 (KAIST VM 내부 `localhost:3306`, `utf8mb4`), Prisma로 관리.
+- **테이블 7개**: `user_group`(분반) · `app_user`(구글 유저) · `admin_account`(관리자) · `game`(게임 사전) · `game_match`(매치 결과) · `match_edit_history`(수정 감사) · `score_config`(점수 설정).
+- **핵심 규칙**: 온라인 매치만 기록 · soft delete(`deleted_at`) · 점수/랭킹은 저장 안 하고 조회 시 집계 · 매치 결과는 `ENUM('P1_WIN','P2_WIN','DRAW')`.
+
+📄 상세: **[docs/DATABASE.md](docs/DATABASE.md)** (구현·접속·조회) · **[docs/ERD.md](docs/ERD.md)** (설계 정본·근거)
+
+```bash
+# 스키마 적용 + 시드 (SSH 터널로 VM DB 사용 시)
+ssh -N -L 3306:localhost:3306 kaistvm &        # 터널
+npm --workspace @madpump/server run migrate:deploy
+npm --workspace @madpump/server run db:seed
+```
 
 ---
 

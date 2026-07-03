@@ -171,8 +171,10 @@ erDiagram
 | created_at | DATETIME(3) | default now | 가입일시 |
 | deleted_at | DATETIME(3) | NULL | soft delete 시각 |
 
+- 인덱스: `ix_user_group(group_id)` — 분반별 유저 조회용 FK 보조 인덱스.
 - 프로필 사진이 **2컬럼**인 이유·표시 우선순위·업로드 파이프라인은 `ERD.md` note #12.
 - 계정 삭제/재가입 시 유니크 마스킹 로직은 `ERD.md` note #9 (앱 로직, DDL 무변경).
+  - ⚠️ **마스킹 길이 주의**: soft delete 시 `nickname`(VARCHAR 50)/`google_sub`(64)/`email`(255)을 마스킹할 때, 마스킹 값이 컬럼 한도를 넘으면 MySQL 8 STRICT 모드에서 UPDATE가 실패한다(예: 50자 닉네임 + `deleted:<id>:` 접두어 → 50자 초과). 유니크 해방은 PK(`id`)만으로 보장되므로, 접두어는 `deleted:<id>` 로 짧게 두고 **원본 값은 붙이지 않거나 컬럼 한도에 맞게 절단**할 것. (ERD.md note #9 에 이 경계 조건이 명시돼 있지 않음 → 구현 시 반드시 처리)
 
 ### 5.3 `admin_account` — 관리자 (Prisma: `AdminAccount`)
 | 컬럼 | 타입 | 제약 | 설명 |
@@ -272,10 +274,11 @@ erDiagram
 SELECT u.id, u.nickname, u.group_id,
   COALESCE(SUM(
     CASE
+      WHEN m.id IS NULL                                  THEN 0             -- 매치 0건 유저(LEFT JOIN 팬텀 행) → 점수 0
       WHEN (m.player1_id = u.id AND m.result = 'P1_WIN')
         OR (m.player2_id = u.id AND m.result = 'P2_WIN') THEN c.win_points
       WHEN m.result = 'DRAW'                              THEN c.draw_points
-      ELSE                                                     c.loss_points
+      ELSE                                                     c.loss_points  -- 실제 패배 매치만
     END
   ), 0) AS score
 FROM app_user u
@@ -326,7 +329,7 @@ const matches = await prisma.gameMatch.findMany({
 
 ## 10. 원본 DDL 대비 의도적 차이 (정직 고지)
 
-`ERD.md`의 순수 MySQL DDL과 구현(Prisma) 사이의 **의미가 같지만 표기가 다른** 지점들. 데이터 의미를 바꾸지 않는 범위:
+`ERD.md`의 순수 MySQL DDL과 구현(Prisma) 사이의 차이. 대부분은 **의미가 같고 표기만 다른** 지점이지만, 삭제 동작이 실제로 달라지는 항목(7번) 하나는 별도로 표시한다:
 
 1. **`DATETIME` → `DATETIME(3)`**: Prisma 기본이 밀리초 정밀도. 의미 동일(더 정밀할 뿐).
 2. **`created_at`/`played_at`/`edited_at` 에 `DEFAULT CURRENT_TIMESTAMP(3)` 추가**: DDL엔 DEFAULT가 없었음. 앱이 값을 안 넣어도 생성시각이 박히는 안전한 fallback(좋은 fallback — 없는 데이터를 지어내지 않음).
@@ -334,6 +337,7 @@ const matches = await prisma.gameMatch.findMany({
 4. **`updated_at` 은 `@updatedAt`**: 행 수정 시 자동 갱신.
 5. **onUpdate: Cascade**(Prisma 기본)가 FK에 붙음: 대리키(auto-increment)라 PK가 바뀔 일이 없어 사실상 무동작.
 6. **BIGINT id ↔ JS `bigint`**: Prisma는 BIGINT를 JS `bigint`로 매핑한다. **API에서 JSON 직렬화 시 주의** — `JSON.stringify(bigint)`는 에러. 서버 응답 직전 문자열/숫자로 변환하는 직렬화 헬퍼가 필요(예: `BigInt.prototype.toJSON = function(){return this.toString()}` 또는 응답 매퍼). 이 게임의 id 규모는 작지만 컬럼 타입은 정본(BIGINT)을 따랐다.
+7. **`fk_cfg_admin` 은 `ON DELETE SET NULL`** (⚠️ 유일하게 삭제 동작이 다름): 원본 DDL(`ERD.md`)은 ON DELETE 절이 없어 암묵 RESTRICT지만, 이 FK만 SET NULL로 구현했다. `updated_by`가 nullable(선택)이라 **관리자를 삭제해도 `score_config` 행은 보존하고 수정자만 NULL**로 비우려는 의도(§6 표 참조). 나머지 6개 FK는 DDL 암묵값(RESTRICT)과 동일. 이 항목만 표기가 아니라 실제 삭제 결과가 달라진다.
 
 ---
 

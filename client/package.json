@@ -1,0 +1,7 @@
+{
+  "name": "@madpump/client",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Vite + React SPA. 프론트 구현 단계에서 채워진다."
+}

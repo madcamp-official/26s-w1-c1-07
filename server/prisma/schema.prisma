@@ -1,0 +1,134 @@
+// MADPUMP DB 스키마
+// 정본(source of truth): docs/ERD.md (v1, 2026-07-03)
+// 이 파일은 ERD.md의 "MySQL DDL" 블록을 Prisma로 충실히 옮긴 것이다.
+// 스키마 변경 시 → docs/ERD.md 를 먼저 갱신하고, 그 다음 이 파일에 반영한다.
+//
+// 원본 DDL 대비 의도적 차이(문서화됨, docs/DATABASE.md "구현 노트" 참조):
+//  - created_at / played_at / edited_at 에 @default(now()) 추가 (DDL엔 DEFAULT 없음, 편의용 fallback)
+//  - score_config.updated_at 은 @updatedAt (자동 갱신)
+//  - result / before_result / after_result 는 VARCHAR 대신 enum MatchResult (ERD.md note #16 "값 제한" 이행)
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"] // native=개발기(mac), debian-openssl-3.0.x=배포 VM(Ubuntu 22.04)
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+/// 매치 결과 도메인 (원자값) — ERD.md note #16
+enum MatchResult {
+  P1_WIN
+  P2_WIN
+  DRAW
+}
+
+/// 분반/그룹
+model UserGroup {
+  id        BigInt   @id @default(autoincrement())
+  name      String   @unique(map: "uq_group_name") @db.VarChar(100)
+  isPublic  Boolean  @default(true) @map("is_public")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  users AppUser[]
+
+  @@map("user_group")
+}
+
+/// 구글 로그인 유저
+model AppUser {
+  id               BigInt    @id @default(autoincrement())
+  googleSub        String    @unique(map: "uq_user_google") @map("google_sub") @db.VarChar(64)
+  email            String    @db.VarChar(255)
+  nickname         String    @unique(map: "uq_user_nickname") @db.VarChar(50)
+  googleImageUrl   String?   @map("google_image_url") @db.VarChar(500)
+  uploadedImageKey String?   @map("uploaded_image_key") @db.VarChar(300)
+  groupId          BigInt?   @map("group_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  group       UserGroup?  @relation(fields: [groupId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_user_group")
+  matchesAsP1 GameMatch[] @relation("MatchPlayer1")
+  matchesAsP2 GameMatch[] @relation("MatchPlayer2")
+
+  @@index([groupId], map: "ix_user_group")
+  @@map("app_user")
+}
+
+/// 관리자 계정 (유저와 별도 인증)
+model AdminAccount {
+  id        BigInt   @id @default(autoincrement())
+  loginId   String   @unique(map: "uq_admin_login") @map("login_id") @db.VarChar(50)
+  pwHash    String   @map("pw_hash") @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  editHistories MatchEditHistory[]
+  scoreConfigs  ScoreConfig[]
+
+  @@map("admin_account")
+}
+
+/// 게임 종류 사전 (코드 미러, 시드로 관리) — ERD.md note #15
+model Game {
+  id       Int     @id @db.TinyInt // 코드와 고정 매핑(1/2/3). AUTO_INCREMENT 아님 — 시드로 주입
+  name     String  @unique(map: "uq_game_name") @db.VarChar(50)
+  isActive Boolean @default(true) @map("is_active")
+
+  matches GameMatch[]
+
+  @@map("game")
+}
+
+/// 매치 결과 (온라인 매치만 기록) — ERD.md note #2
+model GameMatch {
+  id        BigInt      @id @default(autoincrement())
+  gameId    Int         @map("game_id") @db.TinyInt
+  player1Id BigInt      @map("player1_id")
+  player2Id BigInt      @map("player2_id")
+  result    MatchResult
+  playedAt  DateTime    @default(now()) @map("played_at")
+  deletedAt DateTime?   @map("deleted_at") // soft delete — ERD.md note #3
+
+  game    Game    @relation(fields: [gameId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_match_game")
+  player1 AppUser @relation("MatchPlayer1", fields: [player1Id], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_match_p1")
+  player2 AppUser @relation("MatchPlayer2", fields: [player2Id], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_match_p2")
+
+  editHistories MatchEditHistory[]
+
+  @@index([player1Id, playedAt], map: "ix_match_p1")
+  @@index([player2Id, playedAt], map: "ix_match_p2")
+  @@index([playedAt], map: "ix_match_played")
+  @@map("game_match")
+}
+
+/// 매치 결과 수정이력 (감사 로그) — ERD.md note #5
+model MatchEditHistory {
+  id           BigInt      @id @default(autoincrement())
+  matchId      BigInt      @map("match_id")
+  adminId      BigInt      @map("admin_id")
+  beforeResult MatchResult @map("before_result")
+  afterResult  MatchResult @map("after_result")
+  editedAt     DateTime    @default(now()) @map("edited_at")
+
+  match GameMatch    @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_meh_match")
+  admin AdminAccount @relation(fields: [adminId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_meh_admin")
+
+  @@index([matchId, editedAt], map: "ix_meh_match")
+  @@map("match_edit_history")
+}
+
+/// 점수 시스템 설정 (admin 수정 가능, 단일 행 id=1) — ERD.md note #17
+model ScoreConfig {
+  id         Int      @id @db.TinyInt // 항상 1 (단일 행)
+  winPoints  Int      @default(3) @map("win_points")
+  drawPoints Int      @default(1) @map("draw_points")
+  lossPoints Int      @default(0) @map("loss_points")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  updatedBy  BigInt?  @map("updated_by")
+
+  updatedByAdmin AdminAccount? @relation(fields: [updatedBy], references: [id], onDelete: SetNull, onUpdate: Cascade, map: "fk_cfg_admin")
+
+  @@map("score_config")
+}

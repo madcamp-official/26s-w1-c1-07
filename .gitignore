@@ -1,0 +1,22 @@
+# deps
+node_modules/
+
+# env / secrets (절대 커밋 금지)
+.env
+.env.*
+!.env.example
+
+# build
+dist/
+build/
+*.tsbuildinfo
+
+# prisma 런타임 산출물
+**/generated/
+
+# os
+.DS_Store
+
+# design-lab
+*.log
+design-lab/reference/sheet/full.xlsx

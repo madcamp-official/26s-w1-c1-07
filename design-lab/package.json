@@ -1,0 +1,9 @@
+{
+  "name": "madpump-design-lab",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "shared",
+    "ideas/*"
+  ]
+}

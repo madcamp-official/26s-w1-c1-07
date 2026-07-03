@@ -1,0 +1,7 @@
+{
+  "name": "@madpump/shared",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "게임 코어 로직 + 소켓 이벤트 타입 (client/server 공유). 게임 구현 단계에서 채워진다."
+}
