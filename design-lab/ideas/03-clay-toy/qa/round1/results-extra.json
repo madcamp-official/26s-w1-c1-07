@@ -1,0 +1,122 @@
+[
+  {
+    "name": "x1. S1 설정 → modal-settings (QA-S1-08)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "x2. 기본값 버튼 → 3/60 복원+모달 유지 (QA-S4-05)",
+    "ok": true,
+    "detail": "3/60"
+  },
+  {
+    "name": "x3. S3 취소 → 모달 닫힘+메인 유지 (QA-S3-04)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "x4. 빈값 제출 방지 (QA-S5-05)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "x5. 온보딩 통과 → S2",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "x6. 로그아웃 → S1 (QA-S2-06)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "x7. 재로그인 → 기존 유저 S2 직행 (QA-S1-07)",
+    "ok": true,
+    "detail": "screen=scr-main-in"
+  },
+  {
+    "name": "x8. 코드 생성 → 숫자 코드 표시 (QA-S6-04)",
+    "ok": true,
+    "detail": "code=48453191269"
+  },
+  {
+    "name": "x9. 복사 → 클립보드 일치 (QA-S6-05)",
+    "ok": true,
+    "detail": "clip=48453191269"
+  },
+  {
+    "name": "x10. 복사됨 피드백 표시 (QA-S6-05)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "x11. 코드 생성 후 mock 상대 입장 → 인게임 (QA-S6-06)",
+    "ok": true,
+    "detail": "screen=scr-game1"
+  },
+  {
+    "name": "x12. 코드 참가 → 매칭 플로우 (QA-S6-07)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "x13. 매칭 취소 버튼 (waiting)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "x14. 취소 → S6 복귀 (QA-S7-03)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "x15. 취소 후 유령 매칭 없음 (QA-S7-05)",
+    "ok": true,
+    "detail": "screen=scr-main-in"
+  },
+  {
+    "name": "x16. S6 톱니 → 설정 모달 (QA-S6-08)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "x17. 배경 클릭 → 패널 닫힘 (QA-S6-09)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "x18. S8 뒤로가기 → 메인 (QA-S8-04)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "x19. 일치 이탈 시 홀드 리셋 (QA-S9-10)",
+    "ok": true,
+    "detail": "before=1167 after=0"
+  },
+  {
+    "name": "x20. 총알 낙하 속도 랜덤 (QA-S10-08)",
+    "ok": true,
+    "detail": "speeds=70.5,72.8,91.2,137.6,72.5,81.7"
+  },
+  {
+    "name": "x21. 공격 vs 회피 → 공격자 밀림 (QA-S12-05)",
+    "ok": true,
+    "detail": "{\"P1\":\"ATTACK\",\"P2\":\"DODGE\"} pushed=P1"
+  },
+  {
+    "name": "x22. 동일 행동(공/공) → 무밀림 (QA-S12-07)",
+    "ok": true,
+    "detail": "{\"P1\":\"ATTACK\",\"P2\":\"ATTACK\"} pushed=null clash=true"
+  },
+  {
+    "name": "x23. 틱 내 마지막 입력 채택 (QA-S12-08)",
+    "ok": true,
+    "detail": "{\"P1\":\"DODGE\",\"P2\":\"NONE\"}"
+  },
+  {
+    "name": "x24. 종료 후 메인 복귀",
+    "ok": true,
+    "detail": ""
+  }
+]

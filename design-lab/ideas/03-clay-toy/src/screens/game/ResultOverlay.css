@@ -1,0 +1,166 @@
+/**
+ * ResultOverlay.css — 라운드/매치 결과 클레이 오버레이 (game1 에이전트 소유).
+ * 전역 셀렉터 금지 — 전부 .rov- 프리픽스.
+ */
+
+.rov-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--dim);
+}
+
+.rov-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 44px 56px 36px;
+  min-width: 380px;
+  text-align: center;
+}
+
+/* ---------- 상단 클레이 오브젝트 ---------- */
+.rov-medal {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34px;
+  color: #fff9f4;
+  margin-bottom: 8px;
+  box-shadow:
+    0 8px 18px rgba(74, 58, 82, 0.18),
+    inset 0 -8px 10px rgba(74, 58, 82, 0.16),
+    inset 0 6px 8px rgba(255, 255, 255, 0.6);
+}
+/* 무승부 — 납작하게 눌린 찰흙 */
+.rov-flat {
+  width: 88px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  color: var(--ink-muted);
+  margin-bottom: 10px;
+  letter-spacing: 2px;
+}
+
+.rov-title {
+  font-size: 34px;
+  line-height: 1.2;
+}
+.rov-sub {
+  font-size: 15px;
+  color: var(--ink-muted);
+}
+
+/* ---------- 스코어 ---------- */
+.rov-score {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 4px;
+  font-size: 26px;
+  font-weight: 800;
+}
+.rov-score-chip {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  border-radius: 10px;
+  padding: 3px 10px;
+  color: #fff9f4;
+  box-shadow: var(--shadow-clay-sm);
+}
+.rov-score-chip--p1 {
+  background: var(--p1);
+}
+.rov-score-chip--p2 {
+  background: var(--p2);
+}
+
+/* 라운드별 점 (승자 색) */
+.rov-dots {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.rov-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 -3px 4px rgba(74, 58, 82, 0.18),
+    inset 0 2px 3px rgba(255, 255, 255, 0.6);
+}
+
+/* ---------- 컨페티 (매치 승리) — 클레이 조각 통통 낙하 ---------- */
+.rov-confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: inherit;
+}
+@keyframes rov-fall {
+  0% {
+    transform: translateY(-40px) rotate(0deg);
+    opacity: 1;
+  }
+  62% {
+    transform: translateY(72vh) rotate(140deg);
+  }
+  76% {
+    transform: translateY(64vh) rotate(180deg); /* 탄성 바운스 1회 */
+  }
+  100% {
+    transform: translateY(102vh) rotate(220deg);
+    opacity: 0.9;
+  }
+}
+.rov-piece {
+  position: absolute;
+  top: -30px;
+  animation: rov-fall var(--rov-dur, 2.6s) ease-in var(--rov-delay, 0s) 1 both;
+}
+.rov-piece--circle {
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: inset 0 -3px 4px rgba(74, 58, 82, 0.2);
+}
+.rov-piece--star {
+  background: currentColor;
+  clip-path: polygon(
+    50% 0%,
+    61% 35%,
+    98% 35%,
+    68% 57%,
+    79% 91%,
+    50% 70%,
+    21% 91%,
+    32% 57%,
+    2% 35%,
+    39% 35%
+  );
+}
+.rov-piece--moon {
+  border-radius: 50%;
+  background: radial-gradient(circle at 68% 32%, transparent 0 52%, currentColor 53%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rov-confetti {
+    display: none;
+  }
+}

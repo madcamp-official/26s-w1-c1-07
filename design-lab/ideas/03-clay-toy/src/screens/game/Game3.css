@@ -1,0 +1,602 @@
+/* =============================================================================
+ * S12 게임3 — 펜싱 "찰흙 해적판 위의 결투" 전용 스타일 (game3 에이전트 소유)
+ * PLAN §3.3. 전역 셀렉터 금지 — 전부 .g3-* 스코프.
+ * ========================================================================== */
+
+.g3-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 28px 28px;
+}
+
+/* ------------------------------ HUD ------------------------------ */
+
+.g3-hud {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.g3-hud-side {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-top: 8px;
+}
+
+.g3-hud-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 1초 틱 진행 표시 — 홈 파인 트랙 + 차오르는 라벤더 + 메트로놈 점 */
+.g3-tickmeter {
+  position: relative;
+  width: 150px;
+  height: 14px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.g3-tickfill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 10px;
+  background: var(--lavender);
+  opacity: 0.5;
+}
+
+.g3-tickdot {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 2px 4px rgba(74, 58, 82, 0.25);
+}
+
+.g3-tick-label {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* ------------------------------ 스테이지 ------------------------------ */
+
+.g3-stage {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 420px;
+  overflow: hidden;
+  /* 노을 라일락 → 하늘 → 바다로 스미는 파스텔 그라디언트 */
+  background: linear-gradient(180deg, var(--bg-lilac) 0%, var(--bg-sky) 72%, var(--sea) 100%);
+}
+
+/* ---- 틱 판정 공개 칩 (무대 상단 중앙) ---- */
+
+.g3-reveal {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  pointer-events: none;
+}
+
+.g3-reveal-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 22px;
+  border-radius: var(--radius);
+  background: rgba(255, 251, 247, 0.92);
+  box-shadow: var(--shadow-clay-sm);
+}
+
+.g3-reveal-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.g3-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 16px;
+  box-shadow: var(--shadow-clay-sm);
+}
+
+.g3-vs {
+  font-family: var(--font-num);
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--ink-muted);
+}
+
+.g3-verdict {
+  font-size: 16px;
+  color: var(--ink);
+}
+
+/* ---- 판자 다리 + 인형 ---- */
+
+.g3-bridge-zone {
+  position: absolute;
+  left: 11%;
+  right: 11%;
+  bottom: 21%;
+  z-index: 3;
+  transform-origin: 50% 100%;
+  transition: transform 420ms var(--spring);
+}
+
+/* 낭떠러지 경고 — 남은 1칸이면 그쪽으로 판자가 삐걱 기운다 */
+.g3-tilt-l {
+  transform: rotate(-1.6deg);
+}
+.g3-tilt-r {
+  transform: rotate(1.6deg);
+}
+.g3-tilt-l.g3-tilt-r {
+  transform: rotate(0deg) translateY(3px);
+}
+
+.g3-bridge {
+  display: flex;
+  height: 54px;
+  background: var(--surface);
+  /* 좌우 끝은 둥글게 부서진 낭떠러지 단면 (비대칭 라운드) */
+  border-radius: 34px 24px 28px 38px / 26px 22px 30px 24px;
+  box-shadow: var(--shadow-clay);
+  overflow: hidden;
+}
+
+.g3-cell {
+  position: relative;
+  flex: 1;
+}
+
+/* 칸 경계 = 손가락으로 꾹 누른 홈 선 */
+.g3-cell + .g3-cell::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: 9px;
+  bottom: 9px;
+  width: 6px;
+  border-radius: 6px;
+  background: rgba(74, 58, 82, 0.08);
+  box-shadow:
+    inset 0 2px 3px rgba(74, 58, 82, 0.14),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.6);
+}
+
+/* ---- 클레이 인형 (눈사람 체형 + 이쑤시개 검 + 단추 방패) ---- */
+
+.g3-doll {
+  position: absolute;
+  bottom: 52px; /* 판자 윗면에 발이 닿게 */
+  z-index: 4;
+  width: 64px;
+  margin-left: -32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: left 380ms var(--spring);
+}
+
+.g3-doll-label {
+  position: absolute;
+  top: 100%;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-shadow: 0 1px 2px rgba(255, 251, 247, 0.8);
+}
+
+.g3-figure {
+  position: relative;
+  width: 64px;
+  height: 86px;
+}
+
+/* P2는 왼쪽(상대)을 바라보도록 미러 */
+.g3-flip .g3-figure {
+  transform: scaleX(-1);
+}
+
+/* 포즈 레이어 — 스탠스 transform은 여기에만 (flip과 분리) */
+.g3-pose {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 100%;
+  transition: transform 220ms var(--spring);
+}
+
+.g3-pose.pose-attack {
+  transform: translateX(11px); /* 검 내지르기 런지 */
+}
+
+.g3-pose.pose-dodge {
+  transform: translateY(6px) scaleY(0.87); /* 방패 웅크림 */
+}
+
+.g3-head {
+  position: absolute;
+  top: 0;
+  left: 15px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--doll-tint, var(--p1-tint));
+  box-shadow:
+    inset 0 -4px 6px rgba(74, 58, 82, 0.14),
+    inset 0 3px 4px rgba(255, 255, 255, 0.8);
+}
+
+/* 옆모습 눈 한 점 */
+.g3-head::before {
+  content: '';
+  position: absolute;
+  right: 7px;
+  top: 12px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+.g3-body {
+  position: absolute;
+  top: 26px;
+  left: 11px;
+  width: 38px;
+  height: 48px;
+  border-radius: 46% 46% 42% 42%;
+  background: var(--doll, var(--p1));
+  box-shadow:
+    inset 0 -7px 9px rgba(74, 58, 82, 0.18),
+    inset 0 4px 6px rgba(255, 255, 255, 0.5);
+}
+
+/* 이쑤시개 검 (버터옐로 손잡이) */
+.g3-sword {
+  position: absolute;
+  top: 42px;
+  left: 42px;
+  width: 30px;
+  height: 7px;
+  border-radius: 6px;
+  background: var(--ink-muted);
+  box-shadow: inset 0 2px 2px rgba(255, 255, 255, 0.5);
+  transform-origin: 3px 50%;
+  transform: rotate(-30deg);
+  transition: transform 220ms var(--spring), opacity 150ms ease-out;
+}
+
+.g3-sword::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--pop);
+  box-shadow: inset 0 -2px 3px rgba(74, 58, 82, 0.2);
+}
+
+.g3-pose.pose-attack .g3-sword {
+  transform: rotate(-2deg) translateX(5px);
+}
+
+.g3-pose.pose-dodge .g3-sword {
+  transform: rotate(52deg) scale(0.85);
+  opacity: 0.6;
+}
+
+/* 단추 방패 (라벤더) — 회피 때만 앞으로 뿅 */
+.g3-shield {
+  position: absolute;
+  top: 36px;
+  left: 40px;
+  width: 24px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--lavender);
+  box-shadow:
+    inset 0 0 0 5px rgba(255, 255, 255, 0.45),
+    inset 0 -3px 5px rgba(74, 58, 82, 0.2);
+  opacity: 0;
+  transform: scale(0.4);
+  transition: transform 200ms var(--spring), opacity 130ms ease-out;
+}
+
+.g3-pose.pose-dodge .g3-shield {
+  opacity: 1;
+  transform: scale(1.15) translateX(4px);
+}
+
+/* 링아웃 낙사 — 풍덩 */
+.g3-doll.g3-fell {
+  animation: g3-fall 650ms ease-in forwards;
+}
+
+@keyframes g3-fall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(150px) rotate(26deg);
+    opacity: 0;
+  }
+}
+
+/* 승자 세리머니 — 판자 위 젤리 바운스 */
+.g3-doll.g3-win {
+  animation: g3-win-bounce 0.9s ease-in-out infinite;
+}
+
+@keyframes g3-win-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+
+/* ---- 바다 ---- */
+
+.g3-sea {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 21%;
+  z-index: 5;
+  background: var(--sea);
+  box-shadow: inset 0 8px 14px rgba(74, 58, 82, 0.1);
+}
+
+.g3-waves {
+  position: absolute;
+  top: -14px;
+  left: -24px;
+  right: -24px;
+  display: flex;
+  pointer-events: none;
+}
+
+.g3-wave {
+  flex: 1;
+  height: 30px;
+  margin: 0 -7px;
+  border-radius: 50% 50% 0 0;
+  background: var(--sea);
+  animation: g3-wave-bob 3.4s ease-in-out infinite;
+}
+
+.g3-wave:nth-child(even) {
+  animation-delay: -1.7s;
+  height: 26px;
+}
+
+/* 경고 — 물결이 높아지고 빨라진다 */
+.g3-sea.g3-sea-warn .g3-wave {
+  animation-duration: 1.5s;
+  height: 38px;
+}
+
+@keyframes g3-wave-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
+/* 물 위로 삐진 얼굴만 동동 */
+.g3-face {
+  position: absolute;
+  top: -10px;
+  width: 30px;
+  height: 30px;
+  margin-left: -15px;
+  z-index: 6;
+  border-radius: 50%;
+  background: var(--doll-tint, var(--p1-tint));
+  box-shadow:
+    inset 0 -4px 6px rgba(74, 58, 82, 0.14),
+    inset 0 3px 4px rgba(255, 255, 255, 0.8);
+  animation: g3-face-bob 2.2s ease-in-out 0.5s infinite both;
+}
+
+/* 삐진 표정 — 눈 두 점 + 뾰로통 입 */
+.g3-face::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 11px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 10px 0 0 var(--ink);
+}
+
+.g3-face::after {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 20px;
+  width: 8px;
+  height: 5px;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  border-top: 3px solid var(--ink);
+}
+
+@keyframes g3-face-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-7deg);
+  }
+  50% {
+    transform: translateY(5px) rotate(7deg);
+  }
+}
+
+/* 풍덩 스플래시 — 클레이 물방울 튐 */
+.g3-splash {
+  position: absolute;
+  bottom: 19%;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.g3-drop {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--sea);
+  box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.7);
+  animation: g3-splash-pop 750ms ease-out forwards;
+}
+
+@keyframes g3-splash-pop {
+  0% {
+    transform: translate(0, 0) scale(0.4);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx, 0px), var(--dy, -60px)) scale(1);
+    opacity: 0;
+  }
+}
+
+/* ---- 종료 배너 (링아웃/시간 종료) ---- */
+
+.g3-banner-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.g3-banner {
+  padding: 20px 40px;
+  font-size: 28px;
+  text-align: center;
+}
+
+/* ---- 온스크린 패드 ---- */
+
+.g3-pad {
+  position: absolute;
+  bottom: 24px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.g3-pad-l {
+  left: 28px;
+}
+
+.g3-pad-r {
+  right: 28px;
+}
+
+.g3-pad-keys {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.g3-pad-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.g3-key-role {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+/* 틱 내 마지막 입력 미리보기 칩 */
+.g3-pending {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink-muted);
+  background: rgba(255, 251, 247, 0.85);
+  border-radius: 12px;
+  padding: 4px 12px;
+  box-shadow: var(--shadow-sunken);
+  white-space: nowrap;
+}
+
+.g3-bot-chip {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--p2-tint);
+  color: var(--p2);
+  font-family: var(--font-num);
+  font-weight: 800;
+  letter-spacing: 1px;
+  box-shadow: var(--shadow-clay-sm);
+}
+
+/* ------------------------------ 모션 축소 ------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .g3-wave,
+  .g3-face,
+  .g3-doll.g3-win {
+    animation: none;
+  }
+  .g3-doll,
+  .g3-bridge-zone,
+  .g3-pose,
+  .g3-sword,
+  .g3-shield {
+    transition-duration: 0ms;
+  }
+  .g3-doll.g3-fell,
+  .g3-drop {
+    animation-duration: 150ms;
+    animation-timing-function: ease-out;
+  }
+}

@@ -1,0 +1,236 @@
+/* ============================================================================
+ * lobby 에이전트 소유 — S2(MainLoggedIn) + S8(GameSelect) 화면 전용 스타일.
+ * 전역 셀렉터 금지 — 전부 lb2- / gsel- 프리픽스 클래스만 사용.
+ * ========================================================================== */
+
+/* ------------------------------- S2 메인 -------------------------------- */
+
+.lb2-header {
+  position: absolute;
+  top: 22px;
+  right: 30px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.lb2-hello {
+  font-size: 19px;
+}
+
+.lb2-gear {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-clay-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.lb2-body {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 56px;
+  padding: 96px 48px 48px;
+  flex-wrap: wrap;
+}
+
+.lb2-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 44px;
+}
+
+.lb2-title {
+  font-family: var(--font-ui);
+  font-size: clamp(56px, 8vw, 92px);
+  letter-spacing: 2px;
+  line-height: 1;
+}
+
+.lb2-title span {
+  display: inline-block;
+}
+
+.lb2-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 320px;
+  max-width: 80vw;
+}
+
+.lb2-board {
+  width: 430px;
+  max-width: 92vw;
+}
+
+.lb2-board-title {
+  font-size: 22px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lb2-trophy {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--win);
+  box-shadow: var(--shadow-clay-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* 내 등수 행 — 신규 유저: 기록 없음(정직한 빈 상태, SPEC §0.4) */
+.lb2-myrank {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+}
+
+.lb2-myrank-dash {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-sunken);
+  color: var(--ink-muted);
+  font-weight: 800;
+  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.lb2-me-badge {
+  margin-left: 8px;
+  font-size: 12px;
+  background: var(--accent);
+  color: #fff9f4;
+  border-radius: 10px;
+  padding: 2px 8px;
+  vertical-align: middle;
+}
+
+.lb2-myrank-note {
+  flex: 1;
+  text-align: right;
+  color: var(--ink-muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+
+/* ----------------------------- S8 게임 선택 ------------------------------ */
+
+.gsel-back {
+  position: absolute;
+  top: 22px;
+  left: 30px;
+  z-index: 2;
+  padding: 10px 22px;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow-clay-sm);
+  font-size: 17px;
+  font-family: var(--font-ui);
+}
+
+.gsel-body {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 44px;
+  padding: 48px;
+}
+
+.gsel-title {
+  font-size: clamp(40px, 6vw, 64px);
+  line-height: 1;
+}
+
+.gsel-title span {
+  display: inline-block;
+}
+
+.gsel-sub {
+  font-size: 20px;
+  color: var(--ink-muted);
+  margin-top: 12px;
+  text-align: center;
+}
+
+.gsel-cards {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.gsel-card {
+  width: 232px;
+  text-align: center;
+}
+
+.gsel-obj {
+  height: 116px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.gsel-card:hover .gsel-obj > * {
+  animation: gsel-wiggle 450ms ease-in-out;
+}
+
+@keyframes gsel-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-6deg);
+  }
+  75% {
+    transform: rotate(6deg);
+  }
+}
+
+.gsel-name {
+  font-size: 22px;
+  margin-bottom: 6px;
+}
+
+.gsel-desc {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gsel-card:hover .gsel-obj > * {
+    animation: none;
+  }
+}

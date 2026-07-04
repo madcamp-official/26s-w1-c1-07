@@ -1,0 +1,123 @@
+/* S5 닉네임 온보딩 (auth 에이전트 소유 — 화면 전용 스타일, 전역 셀렉터 금지) */
+
+.s5-wrap {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px 24px;
+}
+
+/* 유치원 이름표 메타포 — 명찰 모양 대형 클레이 카드 */
+.s5-card {
+  position: relative;
+  width: min(520px, 92vw);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-clay-lg);
+  padding: 62px 44px 42px;
+}
+
+/* 이름표 끈 고리 (카드 위로 반쯤 걸침) */
+.s5-ring {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 14px solid var(--lavender);
+  box-shadow: 0 6px 14px rgba(74, 58, 82, 0.16);
+  pointer-events: none;
+}
+
+/* 카드에 눌러 뚫은 끈 구멍 */
+.s5-hole {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 48px;
+  height: 13px;
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-sunken);
+  pointer-events: none;
+}
+
+.s5-title {
+  font-family: var(--font-num);
+  font-weight: 800;
+  font-size: 34px;
+  text-align: center;
+  color: var(--ink);
+}
+
+.s5-subtitle {
+  margin-top: 8px;
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: 17px;
+  color: var(--ink-muted);
+}
+
+.s5-form {
+  margin-top: 28px;
+}
+
+.s5-field {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.s5-label {
+  font-family: var(--font-ui);
+  font-size: 22px;
+  color: var(--ink);
+  width: 62px;
+  text-align: right;
+  flex: none;
+}
+
+/* 손가락으로 꾹 눌러 만든 홈 입력창 (PLAN §1.5) */
+.s5-input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-size: 20px;
+  padding: 14px 18px;
+  border: none;
+  background: var(--surface-sunken);
+  border-radius: 20px;
+  box-shadow: var(--shadow-sunken);
+}
+
+.s5-input:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 중복 에러 — --error 링 */
+.s5-input--error,
+.s5-input--error:focus-visible {
+  outline: 3px solid var(--error);
+  outline-offset: 2px;
+}
+
+.s5-error {
+  margin: 8px 0 0 78px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--error);
+}
+
+.s5-submit-row {
+  margin-top: 36px;
+  display: flex;
+  justify-content: center;
+}

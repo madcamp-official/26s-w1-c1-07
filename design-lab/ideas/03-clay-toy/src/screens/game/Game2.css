@@ -1,0 +1,88 @@
+/* S10·S11 게임2 전용 스타일 (game2 에이전트 소유 — 전역 셀렉터 금지, .g2- 스코프) */
+
+.g2-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 28px 26px;
+}
+
+/* ---- 상단 HUD: [나가기+P1배지] — 타이머 — [P2배지] ---- */
+.g2-hud {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1040px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 10px;
+}
+
+.g2-hud-side {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.g2-hud-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* ---- 스테이지 (canvas) ---- */
+.g2-stage {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1040px;
+  background: var(--bg-sky);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-clay-lg);
+  overflow: hidden;
+}
+
+.g2-stage canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* ---- 하단 온스크린 패드 ---- */
+.g2-pads {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1040px;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.g2-pad-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 251, 247, 0.6);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-clay-sm);
+  padding: 12px 22px 10px;
+}
+
+.g2-pad-keys {
+  display: flex;
+  gap: 18px;
+  align-items: flex-end;
+}
+
+.g2-pad-label {
+  font-size: 13px;
+  color: var(--ink-muted);
+  letter-spacing: 0.5px;
+}

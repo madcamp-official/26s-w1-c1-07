@@ -1,0 +1,247 @@
+/* ============================================================================
+ * lobby 에이전트 소유 — S4(Settings) / S6(Online) / S7(Matching) 모달 전용.
+ * 전역 셀렉터 금지 — 전부 set- / onl- / mtc- 프리픽스 클래스만 사용.
+ * ========================================================================== */
+
+/* ------------------------------ S4 설정 모달 ----------------------------- */
+
+.set-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 26px;
+}
+
+.set-title {
+  font-size: 26px;
+}
+
+.set-field {
+  margin-bottom: 20px;
+}
+
+.set-label {
+  display: block;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.set-step {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-clay-sm);
+  font-family: var(--font-num);
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.set-input {
+  width: 96px;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 600;
+  padding: 10px 8px;
+  border: none;
+  border-radius: 20px;
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-sunken);
+}
+
+.set-input::-webkit-outer-spin-button,
+.set-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.set-input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.set-unit {
+  color: var(--ink-muted);
+  font-size: 16px;
+}
+
+.set-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 28px;
+}
+
+/* --------------------------- S6 온라인 패널 ------------------------------ */
+
+.onl-title {
+  font-size: 26px;
+  margin-bottom: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.onl-sub {
+  margin-top: 22px;
+  padding: 20px;
+  border-radius: 24px;
+}
+
+.onl-sub-title {
+  font-size: 18px;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.onl-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.onl-code {
+  flex: 1;
+  min-width: 180px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.onl-bead {
+  width: 25px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-clay-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 17px;
+}
+
+.onl-code-empty {
+  display: inline-block;
+  width: 170px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(74, 58, 82, 0.18);
+}
+
+.onl-gear {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-clay-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.onl-label {
+  font-size: 17px;
+  flex-shrink: 0;
+}
+
+.onl-input {
+  flex: 1;
+  min-width: 150px;
+  border: none;
+  padding: 12px 16px;
+  font-size: 17px;
+  border-radius: 20px;
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-sunken);
+}
+
+.onl-input-error {
+  outline: 3px solid var(--error);
+  outline-offset: 2px;
+}
+
+.onl-error {
+  color: var(--error);
+  font-family: var(--font-body);
+  font-size: 14px;
+  margin-top: 10px;
+  text-align: right;
+}
+
+/* --------------------------- S7 매칭 상태 모달 --------------------------- */
+
+.mtc-body {
+  text-align: center;
+  padding: 4px;
+}
+
+.mtc-title {
+  font-size: 24px;
+  margin-bottom: 6px;
+}
+
+.mtc-loader {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin: 30px 0;
+}
+
+.mtc-ball {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  box-shadow: var(--shadow-clay-sm);
+  animation: clay-bounce 700ms ease-in-out infinite;
+}
+
+.mtc-found {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 30px 0;
+}
+
+.mtc-doll {
+  width: 44px;
+  height: 54px;
+  border-radius: 22px 22px 18px 18px;
+  box-shadow: var(--shadow-clay-sm);
+}
+
+.mtc-msg {
+  font-size: 20px;
+  margin-bottom: 10px;
+}
+
+.mtc-cancel-row {
+  margin-top: 26px;
+  display: flex;
+  justify-content: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mtc-ball {
+    animation: none;
+  }
+}

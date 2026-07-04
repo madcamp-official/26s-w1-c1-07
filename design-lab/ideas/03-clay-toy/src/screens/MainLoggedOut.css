@@ -1,0 +1,133 @@
+/* S1 메인 — 비로그인 (auth 에이전트 소유 — 화면 전용 스타일, 전역 셀렉터 금지) */
+
+.s1-header {
+  position: absolute;
+  top: 24px;
+  right: 28px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  z-index: 3;
+}
+
+/* 원형 톱니 클레이 버튼 */
+.s1-gear {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-clay-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--lavender);
+}
+
+.s1-center {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 56px;
+  padding: 24px;
+}
+
+.s1-title-wrap {
+  position: relative;
+}
+
+/* 초대형 Jua 타이틀 — 글자마다 클레이 색 교차 (PLAN §2-S1) */
+.s1-title {
+  display: flex;
+  gap: 0.05em;
+  font-family: var(--font-ui);
+  font-weight: 400;
+  font-size: clamp(60px, 11vw, 122px);
+  line-height: 1;
+  user-select: none;
+}
+
+.s1-title span {
+  display: inline-block;
+  text-shadow: 0 7px 0 rgba(74, 58, 82, 0.1);
+}
+
+.s1-title span:nth-child(4n + 1) {
+  color: var(--accent);
+  transform: rotate(-4deg);
+}
+.s1-title span:nth-child(4n + 2) {
+  color: var(--p2);
+  transform: rotate(3deg) translateY(-5px);
+}
+.s1-title span:nth-child(4n + 3) {
+  color: var(--pop);
+  transform: rotate(-2deg) translateY(2px);
+}
+.s1-title span:nth-child(4n + 4) {
+  color: var(--lavender);
+  transform: rotate(4deg) translateY(4px);
+}
+
+.s1-tagline {
+  margin-top: 18px;
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: 18px;
+  color: var(--ink-muted);
+}
+
+/* 온라인/오프라인 세로 스택 */
+.s1-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: min(340px, 84vw);
+}
+
+.s1-stack > button {
+  width: 100%;
+}
+
+/* 타이틀 주변 부유하는 게임 상징 미니 클레이 오브젝트 */
+.s1-toy {
+  position: absolute;
+  pointer-events: none;
+  animation: s1-bob 4.2s ease-in-out infinite;
+}
+
+.s1-toy--balloon {
+  top: -78px;
+  left: -84px;
+  animation-duration: 4.6s;
+}
+.s1-toy--capsule {
+  top: -46px;
+  right: -92px;
+  animation-delay: -1.4s;
+}
+.s1-toy--sword {
+  bottom: -64px;
+  right: -60px;
+  animation-duration: 5.2s;
+  animation-delay: -2.6s;
+}
+
+@keyframes s1-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-5deg);
+  }
+  50% {
+    transform: translateY(-16px) rotate(5deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .s1-toy {
+    animation: none;
+  }
+}

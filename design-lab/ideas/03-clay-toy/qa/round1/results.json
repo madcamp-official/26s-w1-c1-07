@@ -1,0 +1,327 @@
+[
+  {
+    "name": "a1. S1 scr-main-out 표시",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "a2. 브리지 screen=scr-main-out",
+    "ok": true,
+    "detail": "screen=scr-main-out"
+  },
+  {
+    "name": "a3. 브리지 session 비로그인",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "a4. S1 필수 버튼 4종 (online/offline/google/settings)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "a5. MADPUMP 타이틀 표시",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "b1. modal-login-required 표시",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "b2. 모달 문구 \"로그인이 필요\"",
+    "ok": true,
+    "detail": "온라인 게임은\n로그인이 필요합니다!\nSIGN IN WITH GOOGLE\n취소하기"
+  },
+  {
+    "name": "c1. scr-onboarding 진입",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "c2. 중복 닉네임 에러 표시 (펌프광인)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "c3. 이름 수정 시 에러 해제",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "c4. scr-main-in 진입",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "c5. 세션 로그인+닉네임 반영",
+    "ok": true,
+    "detail": "{\"loggedIn\":true,\"nickname\":\"클레이큐에이\"}"
+  },
+  {
+    "name": "c6. 인사말에 닉네임 표시",
+    "ok": true,
+    "detail": "클레이큐에이님 안녕하세요"
+  },
+  {
+    "name": "d1. lb-top3 표시",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "d2. lb-myrank 표시",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "d3. TOP3에 수치(승률 % 등) 표시",
+    "ok": true,
+    "detail": "1 펌 펌프광인 10판 9승 90% 2 막 막판뒤집기 10판 6승 60% 3 질 질주본능 11판 5승 45%"
+  },
+  {
+    "name": "e1. modal-settings 표시",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "e2. 저장 후 모달 닫힘",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "e3. 재오픈 시 라운드 수=2 유지",
+    "ok": true,
+    "detail": "value=2"
+  },
+  {
+    "name": "e4. 설정 모달 닫기(ESC/배경)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "f1. 로그인 상태 온라인 → modal-online",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "f2. modal-matching 표시",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "f3. 접속 중 문구",
+    "ok": true,
+    "detail": "온라인 게임하기  게임에 접속 중입니다"
+  },
+  {
+    "name": "f4. 대기 단계 취소 버튼 등장",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "f5. \"플레이어 대기 중\" 문구",
+    "ok": true,
+    "detail": "온라인 게임하기  플레이어 대기 중  취소하기"
+  },
+  {
+    "name": "f6. 매칭 성사 → 인게임 자동 전환",
+    "ok": true,
+    "detail": "screen=scr-game2"
+  },
+  {
+    "name": "f7. 인게임 HUD 프로필 2개",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "f8. btn-exit → 메인 복귀",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "g1. scr-game-select 진입",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "g2. 게임 카드 3종",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "h1. scr-game1 진입",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "h2. 브리지 game1 state 확인",
+    "ok": true,
+    "detail": "target=98"
+  },
+  {
+    "name": "h3. 시작 숫자 ≠ 타겟 (QA-S9-08)",
+    "ok": true,
+    "detail": "target=98 P1=15 P2=74"
+  },
+  {
+    "name": "h4. 타겟 1~100 범위",
+    "ok": true,
+    "detail": "target=98"
+  },
+  {
+    "name": "h5. 카운트다운 감소 (QA-S9-05)",
+    "ok": true,
+    "detail": "60000 → 58795.50000001192"
+  },
+  {
+    "name": "h6. P1 w키 = +1 (QA-S9-06)",
+    "ok": true,
+    "detail": "15 → 16"
+  },
+  {
+    "name": "h7. P1 q키 = -1 (QA-S9-06)",
+    "ok": true,
+    "detail": "now=15"
+  },
+  {
+    "name": "h8. P2 i키 = +1 (QA-S9-07)",
+    "ok": true,
+    "detail": "74 → 75"
+  },
+  {
+    "name": "h9-r1. P1 숫자를 타겟에 일치",
+    "ok": true,
+    "detail": "target=98 P1=98"
+  },
+  {
+    "name": "h10. 일치 유지 타이머 진행",
+    "ok": true,
+    "detail": "holdMs=1266.6000000000004"
+  },
+  {
+    "name": "h11-r1. 라운드1 결과 오버레이",
+    "ok": true,
+    "detail": "P1 라운드 승리!"
+  },
+  {
+    "name": "h9-r2. P1 숫자를 타겟에 일치",
+    "ok": true,
+    "detail": "target=56 P1=56"
+  },
+  {
+    "name": "h11-r2. 라운드2 결과 오버레이",
+    "ok": true,
+    "detail": "P1 승리!"
+  },
+  {
+    "name": "h12. 매치 종료 오버레이 도달 (2라운드 반영)",
+    "ok": true,
+    "detail": "round=2에서 종료"
+  },
+  {
+    "name": "h13. 게임1 종료 후 메인 복귀",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "i1. scr-game2 진입",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "i2. 브리지 game2 state 확인",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "i3. P2 i키 우측 이동",
+    "ok": true,
+    "detail": "50.0 → 72.5"
+  },
+  {
+    "name": "i4. P1 q키 방향 반전",
+    "ok": true,
+    "detail": "1 → -1"
+  },
+  {
+    "name": "i5. P1 w키 발사 → 총알 존재",
+    "ok": true,
+    "detail": "bullets=1"
+  },
+  {
+    "name": "i6-r1. 라운드1 종료 (피격 또는 시간종료)",
+    "ok": true,
+    "detail": "result=P1_WIN"
+  },
+  {
+    "name": "i7-r1. 라운드1 결과 오버레이",
+    "ok": true,
+    "detail": "P1 라운드 승리!"
+  },
+  {
+    "name": "i6-r2. 라운드2 종료 (피격 또는 시간종료)",
+    "ok": true,
+    "detail": "result=P1_WIN"
+  },
+  {
+    "name": "i7-r2. 라운드2 결과 오버레이",
+    "ok": true,
+    "detail": "P1 승리!"
+  },
+  {
+    "name": "i8. 게임2 종료 후 메인 복귀",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "j1. scr-game3 진입",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "j2. 브리지 game3 state 확인",
+    "ok": true,
+    "detail": "P2 dist=3"
+  },
+  {
+    "name": "j3. 시작 3칸 배치 (QA-S12-09)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "j4. P1 공격 반복 → P2 밀림",
+    "ok": true,
+    "detail": "P2 dist=2"
+  },
+  {
+    "name": "j5-r1. 라운드1 링아웃 종료",
+    "ok": true,
+    "detail": "result=P1_WIN reason=RING_OUT"
+  },
+  {
+    "name": "j6-r1. 라운드1 결과 오버레이",
+    "ok": true,
+    "detail": "P1 라운드 승리!"
+  },
+  {
+    "name": "j5-r2. 라운드2 링아웃 종료",
+    "ok": true,
+    "detail": "result=P1_WIN reason=RING_OUT"
+  },
+  {
+    "name": "j6-r2. 라운드2 결과 오버레이",
+    "ok": true,
+    "detail": "P1 승리!"
+  },
+  {
+    "name": "k1. 최종 메인 복귀",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "k2. 브리지 screen=scr-main-in",
+    "ok": true,
+    "detail": "screen=scr-main-in"
+  }
+]
