@@ -1,0 +1,14 @@
+{
+  "name": "madpump",
+  "private": true,
+  "version": "0.0.1",
+  "workspaces": [
+    "shared",
+    "client"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w client",
+    "build": "npm run build -w client",
+    "preview": "npm run preview -w client"
+  }
+}
