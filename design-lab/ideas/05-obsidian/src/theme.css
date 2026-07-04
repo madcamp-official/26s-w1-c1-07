@@ -1,0 +1,639 @@
+/* ==========================================================================
+   OBSIDIAN PROTOCOL — 다크 e스포츠 럭셔리 (idea 05)
+   PLAN.md §1 디자인 토큰 + 전역 스타일 + 프리미티브 클래스.
+   이 파일은 아키텍트 소유 — 화면 구현 에이전트는 수정 금지.
+   (화면 전용 스타일은 각자 컴포넌트에서 inline style 또는
+    아래 유틸 클래스 조합으로 해결한다)
+   ========================================================================== */
+
+/* --- §1.1 팔레트 -------------------------------------------------------- */
+:root {
+  --bg-0: #0a0c10; /* 최심층 배경(옵시디언 블랙) */
+  --bg-1: #0e1118; /* 얕은 레이어(섹션·아레나 필드) */
+  --surface: #12151c; /* 패널/카드 표면 */
+  --surface-hi: #1a1e28; /* 호버·활성 표면 */
+  --line: #232a38; /* 비발광 기본 보더 1px */
+  --line-dim: #171c26; /* 테이블 로우 디바이더 */
+  --text-hi: #eaf0f8;
+  --text-md: #8b95a8;
+  --text-lo: #4c5568;
+  --p1: #00f0ff; /* P1 / 나 (일렉트릭 시안) — 절대 불변 */
+  --p1-dim: rgba(0, 240, 255, 0.14);
+  --p2: #ff3358; /* P2 / 상대 (마젠타 레드) — 절대 불변 */
+  --p2-dim: rgba(255, 51, 88, 0.14);
+  --gold: #e8c15a; /* 랭크/리더보드 전용 — 버튼·일반 강조 금지 */
+  --silver: #b8c4d6;
+  --bronze: #b0784a;
+  --danger: #ff3358;
+  --ok: #39e6a3;
+
+  --font-display: 'Orbitron', 'Noto Sans KR', sans-serif;
+  --font-body: 'Noto Sans KR', sans-serif;
+
+  --ease: cubic-bezier(0.16, 1, 0.3, 1); /* expo-out */
+  --dur: 240ms;
+
+  /* 45° 코너컷 (좌상+우하 14px) */
+  --cut: 14px;
+  --clip-cut: polygon(
+    var(--cut) 0,
+    100% 0,
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    0 100%,
+    0 var(--cut)
+  );
+  /* 소형 컷 (버튼·칩용, 8px) */
+  --cut-sm: 8px;
+  --clip-cut-sm: polygon(
+    var(--cut-sm) 0,
+    100% 0,
+    100% calc(100% - var(--cut-sm)),
+    calc(100% - var(--cut-sm)) 100%,
+    0 100%,
+    0 var(--cut-sm)
+  );
+  /* 헥사곤 */
+  --clip-hex: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+
+/* --- 리셋/전역 ----------------------------------------------------------- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg-0);
+  color: var(--text-hi);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* 딥 레이어감: 좌상 시안·우하 마젠타 초저채도 glow + 노이즈 그레인 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60vw 60vh at 0% 0%, rgba(0, 240, 255, 0.05), transparent 65%),
+    radial-gradient(60vw 60vh at 100% 100%, rgba(255, 51, 88, 0.05), transparent 65%);
+}
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.02;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.8) 1px, transparent 1px),
+    radial-gradient(rgba(255, 255, 255, 0.5) 1px, transparent 1px);
+  background-size: 3px 3px, 7px 7px;
+  background-position: 0 0, 2px 3px;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+button {
+  font-family: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+input {
+  font-family: inherit;
+  color: inherit;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+::selection {
+  background: var(--p1-dim);
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* --- §1.2 타이포 유틸 ---------------------------------------------------- */
+
+/* 영문 와이드 트래킹 라벨: OVERLINE → 타이틀 → 한글 서브카피 3단 스택의 1단 */
+.overline {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-md);
+}
+
+/* Orbitron 디스플레이(영문/숫자 전용 — 한글 스큐 금지) */
+.display {
+  font-family: var(--font-display);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  transform: skewX(-8deg);
+}
+.display-noskew {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+/* 숫자 공통 (카운트다운/스코어/리더보드) */
+.num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- §1.3 형태 유틸 ------------------------------------------------------ */
+
+.cornercut {
+  clip-path: var(--clip-cut);
+}
+.cornercut-sm {
+  clip-path: var(--clip-cut-sm);
+}
+.hex {
+  clip-path: var(--clip-hex);
+}
+
+/* 코너 브래킷 장식 (인게임 스테이지·대형 패널 네 귀퉁이) — 부모 relative 필요 */
+.brackets::before,
+.brackets::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+}
+.brackets::before {
+  top: 0;
+  left: 0;
+  border-top: 1px solid var(--bracket-color, var(--p1));
+  border-left: 1px solid var(--bracket-color, var(--p1));
+}
+.brackets::after {
+  bottom: 0;
+  right: 0;
+  border-bottom: 1px solid var(--bracket-color, var(--p2));
+  border-right: 1px solid var(--bracket-color, var(--p2));
+}
+
+/* --- 버튼 (§1.5) --------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 14px 28px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  clip-path: var(--clip-cut-sm);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-hi);
+  transition:
+    transform var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+  user-select: none;
+}
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn .btn-overline {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-md);
+  transition: color var(--dur) var(--ease);
+}
+
+/* Primary: 시안 1px 발광 보더 */
+.btn--primary {
+  border-color: var(--p1);
+  box-shadow:
+    0 0 12px -2px rgba(0, 240, 255, 0.4),
+    inset 0 0 0 1px rgba(0, 240, 255, 0.25);
+}
+.btn--primary:hover:not(:disabled) {
+  background: var(--p1-dim);
+  box-shadow:
+    0 0 18px -2px rgba(0, 240, 255, 0.55),
+    inset 0 0 0 1px rgba(0, 240, 255, 0.35);
+}
+.btn--primary .btn-overline {
+  color: var(--p1);
+}
+
+/* Secondary: 발광 없음, 호버 시 보더만 밝아짐 */
+.btn--secondary:hover:not(:disabled) {
+  border-color: var(--text-md);
+}
+
+/* Ghost/텍스트: 로그아웃 등 */
+.btn--ghost {
+  background: transparent;
+  border: none;
+  clip-path: none;
+  padding: 6px 10px;
+  font-weight: 500;
+  color: var(--text-md);
+}
+.btn--ghost:hover:not(:disabled) {
+  color: var(--text-hi);
+  text-decoration: underline;
+  text-decoration-color: var(--p1);
+  text-underline-offset: 4px;
+}
+
+/* Google 로그인: 다크 surface + 흰 G + Orbitron 500 */
+.btn--google {
+  flex-direction: row;
+  gap: 10px;
+  padding: 11px 20px;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.btn--google:hover:not(:disabled) {
+  border-color: var(--text-md);
+  background: var(--surface-hi);
+}
+
+/* --- 입력 (§1.5) --------------------------------------------------------- */
+
+.input {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  color: var(--text-hi);
+  font-size: 15px;
+  caret-color: var(--p1);
+  outline: none;
+  transition:
+    border-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+}
+.input:focus {
+  border-color: var(--p1);
+  box-shadow:
+    0 0 12px -2px rgba(0, 240, 255, 0.4),
+    inset 0 0 0 1px rgba(0, 240, 255, 0.25);
+}
+.input--error,
+.input--error:focus {
+  border-color: var(--danger);
+  box-shadow:
+    0 0 12px -2px rgba(255, 51, 88, 0.4),
+    inset 0 0 0 1px rgba(255, 51, 88, 0.25);
+}
+.input::placeholder {
+  color: var(--text-lo);
+}
+/* number input 스피너 제거 (스테퍼는 커스텀) */
+.input::-webkit-outer-spin-button,
+.input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.field-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+/* --- 카드/패널 (§1.5) ---------------------------------------------------- */
+
+.card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  clip-path: var(--clip-cut);
+  padding: 20px;
+  transition:
+    transform var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+}
+.card--hoverable {
+  cursor: pointer;
+}
+.card--hoverable:hover {
+  transform: translateY(-2px);
+  border-color: var(--p1);
+  box-shadow:
+    0 0 16px -2px rgba(0, 240, 255, 0.4),
+    inset 0 0 0 1px rgba(0, 240, 255, 0.25);
+}
+.card--accent-p1 {
+  border-color: var(--p1);
+  box-shadow:
+    0 0 12px -2px rgba(0, 240, 255, 0.4),
+    inset 0 0 0 1px rgba(0, 240, 255, 0.25);
+}
+.card--accent-p2 {
+  border-color: var(--p2);
+  box-shadow:
+    0 0 12px -2px rgba(255, 51, 88, 0.4),
+    inset 0 0 0 1px rgba(255, 51, 88, 0.25);
+}
+
+/* --- 모달 (§1.5) --------------------------------------------------------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 8, 12, 0.78);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.modal {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  clip-path: var(--clip-cut);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  padding: 28px;
+  max-width: min(92vw, 560px);
+  animation: panel-in var(--dur) var(--ease) both;
+}
+/* 상단 1px 발광 톱라인 (기본 시안 / 경고 문맥만 마젠타) */
+.modal::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: var(--cut);
+  right: 0;
+  height: 1px;
+  background: var(--p1);
+  box-shadow: 0 0 8px 0 rgba(0, 240, 255, 0.6);
+}
+.modal--warn::before {
+  background: var(--p2);
+  box-shadow: 0 0 8px 0 rgba(255, 51, 88, 0.6);
+}
+
+/* --- 테이블(리더보드) (§1.5) --------------------------------------------- */
+
+.lb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.lb-table th {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-md);
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.lb-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--line-dim);
+}
+.lb-table tbody tr {
+  transition: background var(--dur) var(--ease);
+}
+.lb-table tbody tr:hover {
+  background: var(--surface-hi);
+}
+/* TOP 3 로우: 좌측 2px 골드 인셋 */
+.lb-row--top td:first-child {
+  box-shadow: inset 2px 0 0 var(--gold);
+}
+/* 내 로우: 시안 인셋 + YOU 칩 */
+.lb-row--me td:first-child {
+  box-shadow: inset 2px 0 0 var(--p1);
+}
+
+/* --- 키캡 표기 (§1.5 [Q] 스타일) ------------------------------------------ */
+
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  background: var(--bg-1);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-md);
+  transition:
+    background 80ms linear,
+    color 80ms linear,
+    border-color 80ms linear,
+    box-shadow 80ms linear;
+}
+.keycap--p1.keycap--active {
+  background: var(--p1-dim);
+  border-color: var(--p1);
+  color: var(--p1);
+  box-shadow: 0 0 10px -2px rgba(0, 240, 255, 0.6);
+}
+.keycap--p2.keycap--active {
+  background: var(--p2-dim);
+  border-color: var(--p2);
+  color: var(--p2);
+  box-shadow: 0 0 10px -2px rgba(255, 51, 88, 0.6);
+}
+
+/* --- 칩 ------------------------------------------------------------------ */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 2px; /* 소형 칩만 2px 허용 */
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--text-md);
+}
+.chip--p1 {
+  border-color: var(--p1);
+  color: var(--p1);
+  background: var(--p1-dim);
+}
+.chip--p2 {
+  border-color: var(--p2);
+  color: var(--p2);
+  background: var(--p2-dim);
+}
+.chip--ok {
+  border-color: var(--ok);
+  color: var(--ok);
+  background: rgba(57, 230, 163, 0.12);
+}
+
+/* --- §1.4 모션 ----------------------------------------------------------- */
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 카운트다운 매초 펄스: 숫자 요소에 key 갱신 + 이 클래스 부여 */
+@keyframes count-pop {
+  from {
+    transform: scale(1.12);
+    text-shadow: 0 0 24px rgba(234, 240, 248, 0.55);
+  }
+  to {
+    transform: scale(1);
+    text-shadow: 0 0 8px rgba(234, 240, 248, 0.2);
+  }
+}
+.count-pop {
+  animation: count-pop 300ms var(--ease) both;
+}
+
+/* 마지막 5초 심장박동 명멸 (아레나 보더 등에 부여, 마젠타 틴트) */
+@keyframes heartbeat {
+  0%,
+  100% {
+    box-shadow: 0 0 10px -4px rgba(255, 51, 88, 0.25);
+    border-color: var(--line);
+  }
+  50% {
+    box-shadow: 0 0 22px -4px rgba(255, 51, 88, 0.7);
+    border-color: var(--p2);
+  }
+}
+.heartbeat {
+  animation: heartbeat 1s ease-in-out infinite;
+}
+
+/* 점 3개 순차 점멸 (매칭 대기) — <span class="dots"><i/><i/><i/></span> */
+@keyframes dot-blink {
+  0%,
+  80%,
+  100% {
+    opacity: 0.2;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+.dots i {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-left: 4px;
+  background: var(--p1);
+  animation: dot-blink 1.2s infinite;
+}
+.dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* 스핀 (헥사곤 레이더 스피너용) */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* prefers-reduced-motion: 전부 즉시 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --- 레이아웃 유틸 -------------------------------------------------------- */
+
+.screen {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 얇은 상단 헤더 바 */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--line);
+}
+.logotype {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  color: var(--text-hi);
+}
+.logotype em {
+  font-style: normal;
+  color: var(--p1);
+}

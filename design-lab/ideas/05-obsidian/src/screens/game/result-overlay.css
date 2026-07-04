@@ -1,0 +1,75 @@
+/* ==========================================================================
+   ResultOverlay 전용 스타일 — 전 게임(S9~S12) 공용 (PLAN §1.4 / §2 인게임 공통 셸)
+   소유: game1 에이전트. Game2/Game3은 컴포넌트만 import 한다.
+   ========================================================================== */
+
+.ro {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 8, 12, 0.72);
+  overflow: hidden;
+  animation: ro-in 240ms var(--ease) both;
+}
+@keyframes ro-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 승자 진영색 radial 워시 — 600ms에 걸쳐 서서히 물듦 (§1.4 슬로모션 컨셉) */
+.ro-wash {
+  position: absolute;
+  inset: -25%;
+  pointer-events: none;
+  animation: ro-wash-in 600ms var(--ease) both;
+}
+@keyframes ro-wash-in {
+  from {
+    opacity: 0;
+    transform: scale(0.25);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.ro-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  animation: panel-in var(--dur) var(--ease) both;
+}
+
+/* 매치 승자 전용 골드 왕관 라인 (골드는 랭크/승리 문맥 한정 — PLAN §1.1) */
+.ro-crown {
+  filter: drop-shadow(0 0 10px rgba(232, 193, 90, 0.55));
+}
+
+.ro-text {
+  font-size: clamp(30px, 5.5vw, 54px);
+  line-height: 1.12;
+  color: var(--text-hi);
+}
+
+.ro-sub {
+  font-size: 14px;
+  color: var(--text-md);
+}
+
+.ro-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+}

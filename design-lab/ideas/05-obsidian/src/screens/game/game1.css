@@ -1,0 +1,271 @@
+/* ==========================================================================
+   S9 게임1 "숫자 맞추기 — 주파수 동조" 전용 스타일 (PLAN §2.S9 / §3.1)
+   소유: game1 에이전트. 공용 theme.css는 건드리지 않는다.
+   ========================================================================== */
+
+/* --- HUD ------------------------------------------------------------------ */
+.g1-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--line);
+}
+.g1-hud-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 140px;
+}
+.g1-countdown {
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text-hi);
+  text-shadow: 0 0 12px rgba(234, 240, 248, 0.25);
+}
+.g1-countdown--danger {
+  color: var(--p2);
+  animation: g1-cd-pulse 1s ease-in-out infinite;
+}
+@keyframes g1-cd-pulse {
+  0%,
+  100% {
+    text-shadow: 0 0 8px rgba(255, 51, 88, 0.3);
+  }
+  50% {
+    text-shadow: 0 0 24px rgba(255, 51, 88, 0.85);
+  }
+}
+
+.g1-exitrow {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 24px 0;
+}
+
+/* --- 스테이지 -------------------------------------------------------------- */
+.g1-stage {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin: 12px 24px 24px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.g1-sideline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  pointer-events: none;
+}
+.g1-sideline--p1 {
+  left: 0;
+  background: var(--p1);
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+}
+.g1-sideline--p2 {
+  right: 0;
+  background: var(--p2);
+  box-shadow: 0 0 8px rgba(255, 51, 88, 0.6);
+}
+/* 3초 유지 중 진영색이 스테이지 절반을 서서히 물들임 (§3.1) */
+.g1-wash {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  pointer-events: none;
+  transition: opacity 200ms linear;
+}
+.g1-wash--p1 {
+  left: 0;
+  background: linear-gradient(90deg, rgba(0, 240, 255, 0.16), transparent);
+}
+.g1-wash--p2 {
+  right: 0;
+  background: linear-gradient(270deg, rgba(255, 51, 88, 0.16), transparent);
+}
+
+/* --- 아레나 3열: P1 콘솔 / 타겟 / P2 콘솔 ---------------------------------- */
+.g1-arena {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr minmax(260px, 32%) 1fr;
+  align-items: center;
+  gap: clamp(16px, 3vw, 40px);
+  padding: clamp(16px, 4vh, 40px) clamp(20px, 4vw, 48px);
+  position: relative;
+}
+
+/* 중앙 타겟 패널 — 관제 콘솔의 코어 */
+.g1-target {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: clamp(24px, 5vh, 48px) 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  clip-path: var(--clip-cut);
+}
+.g1-target-num {
+  font-size: clamp(72px, 11vw, 128px);
+  line-height: 1;
+  color: var(--text-hi);
+  text-shadow:
+    0 0 12px rgba(234, 240, 248, 0.5),
+    0 0 42px rgba(234, 240, 248, 0.25);
+}
+.g1-target-hint {
+  font-size: 12px;
+  color: var(--text-md);
+}
+
+/* 좌우 현재숫자 콘솔 */
+.g1-console {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 18px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  clip-path: var(--clip-cut);
+  transition:
+    border-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+}
+.g1-console--p1.g1-console--matched {
+  border-color: var(--p1);
+  box-shadow:
+    0 0 18px -2px rgba(0, 240, 255, 0.55),
+    inset 0 0 0 1px rgba(0, 240, 255, 0.35);
+}
+.g1-console--p2.g1-console--matched {
+  border-color: var(--p2);
+  box-shadow:
+    0 0 18px -2px rgba(255, 51, 88, 0.55),
+    inset 0 0 0 1px rgba(255, 51, 88, 0.35);
+}
+.g1-console-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.g1-console-body {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* 현재 숫자 + 3초 유지 링 */
+.g1-numwrap {
+  position: relative;
+  width: clamp(130px, 14vw, 170px);
+  height: clamp(130px, 14vw, 170px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.g1-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%; /* 원형 유지 링 — PLAN §2.S9 "원형 스트로크" (코너컷 규칙 예외) */
+  -webkit-mask: radial-gradient(closest-side, transparent 79%, #000 80%);
+  mask: radial-gradient(closest-side, transparent 79%, #000 80%);
+}
+.g1-value {
+  font-size: clamp(52px, 6.5vw, 76px);
+  font-weight: 900;
+  line-height: 1;
+  /* 글로우 잔상 틱 — 숫자 변경 시 key 갱신으로 재생 (§3.1) */
+  animation: g1-numtick 150ms linear both;
+}
+@keyframes g1-numtick {
+  from {
+    opacity: 0.35;
+    text-shadow: 0 0 28px currentColor;
+  }
+  to {
+    opacity: 1;
+    text-shadow: 0 0 10px currentColor;
+  }
+}
+
+/* 근접도 세로 슬림 게이지 (|현재-타겟| 역비례) */
+.g1-gauge {
+  position: relative;
+  width: 6px;
+  height: clamp(110px, 13vw, 150px);
+  background: var(--line-dim);
+  border: 1px solid var(--line);
+}
+.g1-gauge-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  transition: height 120ms linear;
+}
+.g1-gauge-fill--spark {
+  box-shadow: 0 -2px 8px 1px rgba(255, 255, 255, 0.85); /* 완전 일치 시 바 끝 백색 스파크 */
+}
+
+/* 유지 카운트 라벨 (일치 중에만 표시, 높이 예약으로 레이아웃 고정) */
+.g1-holdlabel {
+  height: 14px;
+  transition: opacity 120ms linear;
+}
+
+/* --- 하단 조작키 안내 ------------------------------------------------------ */
+.g1-pads {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 clamp(24px, 5vw, 56px) 26px;
+}
+.g1-pad {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+/* --- 시작 카운트다운(3·2·1) 오버레이 --------------------------------------- */
+.g1-count-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(6, 8, 12, 0.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.g1-count-num {
+  font-size: clamp(80px, 14vw, 140px);
+  line-height: 1;
+  color: var(--text-hi);
+}
+
+/* --- 반응형 ---------------------------------------------------------------- */
+@media (max-width: 860px) {
+  .g1-arena {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .g1-pads {
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+  }
+}

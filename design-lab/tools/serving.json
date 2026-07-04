@@ -18,5 +18,10 @@
     "port": 5104,
     "dist": "ideas/04-broadcast-arena/dist",
     "name": "04 Broadcast Arena"
+  },
+  {
+    "port": 5105,
+    "dist": "ideas/05-obsidian/dist",
+    "name": "05 Obsidian Protocol"
   }
 ]
