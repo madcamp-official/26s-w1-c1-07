@@ -49,15 +49,16 @@ body {
 }
 
 .game-buttons {
-  display: flex;
-  gap: 18px;
+  display: grid;
+  grid-template-columns: repeat(5, 156px);
+  gap: 16px;
   justify-content: center;
   margin-top: 44px;
 }
 
 .game-button {
-  width: 170px;
-  padding: 22px 0 18px;
+  width: 100%;
+  padding: 20px 0 16px;
   background: var(--panel);
   border: 2px solid #232838;
   border-radius: 14px;

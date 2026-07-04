@@ -4,6 +4,13 @@ const GAMES = [
   { id: '1', name: '게임1', desc: '숫자 맞추기' },
   { id: '2', name: '게임2', desc: '로켓 피하기' },
   { id: '3', name: '게임3', desc: '펜싱' },
+  { id: '4', name: '게임4', desc: '공룡 달리기' },
+  { id: '5', name: '게임5', desc: '몬스터 포격전' },
+  { id: '6', name: '게임6', desc: '펌프' },
+  { id: '7', name: '게임7', desc: '스피드 오목' },
+  { id: '8', name: '게임8', desc: '마그마 총격 듀얼' },
+  { id: '9', name: '게임9', desc: '줄다리기' },
+  { id: '10', name: '게임10', desc: '라이트 사이클' },
 ]
 
 export default function MainScreen() {
