@@ -1,0 +1,234 @@
+/**
+ * MADPUMP idea-04 "Broadcast Arena" — 디자인 토큰 + 전역 스타일.
+ * (아키텍트 소유 — 구현 에이전트 수정 금지. 화면별 CSS는 각자 파일에)
+ *
+ * PLAN.md §1 정본:
+ *  - 밝음-진지, 주간 스타디움 중계 룩. 네이비는 배경이 아니라 잉크/스트립.
+ *  - 시그니처 형태: skewX(-12deg) 평행사변형 (유틸 .skew / 내부 텍스트 .unskew)
+ *  - 골드는 승리·1위·MVP 전용. 평시 화면에 골드 금지.
+ */
+
+:root {
+  /* ── 팔레트 (PLAN §1.1 정확한 hex) ─────────────────────────── */
+  --bg: #eef2f7; /* 스튜디오 라이트 그레이블루 — 전 화면 기본 배경 */
+  --bg-field: #e3eaf3; /* 게임 스테이지·패널 뒤 그라디언트 짝 */
+  --surface: #ffffff; /* 방송 패널/카드/모달 */
+  --strip: #0e1e3c; /* 중계 네이비 — 티커 바·primary 버튼·스코어 버그 몸체 */
+  --ink: #0e1e3c; /* 본문/헤드라인 잉크 */
+  --ink-sub: #5b6b82; /* 캡션·라벨·비활성 */
+  --line: #c9d4e3; /* 1px 헤어라인 */
+  --gold: #c99312; /* 트로피 골드 — 승리·1위·MVP 전용 */
+  --gold-bright: #e4b33c; /* 골드 그라디언트 밝은 짝 */
+  --live: #d7263d; /* LIVE 점·BREAKING 탭·에러 */
+  --p1: #0b63e5; /* P1(playerL) 팀 블루 */
+  --p1-tint: #e3eefd;
+  --p1-deep: #08479f;
+  --p2: #e0323e; /* P2(playerR) 팀 레드 */
+  --p2-tint: #fce8e9;
+  --p2-deep: #a31e27;
+  --dim: rgba(14, 30, 60, 0.45); /* 모달 딤 */
+
+  /* ── 타이포 (PLAN §1.2) ────────────────────────────────────── */
+  --font-display: 'Archivo', 'IBM Plex Sans KR', sans-serif;
+  --font-body: 'IBM Plex Sans KR', 'Archivo', sans-serif;
+
+  /* ── 형태 (PLAN §1.3) ──────────────────────────────────────── */
+  --radius: 6px; /* 일반 카드·모달. 스큐 요소는 0 */
+  --radius-pill: 999px; /* 스코어 버그·LIVE 뱃지 */
+  --shadow: 0 8px 24px rgba(14, 30, 60, 0.12); /* 단일 소프트 섀도 */
+  --skew: -12deg;
+  --ticker-h: 36px; /* 하단 티커 높이 */
+
+  /* ── 모션 (PLAN §1.4) ──────────────────────────────────────── */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur: 240ms;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+  padding: 0;
+}
+
+input {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* ── 유틸 클래스 ─────────────────────────────────────────────── */
+
+/* 방송 디스플레이 서체 (Archivo). 헤드라인·워드마크·숫자 */
+.display {
+  font-family: var(--font-display);
+}
+
+/* 타뷸러 숫자 고정폭 (스코어·카운트다운·코드) */
+.tnum {
+  font-family: var(--font-display);
+  font-feature-settings: 'tnum';
+  font-variant-numeric: tabular-nums;
+}
+
+/* 섹션 라벨: 12px 대문자, letter-spacing 0.12em (PLAN §1.2) */
+.label {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-stretch: 70%;
+}
+
+/* 시그니처 스큐 평행사변형 — 내부 콘텐츠는 .unskew로 수평 복원 */
+.skew {
+  transform: skewX(var(--skew));
+}
+.unskew {
+  display: inline-block;
+  transform: skewX(calc(-1 * var(--skew)));
+}
+
+/* 익스텐디드 워드마크 (wdth 125 + 이탤릭 스큐) */
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-stretch: 125%;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+/* 입력 (PLAN §1.5): 흰 바탕 1px 보더 radius 4px, 포커스 시 네이비 아웃라인 + 좌측 스트립 */
+.input {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-size: 15px;
+  outline: none;
+  transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.input:focus {
+  border-color: var(--strip);
+  box-shadow: 0 0 0 2px var(--strip), inset 3px 0 0 var(--strip);
+}
+.input.input-error {
+  border-color: var(--live);
+}
+.input.input-error:focus {
+  box-shadow: 0 0 0 2px var(--live), inset 3px 0 0 var(--live);
+}
+
+/* ── 키프레임 (PLAN §1.4) ────────────────────────────────────── */
+
+/* 로워서드 와이프 인 (좌→우) — 패널·모달 등장 공통 */
+@keyframes wipe-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0.6;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+.wipe-in {
+  animation: wipe-in var(--dur) var(--ease) both;
+}
+
+/* LIVE 점 1s opacity 펄스 */
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* 하단 티커 30s 무한 linear 스크롤 (트랙을 2벌 이어붙여 -50%까지) */
+@keyframes ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* 플립보드 카운터 — 숫자 변경 시 세로 롤 120ms */
+@keyframes flip-roll {
+  from {
+    transform: translateY(-55%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.flip-roll {
+  animation: flip-roll 120ms var(--ease) both;
+}
+
+/* 승부 순간 화이트 플래시 (result 연출용) */
+@keyframes white-flash {
+  0% {
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* 카운트다운 마지막 5초 스케일 펄스 */
+@keyframes count-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+/* prefers-reduced-motion: 와이프·파티클·티커 정지 (PLAN §1.4) */
+@media (prefers-reduced-motion: reduce) {
+  .wipe-in,
+  .flip-roll {
+    animation: none !important;
+  }
+  [data-anim='ticker'],
+  [data-anim='live'],
+  [data-anim='pulse'] {
+    animation: none !important;
+  }
+}

@@ -1,0 +1,146 @@
+/**
+ * lobby 담당 화면 전용 스타일 (S2 메인·S4 설정·S6 온라인·S7 매칭·S8 게임선택).
+ * lobby 에이전트 소유 — theme.css의 토큰만 참조한다.
+ */
+
+/* 화면 배경: 주간 스튜디오 그라디언트 + 미세 피치 라인 (PLAN §2 S1/S2) */
+.lobby-screen {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(14, 30, 60, 0.03) 0,
+      rgba(14, 30, 60, 0.03) 1px,
+      transparent 1px,
+      transparent 140px
+    ),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-field) 100%);
+}
+
+/* 원형 설정 버튼 (S2 헤더 우측) */
+.lobby-settings-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-sub);
+  box-shadow: var(--shadow);
+  flex-shrink: 0;
+  transition:
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+}
+.lobby-settings-btn:hover {
+  color: var(--ink);
+  border-color: var(--strip);
+  transform: rotate(30deg);
+}
+
+/* 로워서드 인사말 네임플레이트 (S2 헤더 — 팀 블루 엣지) */
+.lobby-nameplate {
+  display: inline-block;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--p1);
+  padding: 6px 16px;
+  box-shadow: var(--shadow);
+}
+
+/* S4 경기 규정 카드 행 */
+.lobby-rule-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  padding: 12px 16px;
+}
+
+/* S6 서브카드 (게임 만들기 / 참가하기) */
+.lobby-subcard {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 16px;
+  background: var(--bg);
+}
+
+/* S6 코드 표시 슬롯 — 생성 전 밑줄 플레이스홀더, 생성 후 tnum 코드 */
+.lobby-code-slot {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 2px solid var(--line);
+  padding: 4px 6px;
+  text-align: center;
+  letter-spacing: 0.14em;
+  font-size: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* S6 아이콘(톱니) 버튼 */
+.lobby-icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-sub);
+  flex-shrink: 0;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.lobby-icon-btn:hover {
+  color: var(--ink);
+  border-color: var(--strip);
+}
+
+/* S7 위성 신호 바 4개 순차 점등 */
+@keyframes lobby-signal {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  40%,
+  60% {
+    opacity: 1;
+  }
+}
+.lobby-signal-bar {
+  width: 10px;
+  background: var(--strip);
+  border-radius: 2px;
+  animation: lobby-signal 1.4s var(--ease) infinite;
+}
+
+/* S7 빈 상대 슬롯 깜박임 */
+@keyframes lobby-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+.lobby-blink {
+  animation: lobby-blink 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lobby-signal-bar,
+  .lobby-blink {
+    animation: none !important;
+  }
+  .lobby-settings-btn:hover {
+    transform: none;
+  }
+}

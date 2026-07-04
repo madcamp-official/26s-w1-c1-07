@@ -1,0 +1,384 @@
+/*
+ * S12 게임3 — 펜싱 전용 스타일 (game3 에이전트 소유).
+ * PLAN §3.3: 피스트 스트립 + 바다 링아웃, 밝은 하늘 그라디언트, 스큐 판정 배너.
+ */
+
+.g3-root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 22px 20px;
+}
+
+/* ── 상단 바 ─────────────────────────────────────────────── */
+.g3-topbar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+}
+.g3-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.g3-topbar-right {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── 1초 틱 진행 표시 ─────────────────────────────────────── */
+.g3-judge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.g3-judge-track {
+  flex: 1;
+  height: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.g3-judge-fill {
+  height: 100%;
+  background: var(--strip);
+}
+
+/* ── 스테이지 (피스트 + 바다) ─────────────────────────────── */
+.g3-stage {
+  position: relative;
+  flex: 1;
+  min-height: 400px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: linear-gradient(180deg, #eef2f7 0%, #e3eaf3 100%);
+  box-shadow: var(--shadow);
+}
+
+/* 바다 (좌우 끝) — 옅은 블루 웨이브 2겹 패럴랙스 루프 */
+.g3-sea {
+  position: absolute;
+  bottom: 0;
+  width: 15%;
+  height: 84px;
+  background: #cfe0f4;
+  overflow: hidden;
+}
+.g3-sea-left {
+  left: 0;
+}
+.g3-sea-right {
+  right: 0;
+}
+.g3-wave {
+  position: absolute;
+  left: -48px;
+  right: -48px;
+  top: -6px;
+  height: 26px;
+  background: radial-gradient(circle at 12px 18px, rgba(11, 99, 229, 0.22) 10px, transparent 11px);
+  background-size: 24px 26px;
+  animation: g3-wave-drift 7s linear infinite;
+}
+.g3-wave2 {
+  top: 4px;
+  background: radial-gradient(circle at 12px 18px, rgba(11, 99, 229, 0.14) 10px, transparent 11px);
+  background-size: 32px 26px;
+  animation-duration: 11s;
+  animation-direction: reverse;
+}
+@keyframes g3-wave-drift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(48px);
+  }
+}
+
+/* 플랫폼 (피스트) — 흰 플랫폼 + 칸 헤어라인 + 칸 번호 스텐실 */
+.g3-platform {
+  position: absolute;
+  bottom: 0;
+  left: 15%;
+  right: 15%;
+  height: 104px;
+  background: var(--surface);
+  border-top: 2px solid var(--strip);
+  box-shadow: 0 -4px 16px rgba(14, 30, 60, 0.08);
+  display: flex;
+}
+.g3-cell {
+  flex: 1;
+  border-right: 1px solid rgba(14, 30, 60, 0.22);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 8px;
+}
+.g3-cell:last-child {
+  border-right: none;
+}
+.g3-cell-num {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--ink);
+  opacity: 0.14;
+  user-select: none;
+}
+/* 해저드 에지 (플랫폼 좌우 끝 레드/화이트) */
+.g3-hazard {
+  position: absolute;
+  bottom: 0;
+  width: 8px;
+  height: 104px;
+  background: repeating-linear-gradient(
+    45deg,
+    var(--live) 0 6px,
+    #fff 6px 12px
+  );
+}
+.g3-hazard-left {
+  left: 15%;
+}
+.g3-hazard-right {
+  right: 15%;
+}
+
+/* ── 펜서 캐릭터 ─────────────────────────────────────────── */
+.g3-fencer {
+  position: absolute;
+  bottom: 102px;
+  width: 96px;
+  margin-left: -48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: left var(--dur) var(--ease);
+}
+.g3-fencer.g3-fall {
+  transition: left var(--dur) var(--ease),
+    transform 900ms cubic-bezier(0.5, 0, 1, 1) 120ms,
+    opacity 700ms ease-in 500ms;
+  transform: translateY(200px) rotate(-28deg);
+  opacity: 0;
+}
+.g3-fencer.g3-fall.g3-fall-right {
+  transform: translateY(200px) rotate(28deg);
+}
+.g3-fencer-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+}
+.g3-you {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #fff;
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+.g3-edgeplate {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 10px;
+}
+/* 밀림 스키드 라인 */
+.g3-skid {
+  position: absolute;
+  bottom: 106px;
+  width: 44px;
+  height: 4px;
+  margin-left: -22px;
+  border-radius: 2px;
+  animation: g3-skid-fade 420ms var(--ease) both;
+}
+@keyframes g3-skid-fade {
+  from {
+    opacity: 0.85;
+    transform: scaleX(1.3);
+  }
+  to {
+    opacity: 0;
+    transform: scaleX(0.6);
+  }
+}
+
+/* 물기둥 스플래시 (링아웃) */
+.g3-splash {
+  position: absolute;
+  bottom: 64px;
+  width: 0;
+  height: 0;
+}
+.g3-splash span {
+  position: absolute;
+  bottom: 0;
+  left: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  animation: g3-drop 800ms ease-out both;
+}
+@keyframes g3-drop {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.9;
+  }
+  60% {
+    transform: translate(var(--dx, 0), -46px) scale(0.9);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(calc(var(--dx, 0) * 1.6), 8px) scale(0.5);
+    opacity: 0;
+  }
+}
+
+/* ── 틱 판정 배너 (로워서드 와이프) ───────────────────────── */
+.g3-banner {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 5;
+}
+.g3-banner-card {
+  display: inline-block;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  padding: 8px 18px;
+}
+.g3-banner-in {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+.g3-movechip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.g3-movechip.p1 {
+  background: var(--p1-tint);
+  color: var(--p1-deep);
+}
+.g3-movechip.p2 {
+  background: var(--p2-tint);
+  color: var(--p2-deep);
+}
+
+/* 결과 콜아웃 (링아웃/타임업 — ResultOverlay 등장 전 스테이지 연출) */
+.g3-callout {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.55);
+  animation: white-flash 600ms ease-out;
+}
+.g3-callout-title {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-stretch: 125%;
+  font-style: italic;
+  font-size: 52px;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* ── 하단 패드 (키 인디케이터 + 스탠스 피드백) ────────────── */
+.g3-pads {
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 16px;
+}
+.g3-pad {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 10px 16px;
+}
+.g3-pad.p1 {
+  border-left: 4px solid var(--p1);
+}
+.g3-pad.p2 {
+  border-right: 4px solid var(--p2);
+  flex-direction: row-reverse;
+}
+.g3-stance {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 72px;
+}
+.g3-stance-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--line);
+  color: var(--ink-sub);
+  background: var(--bg);
+  transition: all 120ms var(--ease);
+}
+.g3-stance-chip.on.p1 {
+  background: var(--p1-tint);
+  border-color: var(--p1);
+  color: var(--p1-deep);
+}
+.g3-stance-chip.on.p2 {
+  background: var(--p2-tint);
+  border-color: var(--p2);
+  color: var(--p2-deep);
+}
+.g3-pad-hint {
+  font-size: 10px;
+  color: var(--ink-sub);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .g3-wave,
+  .g3-wave2,
+  .g3-splash span,
+  .g3-skid {
+    animation: none !important;
+  }
+  .g3-fencer {
+    transition: none !important;
+  }
+}

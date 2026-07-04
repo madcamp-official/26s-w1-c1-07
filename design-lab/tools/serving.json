@@ -1,0 +1,22 @@
+[
+  {
+    "port": 5101,
+    "dist": "ideas/01-neo-brutal/dist",
+    "name": "01 Neo-Brutal"
+  },
+  {
+    "port": 5102,
+    "dist": "ideas/02-neon-coinop/dist",
+    "name": "02 NEON COIN-OP"
+  },
+  {
+    "port": 5103,
+    "dist": "ideas/03-clay-toy/dist",
+    "name": "03 Clay Toy"
+  },
+  {
+    "port": 5104,
+    "dist": "ideas/04-broadcast-arena/dist",
+    "name": "04 Broadcast Arena"
+  }
+]

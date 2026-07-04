@@ -1,0 +1,147 @@
+/*
+ * auth 화면 전용 스타일 (S1 MainLoggedOut / S5 Onboarding) — auth 에이전트 소유.
+ * 공용 theme.css 수정 금지 규칙에 따라 여기에만 추가.
+ */
+
+/* 화면 컨테이너 — 피치(경기장) 라인 패턴이 깔린 스튜디오 배경 */
+.auth-screen {
+  position: relative;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: var(--ticker-h);
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-field) 100%);
+}
+
+/* 배경 피치 라인 (PLAN §2 S1 "미세한 피치 라인 패턴") */
+.auth-pitch {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(14, 30, 60, 0.035) 0px,
+    rgba(14, 30, 60, 0.035) 1px,
+    transparent 1px,
+    transparent 140px
+  );
+}
+/* 센터 서클 */
+.auth-pitch::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  width: 560px;
+  height: 560px;
+  transform: translate(-50%, -50%);
+  border: 1.5px solid rgba(14, 30, 60, 0.06);
+  border-radius: 50%;
+}
+/* 센터 라인 */
+.auth-pitch::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  background: rgba(14, 30, 60, 0.05);
+}
+
+/* 상단 방송 헤더 바 */
+.auth-header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.auth-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 원형 설정 버튼 (S1 우상단) */
+.auth-gear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.auth-gear-btn:hover {
+  border-color: var(--strip);
+  transform: rotate(30deg);
+}
+
+/* S1 중앙 히어로 */
+.s1-hero {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.s1-wordmark {
+  font-size: clamp(64px, 11vw, 128px);
+  color: var(--ink);
+  margin: 0;
+}
+
+/* S1 버튼 세로 스택 */
+.s1-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  margin-top: 36px;
+  width: min(360px, 86vw);
+}
+
+/* S5 온보딩 중앙 배치 */
+.s5-center {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+}
+
+.s5-field-label {
+  display: block;
+  color: var(--ink-sub);
+  margin-bottom: 6px;
+}
+
+.s5-input {
+  width: 100%;
+  font-size: 16px;
+}

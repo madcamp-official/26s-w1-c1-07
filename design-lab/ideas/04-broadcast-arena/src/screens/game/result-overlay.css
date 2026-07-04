@@ -1,0 +1,108 @@
+/**
+ * ResultOverlay 전용 스타일 (game1 에이전트 소유 — 전 게임 공용).
+ * PLAN §1.4 승부 순간: 화이트 플래시 → 0.5s 슬로모션 → 골드 파티클 + result 카드.
+ */
+
+.ro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--dim);
+}
+
+/* 120ms 화이트 플래시 와이프 */
+.ro-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 96;
+  background: #fff;
+  pointer-events: none;
+  animation: white-flash 480ms ease-out both;
+}
+
+/* 슬로모션 등장 (scale .98 → 1, 500ms) */
+.ro-card-wrap {
+  position: relative;
+}
+.ro-card {
+  position: relative;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 36px 40px 30px;
+  text-align: center;
+  min-width: 360px;
+  animation: ro-slowmo 500ms var(--ease) both;
+}
+@keyframes ro-slowmo {
+  from {
+    transform: scale(0.98);
+    opacity: 0.6;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.ro-tab {
+  position: absolute;
+  top: -13px;
+  left: 24px;
+}
+
+/* 승자 쪽 골드 파티클 */
+.ro-particles {
+  position: absolute;
+  inset: -20px 0 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: var(--radius);
+}
+.ro-particle {
+  position: absolute;
+  top: -14px;
+  width: 7px;
+  height: 11px;
+  background: linear-gradient(160deg, var(--gold-bright), var(--gold));
+  animation: ro-fall 1.6s linear infinite;
+}
+@keyframes ro-fall {
+  from {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  to {
+    transform: translateY(300px) rotate(560deg);
+    opacity: 0;
+  }
+}
+
+.ro-score {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.ro-mvp {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 2px;
+  color: var(--gold);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ro-flash,
+  .ro-particle {
+    animation: none !important;
+    display: none;
+  }
+  .ro-card {
+    animation: none !important;
+  }
+}

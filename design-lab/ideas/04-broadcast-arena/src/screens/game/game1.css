@@ -1,0 +1,249 @@
+/**
+ * S9 게임1 전용 스타일 (game1 에이전트 소유).
+ * PLAN §3.1 "스플릿스크린 기록 경기" — 듀오톤 필드, 타겟 플립보드, 팀 컬러 현재숫자 패널.
+ */
+
+.g1-root {
+  height: 100%;
+  min-height: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 24px 20px;
+}
+
+.g1-topbar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+}
+.g1-topbar-right {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── 스테이지: 세로 헤어라인 이분할 + 좌 블루/우 레드 옅은 틴트 ── */
+.g1-stage {
+  position: relative;
+  flex: 1;
+  min-height: 300px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--bg-field), var(--bg));
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: transform 400ms var(--ease);
+}
+.g1-stage.g1-zoom {
+  transform: scale(1.012); /* 일치 유지 중 — 중계 카메라 줌 인 */
+}
+.g1-half {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  pointer-events: none;
+  opacity: 0.5;
+}
+.g1-half-p1 {
+  left: 0;
+  background: linear-gradient(90deg, var(--p1-tint), transparent 85%);
+}
+.g1-half-p2 {
+  right: 0;
+  background: linear-gradient(-90deg, var(--p2-tint), transparent 85%);
+}
+.g1-divider {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+
+/* ── 중앙 타겟 플립보드 (전광판 슬랫) ── */
+.g1-target {
+  position: absolute;
+  left: 50%;
+  top: 40px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.g1-target-board {
+  position: relative;
+  background: #101a30;
+  color: #fff;
+  border-radius: 8px;
+  padding: 14px 34px 12px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.g1-target-board::after {
+  /* 플립보드 슬랫 헤어라인 */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    180deg,
+    transparent 0 22px,
+    rgba(255, 255, 255, 0.09) 22px 23px
+  );
+  pointer-events: none;
+}
+.g1-target-board::before {
+  /* 중앙 접힘선 */
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  z-index: 1;
+}
+.g1-target-num {
+  font-size: 76px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+/* ── 좌우 현재숫자 패널 ── */
+.g1-panel {
+  position: absolute;
+  bottom: 34px;
+  width: min(280px, 34%);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px 16px 14px;
+  transition: box-shadow var(--dur) var(--ease);
+}
+.g1-panel-p1 {
+  left: 5%;
+  border-left: 4px solid var(--p1);
+}
+.g1-panel-p2 {
+  right: 5%;
+  border-right: 4px solid var(--p2);
+}
+/* 타겟과의 차이 8 이내 — 팀 컬러 발광 (승부 근접 순간에만) */
+.g1-panel-p1.g1-near {
+  box-shadow: 0 0 0 1px var(--p1), 0 0 18px rgba(11, 99, 229, 0.35);
+}
+.g1-panel-p2.g1-near {
+  box-shadow: 0 0 0 1px var(--p2), 0 0 18px rgba(224, 50, 62, 0.35);
+}
+.g1-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.g1-panel-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.g1-value {
+  font-size: 44px;
+  font-weight: 900;
+  line-height: 1;
+  overflow: hidden;
+}
+.g1-diff {
+  font-size: 11px;
+  color: var(--ink-sub);
+  margin-top: 4px;
+}
+
+/* "this is you" 내 표시 — 팀 컬러 스큐 태그 */
+.g1-youtag {
+  position: absolute;
+  top: -14px;
+  right: 12px;
+}
+
+/* ── 일치 유지(HOLD) 골드 프로그레스 링 ── */
+.g1-hold {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  flex: none;
+}
+.g1-hold svg {
+  transform: rotate(-90deg);
+  display: block;
+}
+.g1-hold-track {
+  stroke: var(--line);
+}
+.g1-hold-bar {
+  stroke: var(--gold);
+  transition: stroke-dashoffset 90ms linear;
+}
+.g1-hold-bar.g1-hold-idle {
+  stroke: var(--line);
+}
+.g1-hold-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+}
+.g1-hold-label.g1-holding {
+  color: var(--gold);
+  animation: g1-hold-blink 700ms ease-in-out infinite;
+}
+@keyframes g1-hold-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ── 하단 조작키 안내 ── */
+.g1-pads {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 8px;
+}
+.g1-pad-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.g1-pad-group.g1-pad-right {
+  align-items: flex-end;
+}
+.g1-pad-keys {
+  display: flex;
+  gap: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .g1-stage,
+  .g1-stage.g1-zoom {
+    transform: none;
+    transition: none;
+  }
+  .g1-hold-label.g1-holding {
+    animation: none;
+  }
+}
