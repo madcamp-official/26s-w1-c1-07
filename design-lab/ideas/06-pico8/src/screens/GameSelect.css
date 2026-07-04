@@ -1,0 +1,159 @@
+/* S8 게임 선택 — 카트리지 진열대 (scr-game-select) — lobby 에이전트 소유
+   PLAN §2 S8: 카트리지 실루엣 + 시그니처 컬러 라벨 + 단자 빗살 */
+
+.gs-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 32px 32px;
+  gap: 32px;
+}
+
+.gs-top {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.gs-heading {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-pixel);
+  font-size: 20px;
+  color: var(--text);
+  text-shadow: 4px 4px 0 var(--bg-deep);
+}
+
+.gs-shelf {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+/* 카트리지 카드 */
+.gs-cart {
+  width: 208px;
+  padding: 0;
+  background: var(--surface);
+  border: 2px solid var(--bg-deep);
+  box-shadow: var(--shadow-hard);
+  cursor: pointer;
+  text-align: center;
+  font-family: var(--font-kr);
+  color: var(--text);
+  position: relative;
+}
+.gs-cart:hover,
+.gs-cart:focus-visible {
+  transform: translateY(-8px);
+  box-shadow: 6px 14px 0 var(--bg-deep);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.gs-cart:hover .gs-cart-cursor,
+.gs-cart:focus-visible .gs-cart-cursor {
+  visibility: visible;
+}
+
+/* 클릭 → 슬롯에 꽂히는 step 애니 (아래로 스냅) */
+.gs-cart.is-booting {
+  animation: gs-boot 0.4s steps(3, jump-none) forwards;
+}
+@keyframes gs-boot {
+  0% {
+    transform: translateY(-8px);
+  }
+  100% {
+    transform: translateY(24px);
+  }
+}
+
+/* 상단 라벨 스티커 (시그니처 컬러) */
+.gs-cart-label {
+  padding: 8px;
+  border-bottom: 2px solid var(--bg-deep);
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  color: var(--bg-deep);
+}
+
+/* 도트아트 창 */
+.gs-cart-art {
+  height: 120px;
+  background: var(--bg-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 2px solid var(--bg-deep);
+}
+
+.gs-cart-name {
+  padding: 8px;
+  font-size: 18px;
+}
+.gs-cart-cursor {
+  visibility: hidden;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--accent);
+  margin-right: 6px;
+  animation: px-blink 1.06s steps(2, jump-none) infinite;
+}
+
+/* 하단 단자 빗살 — 세로 스트라이프 */
+.gs-cart-pins {
+  height: 16px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--surface-3) 0 6px,
+    var(--bg-deep) 6px 12px
+  );
+  border-top: 2px solid var(--bg-deep);
+}
+
+/* 하단 안내 바 — hover 설명 1줄 */
+.gs-infobar {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--bg-deep);
+  border: 2px solid var(--bg-deep);
+  color: var(--text-dim);
+  font-size: 16px;
+}
+.gs-infobar .gs-info-cursor {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--accent);
+}
+
+/* 부트 플래시 — 화면 전체 1프레임 검정 */
+.gs-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--bg-deep);
+  animation: gs-flash-in 0.4s steps(1, jump-none) forwards;
+}
+@keyframes gs-flash-in {
+  0% {
+    opacity: 0;
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-cart.is-booting,
+  .gs-flash,
+  .gs-cart-cursor {
+    animation: none;
+  }
+}

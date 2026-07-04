@@ -1,0 +1,444 @@
+/* ==========================================================================
+   S12 게임3 — 펜싱 (scr-game3) 전용 스타일
+   [소유: game3 에이전트] — PLAN §1 토큰/규칙 + §3.3 아트 디렉션 준수
+   (PICO-8 16색 밖 금지 · radius 0 · blur 0 · steps(n) 애니만 · 8px 그리드)
+   ========================================================================== */
+
+.g3-root {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px 16px;
+}
+
+/* ---------------- HUD ---------------- */
+.g3-hud {
+  width: min(960px, 96vw);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.g3-hud-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.g3-round-label {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--text-soft);
+  line-height: 1.6;
+}
+
+.g3-cd-seconds {
+  font-family: var(--font-pixel);
+  font-size: 20px;
+  color: var(--text);
+  line-height: 1.2;
+}
+.g3-cd-seconds.is-last3 {
+  color: var(--danger);
+}
+
+.g3-cd-blocks {
+  display: flex;
+  gap: 2px;
+}
+.g3-cd-block {
+  width: 12px;
+  height: 8px;
+  background: var(--surface-3);
+  border: 1px solid var(--bg-deep);
+}
+.g3-cd-block.is-on {
+  background: var(--accent-2);
+}
+.g3-cd-block.is-on.is-last3 {
+  background: var(--danger);
+}
+
+.g3-exit-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---------------- 콘솔 스크린 프레임 ---------------- */
+.g3-frame {
+  position: relative;
+  border: 4px solid var(--bg-deep);
+  box-shadow:
+    inset 0 0 0 2px var(--surface-3),
+    var(--shadow-float);
+  background: var(--bg-deep);
+  padding: 2px;
+}
+
+.g3-engrave {
+  position: absolute;
+  left: 8px;
+  bottom: -24px;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--text-soft);
+  user-select: none;
+}
+
+/* ---------------- 무대 ---------------- */
+.g3-stage {
+  position: relative;
+  width: min(880px, 90vw);
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background-color: var(--bg-deep);
+  /* 라벤더 별 하늘 (PLAN §3.3) */
+  background-image:
+    radial-gradient(var(--text-soft) 1px, transparent 1px),
+    radial-gradient(var(--text-soft) 1px, transparent 1px);
+  background-size: 96px 72px, 56px 48px;
+  background-position: 12px 8px, 36px 28px;
+}
+
+/* 1초 틱 진행 바 */
+.g3-tickbar {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 8;
+}
+.g3-tickbar-label {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--text-soft);
+  line-height: 1;
+}
+.g3-tickbar-segs {
+  display: flex;
+  gap: 2px;
+}
+.g3-tick-seg {
+  width: 10px;
+  height: 6px;
+  background: var(--surface-3);
+  border: 1px solid var(--bg-deep);
+  outline: 1px solid var(--surface-3);
+}
+.g3-tick-seg.is-on {
+  background: var(--ok);
+}
+
+/* ---------------- 바다 ---------------- */
+.g3-sea {
+  position: absolute;
+  bottom: 0;
+  height: 20%;
+  background-color: var(--p1);
+  /* 화이트 물거품 도트 — 2프레임 파도 (steps) */
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(255, 241, 232, 0.85) 0 4px,
+    transparent 4px 16px
+  );
+  background-size: 16px 4px;
+  background-repeat: repeat-x;
+  border-top: 2px solid var(--bg-deep);
+  animation: g3-wave 1s steps(2, jump-none) infinite;
+  z-index: 2;
+}
+@keyframes g3-wave {
+  0% {
+    background-position-x: 0;
+  }
+  100% {
+    background-position-x: 8px;
+  }
+}
+/* 링아웃 임박 — 레드 틴트 파도 팔레트 스왑 */
+.g3-sea.is-danger {
+  background-color: var(--p2);
+}
+
+/* ---------------- 플랫폼 (칸 분절) ---------------- */
+.g3-platform {
+  position: absolute;
+  bottom: 0;
+  height: 26%;
+  display: flex;
+  background: var(--ok);
+  border: 2px solid var(--bg-deep);
+  border-bottom: none;
+  box-shadow: inset 0 -8px 0 rgba(0, 0, 0, 0.25);
+  z-index: 3;
+}
+.g3-cell {
+  flex: 1;
+  position: relative;
+  border-right: 2px solid var(--bg-deep);
+}
+.g3-cell:last-child {
+  border-right: none;
+}
+/* 칸마다 눈금 도트 */
+.g3-cell::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  background: var(--bg-deep);
+}
+/* 위기: 발밑 칸 점멸 */
+.g3-cell.is-blink {
+  animation: g3-cell-blink 0.6s steps(2, jump-none) infinite;
+}
+@keyframes g3-cell-blink {
+  0% {
+    background-color: var(--accent);
+  }
+  100% {
+    background-color: var(--ok);
+  }
+}
+
+/* ---------------- 캐릭터 ---------------- */
+.g3-char {
+  position: absolute;
+  bottom: 26%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 5;
+  transition: left 0.24s steps(3, jump-none);
+}
+.g3-fencer-svg {
+  width: 100%;
+  max-width: 88px;
+  height: auto;
+}
+.g3-char.is-p2 .g3-fencer-svg {
+  transform: scaleX(-1);
+}
+/* 밀림 착지 먼지 */
+.g3-char.is-pushed-now .g3-fencer-svg {
+  animation: px-shake 0.2s steps(1, jump-none);
+}
+/* 링아웃: 바다로 낙하 */
+.g3-char.is-fallen {
+  animation: g3-fall 0.5s steps(3, jump-none) forwards;
+}
+@keyframes g3-fall {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(130%);
+  }
+}
+/* 승자 표시 */
+.g3-char .g3-win-star {
+  position: absolute;
+  top: -28px;
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  color: var(--accent-2);
+  animation: px-blink 1.06s steps(2, jump-none) infinite;
+}
+
+/* 무행동 틱 zzz */
+.g3-zzz {
+  position: absolute;
+  top: -18px;
+  right: -8px;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--text-soft);
+  line-height: 1;
+}
+
+/* ---------------- 틱 공개 연출 ---------------- */
+.g3-bubble {
+  position: absolute;
+  top: -44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--text);
+  border: 2px solid var(--bg-deep);
+  box-shadow: 2px 2px 0 var(--bg-deep);
+  animation: px-pop 0.12s steps(2, jump-none);
+  z-index: 7;
+}
+.g3-bubble::after {
+  /* 말풍선 픽셀 꼬리 */
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  background: var(--text);
+  border: 2px solid var(--bg-deep);
+  border-top: none;
+}
+
+.g3-push-arrow {
+  position: absolute;
+  top: 30%;
+  font-family: var(--font-pixel);
+  font-size: 16px;
+  color: var(--accent-2);
+  line-height: 1;
+  z-index: 7;
+  animation: px-blink 0.36s steps(2, jump-none) 2;
+}
+
+.g3-clang {
+  position: absolute;
+  bottom: 52%;
+  transform: translateX(-50%);
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  color: var(--accent-2);
+  text-shadow: 2px 2px 0 var(--bg-deep);
+  z-index: 8;
+  animation: px-pop 0.12s steps(2, jump-none);
+}
+
+/* 물기둥 스플래시 */
+.g3-splash {
+  position: absolute;
+  bottom: 18%;
+  width: 8px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: g3-splash-up 0.55s steps(3, jump-none);
+}
+.g3-splash-col {
+  width: 8px;
+  height: 48px;
+  background: var(--text);
+  border: 2px solid var(--p1);
+}
+.g3-splash-text {
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  color: var(--text);
+  text-shadow: 2px 2px 0 var(--bg-deep);
+  white-space: nowrap;
+}
+@keyframes g3-splash-up {
+  0% {
+    transform: translateY(40px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+/* ---------------- 중앙 스탬프 (ROUND N / 3·2·1·GO / TIME UP / RING OUT) ------- */
+.g3-stamp-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.45);
+}
+.g3-stamp-round {
+  font-family: var(--font-pixel);
+  font-size: 18px;
+  color: var(--accent-2);
+  text-shadow: 3px 3px 0 var(--bg-deep);
+}
+.g3-stamp-count {
+  font-family: var(--font-pixel);
+  font-size: 48px;
+  color: var(--text);
+  text-shadow: 4px 4px 0 var(--bg-deep);
+  animation: px-pulse 0.7s steps(2, jump-none) infinite;
+}
+.g3-stamp-count.is-go {
+  color: var(--ok);
+}
+.g3-stamp-end {
+  font-family: var(--font-pixel);
+  font-size: 28px;
+  color: var(--accent-2);
+  text-shadow: 4px 4px 0 var(--bg-deep);
+  animation: px-pop 0.12s steps(2, jump-none);
+  z-index: 20;
+  position: absolute;
+  top: 24%;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+/* ---------------- 하단 키패드 ---------------- */
+.g3-pads {
+  width: min(880px, 90vw);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+.g3-pad-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.g3-pad-title {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+.g3-stance-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--bg-deep);
+  border: 2px solid var(--surface-3);
+}
+.g3-stance-chip .g3-stance-label {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--text-soft);
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .g3-sea,
+  .g3-cell.is-blink,
+  .g3-stamp-count,
+  .g3-char .g3-win-star,
+  .g3-push-arrow {
+    animation: none;
+  }
+  .g3-char {
+    transition: none;
+  }
+}

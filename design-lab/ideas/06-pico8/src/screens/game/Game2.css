@@ -1,0 +1,141 @@
+/* ==========================================================================
+   S10·S11 게임2 "총알 피하기" 전용 스타일 — game2 에이전트 소유
+   (PLAN §1 디자인 시스템 + §3.2 아트 디렉션. theme.css 토큰만 사용)
+   ========================================================================== */
+
+.g2-root {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
+}
+
+/* --- HUD (프로필/라운드/카운트다운/나가기) --- */
+.g2-hud {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 800px;
+}
+
+.g2-hud-side {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.g2-hud-side.is-right {
+  flex: none;
+  align-items: flex-end;
+}
+.g2-hud-side .g2-role-tag {
+  font-size: 10px;
+  line-height: 1;
+}
+.g2-role-tag.is-p1 {
+  color: var(--p1);
+}
+.g2-role-tag.is-p2 {
+  color: var(--p2);
+}
+
+.g2-hud-right-row {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+.g2-hud-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.g2-round-label {
+  font-size: 10px;
+  color: var(--text-soft);
+  line-height: 1;
+}
+.g2-countdown {
+  font-size: 24px;
+  line-height: 1.2;
+  color: var(--text);
+}
+.g2-countdown.is-warn {
+  color: var(--accent-2);
+}
+.g2-countdown.is-danger {
+  color: var(--p2);
+}
+
+/* --- 콘솔 스크린 프레임 (PLAN §1.3: #000 4px + 안쪽 --surface-3 2px 이중 프레임) --- */
+.g2-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.g2-screen {
+  position: relative;
+  background: var(--bg-deep);
+  border: 2px solid var(--surface-3);
+  box-shadow:
+    0 0 0 4px var(--bg-deep),
+    12px 12px 0 rgba(0, 0, 0, 0.55);
+}
+
+.g2-canvas {
+  display: block;
+  width: min(82vw, 56vh, 480px);
+  aspect-ratio: 1 / 1;
+  image-rendering: pixelated;
+}
+
+.g2-engrave {
+  position: absolute;
+  left: 6px;
+  bottom: 2px;
+  font-size: 8px; /* PLAN §1.3이 명시한 각인 전용 8px */
+  color: var(--text-soft);
+  line-height: 1;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* --- 라운드 인트로 (ROUND N → 3·2·1·GO! 팔레트 스왑) --- */
+.g2-intro {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+}
+.g2-intro-text {
+  font-size: 32px;
+  line-height: 1.6;
+  text-shadow: 4px 4px 0 var(--bg-deep);
+}
+
+/* --- 온스크린 키패드 (좌: P1 Q/W 블루 링, 우: P2 U/I 레드 링) --- */
+.g2-pads {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  width: min(82vw, 56vh, 480px);
+  gap: 16px;
+}
+.g2-pad-group {
+  display: flex;
+  gap: 16px;
+}

@@ -1,0 +1,12 @@
+{
+  "failures": [
+    {
+      "screen": "S12",
+      "detail": "게임3 링아웃/종료(result-overlay) 안 뜸"
+    }
+  ],
+  "notes": [
+    "게임3 elapsedMs>0 대기 실패 — 진행 계속"
+  ],
+  "shots": 19
+}

@@ -1,0 +1,363 @@
+/* ==========================================================================
+   MADPUMP idea-06 — PICO-8 PLAYGROUND 디자인 토큰 + 전역 스타일
+   정본: design-lab/ideas/06-pico8/PLAN.md §1
+   규칙 요약:
+   - PICO-8 16색 팔레트 밖의 색 사용 금지 (투명도 변형만 허용)
+   - border-radius 0. "라운드"는 픽셀 노치(clip-path 계단)로만
+   - box-shadow blur 0 (하드 섀도)
+   - 애니메이션은 steps(n) 이징만. ease/스프링 금지
+   - 여백/크기 8px 그리드 스냅
+   ========================================================================== */
+
+:root {
+  /* --- §1.1 팔레트 --- */
+  --bg: #1d2b53; /* 배경(다크블루) — body, 콘솔 베젤 */
+  --bg-deep: #000000; /* 스크린 최심층, 아웃라인, 하드 섀도 */
+  --surface: #7e2553; /* 표면 1 — 카드/모달/패널 기본(다크퍼플) */
+  --surface-2: #008751; /* 표면 2 — 보조 패널(다크그린) */
+  --surface-3: #5f574f; /* 비활성 표면·디바이더·중립 그레이 */
+  --text: #fff1e8; /* 주 텍스트 */
+  --text-dim: #c2c3c7; /* 보조 텍스트·라벨 */
+  --text-soft: #83769c; /* 힌트·비활성(라벤더) */
+  --accent: #ffa300; /* 포인트(오렌지) — 주 CTA, ▶ 커서, 활성 */
+  --accent-2: #ffec27; /* 포인트 보조(옐로) — 하이라이트, 코드 표시 */
+  --p1: #29adff; /* P1 블루 — 인게임 절대 불변 */
+  --p2: #ff004d; /* P2 레드 — 인게임 절대 불변 */
+  --pink: #ff77a8; /* P2 피격 플래시 1프레임 전용 */
+  --ok: #00e436; /* 성공 피드백, 게임3 무대 그린 */
+  --danger: #ff004d; /* 에러 텍스트 (P2색 겸용 허용) */
+  --flesh: #ffccaa; /* 스킨톤·게임1 게이지 보조 */
+
+  /* --- §1.2 타이포 --- */
+  --font-pixel: 'Press Start 2P', monospace; /* 대문자 영문/숫자 전용, 10px 미만 금지 */
+  --font-kr: 'Do Hyeon', sans-serif; /* 한글 전체 + 본문 */
+
+  /* --- §1.3 형태 --- */
+  --shadow-hard: 4px 4px 0 var(--bg-deep);
+  --shadow-hard-sm: 2px 2px 0 var(--bg-deep);
+  --shadow-hover: 6px 6px 0 var(--bg-deep);
+  --shadow-float: 8px 8px 0 rgba(0, 0, 0, 0.55);
+  /* 4px 픽셀 노치 코너 (radius 흉내 — 진짜 라운드 금지) */
+  --notch-4: polygon(
+    0 4px, 4px 4px, 4px 0,
+    calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px,
+    100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%,
+    4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px)
+  );
+  /* 8px 노치 (초대형 패널용) */
+  --notch-8: polygon(
+    0 8px, 8px 8px, 8px 0,
+    calc(100% - 8px) 0, calc(100% - 8px) 8px, 100% 8px,
+    100% calc(100% - 8px), calc(100% - 8px) calc(100% - 8px), calc(100% - 8px) 100%,
+    8px 100%, 8px calc(100% - 8px), 0 calc(100% - 8px)
+  );
+}
+
+/* --------------------------------------------------------------------------
+   리셋 + 전역
+   -------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-kr);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  /* --bg 위 4px 간격 미세 도트(검정 6%) — 콘솔 스크린 질감 (PLAN §1.1) */
+  background-color: var(--bg);
+  background-image: radial-gradient(rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+  background-size: 4px 4px;
+  image-rendering: pixelated;
+  -webkit-font-smoothing: none;
+  overflow-x: hidden;
+}
+
+canvas,
+img,
+svg {
+  image-rendering: pixelated;
+  shape-rendering: crispEdges;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+input {
+  font-family: inherit;
+}
+
+/* 픽셀폰트 공통 (Press Start 2P) — 대문자/숫자/짧은 레이블 전용 */
+.px-font {
+  font-family: var(--font-pixel);
+  font-weight: 400;
+  line-height: 1.6;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+/* --------------------------------------------------------------------------
+   keyframes — 전부 steps(n) (PLAN §1.4)
+   -------------------------------------------------------------------------- */
+
+/* ▶ 커서/대기 문구 점멸 (530ms steps) */
+@keyframes px-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.px-blink {
+  animation: px-blink 1.06s steps(2, jump-none) infinite;
+}
+
+/* 화면 전환: 8px 단위 아래서 스냅 등장 */
+@keyframes px-snap-in {
+  0% { transform: translateY(32px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+.px-snap-in {
+  animation: px-snap-in 0.2s steps(4, jump-none);
+}
+
+/* 모달 스냅 팝 (scale 0.9→1, steps(2)) */
+@keyframes px-pop {
+  0% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+.px-pop {
+  animation: px-pop 0.12s steps(2, jump-none);
+}
+
+/* 1프레임 좌우 셰이크 (에러/피격) */
+@keyframes px-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(4px); }
+  50% { transform: translateX(0); }
+  75% { transform: translateX(4px); }
+}
+.px-shake {
+  animation: px-shake 0.2s steps(1, jump-none);
+}
+
+/* 카운트다운 마지막 3초 펄스 (scale 1.25→1) */
+@keyframes px-pulse {
+  0% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+.px-pulse {
+  animation: px-pulse 1s steps(2, jump-none) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .px-blink,
+  .px-pulse {
+    animation: none;
+  }
+  .px-snap-in,
+  .px-pop,
+  .px-shake {
+    animation-duration: 0.01s;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   공용 클래스 (컴포넌트 프리미티브가 사용 — 구현 에이전트도 재사용 가능)
+   -------------------------------------------------------------------------- */
+
+/* 카드/패널 공통 골격: 검정 2px 아웃라인 + 하드섀도 + 노치 코너 */
+.px-panel {
+  position: relative;
+  border: 2px solid var(--bg-deep);
+  box-shadow: var(--shadow-hard);
+  background: var(--surface);
+  clip-path: none; /* clip-path는 섀도를 자르므로 래퍼(.px-notch)에서만 사용 */
+}
+
+/* 노치 클리핑이 필요한 내부 면 */
+.px-notch {
+  clip-path: var(--notch-4);
+}
+
+/* 모달 오버레이: 검정 70% + 2px 체커 도트 */
+.px-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.7);
+  background-image:
+    repeating-conic-gradient(rgba(0, 0, 0, 0.35) 0% 25%, transparent 0% 50%);
+  background-size: 4px 4px;
+}
+
+/* 입력: 검정 바탕 + 그레이 보더, 포커스 오렌지 (PLAN §1.5) */
+.px-input {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  background: var(--bg-deep);
+  color: var(--text);
+  border: 2px solid var(--surface-3);
+  font-family: var(--font-kr);
+  font-size: 16px;
+  caret-color: var(--accent-2);
+  outline: none;
+}
+.px-input::placeholder {
+  color: var(--text-soft);
+}
+.px-input:focus {
+  border-color: var(--accent);
+}
+.px-input.is-error {
+  border-color: var(--danger);
+}
+
+/* 에러 문구 — danger 배경 칩 + 밝은 텍스트로 대비 확보 */
+.px-error-text {
+  display: inline-block;
+  color: var(--text);
+  background: var(--danger);
+  border: 2px solid #000;
+  padding: 3px 7px;
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+/* 버튼 인터랙션 (components/Button.tsx가 사용 — 본체 스타일은 인라인) */
+.px-btn:not(:disabled):hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-hover) !important;
+}
+.px-btn:not(:disabled):active {
+  transform: translate(2px, 2px);
+  box-shadow: var(--shadow-hard-sm) !important;
+}
+.px-btn--cursor:not(:disabled):hover::before {
+  content: '▶';
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: currentColor;
+  animation: px-blink 1.06s steps(2, jump-none) infinite;
+}
+
+/* 키캡 (온스크린 키패드/설정 스테퍼 — PLAN §1.5) */
+.px-keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+  background: var(--surface-3);
+  color: var(--text);
+  border: 2px solid var(--bg-deep);
+  box-shadow: 0 4px 0 var(--bg-deep);
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  user-select: none;
+}
+.px-keycap.is-pressed {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 var(--bg-deep);
+}
+.px-keycap.owner-p1 {
+  outline: 2px solid var(--p1);
+  outline-offset: 2px;
+}
+.px-keycap.owner-p2 {
+  outline: 2px solid var(--p2);
+  outline-offset: 2px;
+}
+
+/* 스크롤바 (webkit) — 콘솔 감성 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--surface-3);
+  border: 2px solid var(--bg-deep);
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-deep);
+}
+
+/* 텍스트 선택 */
+::selection {
+  background: var(--accent);
+  color: var(--bg-deep);
+}
+
+/* --------------------------------------------------------------------------
+   앱 셸 (App.tsx 상단 스테이터스 바 — PLAN §2 공통 셸)
+   -------------------------------------------------------------------------- */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.app-statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  padding: 0 8px;
+  background: var(--bg-deep);
+  color: var(--text-soft);
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  line-height: 24px;
+  flex: none;
+  user-select: none;
+}
+.app-statusbar .session-on {
+  color: var(--ok);
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 스텁 화면 표시용 (구현 에이전트가 교체) */
+.stub-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+  text-align: center;
+}
+.stub-screen .stub-title {
+  font-family: var(--font-pixel);
+  font-size: 16px;
+  color: var(--accent-2);
+}
+.stub-screen .stub-note {
+  color: var(--text-soft);
+}

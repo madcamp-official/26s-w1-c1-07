@@ -1,0 +1,140 @@
+/* ResultOverlay 전용 스타일 — game1 에이전트 소유 (theme.css 수정 금지 규칙 준수)
+   PICO-8 팔레트 토큰만 사용. radius 0 / 하드섀도 / steps(n) 애니만. */
+
+.ro-card {
+  position: relative;
+  width: min(92vw, 480px);
+  padding: 0 24px 24px;
+  background: var(--surface);
+  border: 2px solid var(--bg-deep);
+  box-shadow:
+    0 0 0 2px var(--ro-accent, var(--text-dim)),
+    8px 8px 0 rgba(0, 0, 0, 0.55);
+  text-align: center;
+}
+
+/* 카트리지 라벨 타이틀 바 */
+.ro-titlebar {
+  margin: 0 -24px;
+  padding: 8px 0;
+  font-size: 10px;
+  color: var(--text-dim);
+  background: var(--bg);
+  border-bottom: 2px solid var(--bg-deep);
+  user-select: none;
+}
+
+.ro-headline {
+  margin: 24px 0 8px;
+  font-size: 24px;
+  color: var(--ro-accent, var(--text-dim));
+  text-shadow: 3px 3px 0 var(--bg-deep);
+  word-break: keep-all;
+}
+
+/* --- 픽셀 별 파편 폭발 (3프레임 step 재생) --- */
+@keyframes ro-burst {
+  0% {
+    transform: translate(0, 0) scale(0.5);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(var(--sx), var(--sy)) scale(1.25);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(var(--sx) * 2), calc(var(--sy) * 2)) scale(0.75);
+    opacity: 0;
+  }
+}
+.ro-burst {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.ro-spark {
+  position: absolute;
+  font-family: var(--font-pixel);
+  font-size: 16px;
+  color: var(--accent-2);
+  animation: ro-burst 0.54s steps(3, jump-none) both;
+}
+.ro-spark.s1 { --sx: -56px; --sy: -24px; }
+.ro-spark.s2 { --sx: 56px; --sy: -24px; color: var(--accent); }
+.ro-spark.s3 { --sx: -40px; --sy: 24px; color: var(--text); }
+.ro-spark.s4 { --sx: 40px; --sy: 24px; }
+
+/* --- 라운드 스코어 (P1 ★★☆ P2) --- */
+.ro-score {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0 24px;
+  padding: 12px 16px;
+  background: var(--bg-deep);
+  border: 2px solid var(--surface-3);
+}
+.ro-score-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ro-score-role {
+  font-size: 12px;
+  flex: none;
+}
+.ro-score-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  font-size: 14px;
+  color: var(--text);
+}
+.ro-score-stars {
+  font-size: 12px;
+  color: var(--text-soft);
+  letter-spacing: 2px;
+}
+.ro-score-stars .is-win {
+  color: var(--accent-2);
+}
+.ro-score-count {
+  font-size: 12px;
+  color: var(--text);
+  min-width: 24px;
+  text-align: right;
+}
+
+.ro-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ro-actions > * {
+  width: 100%;
+}
+
+/* 카트리지 하단 단자 빗살 — 2색 교차 스트라이프(디더 관례, 그라디언트 아님) */
+.ro-pins {
+  height: 8px;
+  margin: 16px -24px -24px;
+  border-top: 2px solid var(--bg-deep);
+  background: repeating-linear-gradient(
+    to right,
+    var(--surface-3) 0 6px,
+    var(--bg-deep) 6px 12px
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ro-spark {
+    animation: none;
+    opacity: 0;
+  }
+}

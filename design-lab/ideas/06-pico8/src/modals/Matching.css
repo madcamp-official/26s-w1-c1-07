@@ -1,0 +1,97 @@
+/* S7 온라인 매칭 상태 모달 (modal-matching) 전용 스타일 — lobby 에이전트 소유
+   모션: steps(n)만 (PLAN §1.4) */
+
+.mat-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+/* 8x8 캐릭터 제자리 걷기 — 2px 상하 스냅 (steps(1)) */
+.mat-walk {
+  animation: mat-walk 0.53s steps(1, jump-none) infinite;
+}
+@keyframes mat-walk {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(2px);
+  }
+}
+
+.mat-vs-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 72px;
+}
+
+.mat-slot {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 대기 중 상대 슬롯 — 검정 실루엣 + ? */
+.mat-silhouette {
+  width: 48px;
+  height: 48px;
+  background: var(--bg-deep);
+  border: 2px solid var(--surface-3);
+  color: var(--text-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-pixel);
+  font-size: 14px;
+}
+
+/* 매칭 성사 VS 스탬프 — 옐로 팝 */
+.mat-vs {
+  font-family: var(--font-pixel);
+  font-size: 20px;
+  color: var(--accent-2);
+  text-shadow: 2px 2px 0 var(--bg-deep);
+}
+
+.mat-loading {
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.mat-status {
+  font-size: 18px;
+  color: var(--text);
+}
+
+/* 말줄임표 글자 단위 점멸 (PLAN §1.4 blink) */
+.mat-dot {
+  display: inline-block;
+  animation: px-blink 1.06s steps(2, jump-none) infinite;
+}
+.mat-dot:nth-child(2) {
+  animation-delay: 0.35s;
+}
+.mat-dot:nth-child(3) {
+  animation-delay: 0.7s;
+}
+
+.mat-ok {
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  color: var(--ok);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mat-walk,
+  .mat-dot {
+    animation: none;
+  }
+}

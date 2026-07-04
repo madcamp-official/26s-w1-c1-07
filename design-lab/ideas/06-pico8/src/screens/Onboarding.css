@@ -1,0 +1,65 @@
+/* S5 닉네임 온보딩 — auth 에이전트 소유 화면 전용 스타일 (theme.css 수정 금지) */
+
+.ob-root {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  padding: 32px;
+}
+
+.ob-face {
+  flex: none;
+}
+
+.ob-card {
+  width: 480px;
+  max-width: calc(100vw - 48px);
+}
+
+.ob-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 32px;
+}
+
+.ob-heading {
+  font-family: var(--font-kr);
+  font-size: 28px;
+  font-weight: 400;
+  text-align: center;
+}
+
+.ob-row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  align-items: start;
+  gap: 16px;
+}
+
+.ob-label {
+  font-size: 18px;
+  text-align: right;
+  line-height: 40px;
+  user-select: none;
+}
+
+.ob-row .px-input {
+  min-height: 40px;
+}
+
+.ob-hint {
+  margin-top: -8px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--text-soft);
+}
+
+@media (max-width: 720px) {
+  .ob-root {
+    flex-direction: column;
+    gap: 24px;
+  }
+}

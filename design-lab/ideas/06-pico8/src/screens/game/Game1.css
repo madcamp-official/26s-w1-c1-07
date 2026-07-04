@@ -1,0 +1,368 @@
+/* S9 게임1 전용 스타일 — game1 에이전트 소유 (theme.css 수정 금지 규칙 준수)
+   PLAN §3.1: 오렌지/옐로 테마, 검정 스테이지 + 오렌지 도트 지평선,
+   타겟 전광판(옐로), 진영색 세로 게이지 탑, 유지 하트 3칸.
+   팔레트는 PICO-8 토큰만 / radius 0 / blur 0 / steps(n) 애니만 / 8px 그리드. */
+
+.g1-root {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+}
+
+/* ---------- HUD ---------- */
+.g1-hud {
+  width: 100%;
+  max-width: 880px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.g1-hud-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.g1-countdown-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.g1-countdown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 16px;
+  background: var(--bg-deep);
+  border: 2px solid var(--surface-3);
+  box-shadow: var(--shadow-hard-sm);
+}
+.g1-count-num {
+  font-size: 24px;
+  color: var(--text);
+}
+/* 마지막 3초: 팔레트 스왑(옐로→레드) + 펄스 (PLAN §1.4) */
+.g1-countdown.is-danger {
+  border-color: var(--p2);
+}
+.g1-countdown.is-danger .g1-count-num {
+  color: var(--p2);
+}
+.g1-timebar {
+  display: flex;
+  gap: 2px;
+}
+.g1-timebar span {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--bg-deep);
+}
+.g1-timebar span.on {
+  background: var(--ok);
+}
+.g1-countdown.is-danger .g1-timebar span.on {
+  background: var(--p2);
+}
+.g1-timebar span.off {
+  background: var(--surface-3);
+  opacity: 0.4;
+}
+.g1-round-label {
+  font-size: 10px;
+  color: var(--accent-2);
+}
+
+/* ---------- 콘솔 스크린 프레임 (PLAN §1.3) ---------- */
+.g1-stage-frame {
+  /* 검정 4px 외곽 + 안쪽 그레이 2px 이중 프레임 */
+  border: 4px solid var(--bg-deep);
+  background: var(--surface-3);
+  padding: 2px;
+  box-shadow: var(--shadow-float);
+  flex: none;
+}
+.g1-stage {
+  position: relative;
+  width: min(88vw, 560px);
+  aspect-ratio: 1;
+  max-height: 60vh;
+  background: var(--bg-deep);
+  overflow: hidden;
+}
+
+/* 하단 1/4 오렌지 도트 지평선 */
+.g1-horizon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 25%;
+  background-image: radial-gradient(var(--accent) 1px, transparent 1px);
+  background-size: 8px 8px;
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* 좌하단 각인 */
+.g1-engrave {
+  position: absolute;
+  left: 8px;
+  bottom: 4px;
+  font-size: 8px;
+  color: var(--text-soft);
+  user-select: none;
+}
+
+/* ---------- 타겟 전광판 ---------- */
+.g1-target {
+  position: absolute;
+  top: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 24px;
+  background: var(--bg-deep);
+  border: 2px solid var(--accent);
+  box-shadow: 4px 4px 0 rgba(255, 163, 0, 0.35);
+}
+.g1-target-label {
+  font-size: 10px;
+  color: var(--accent);
+}
+.g1-target-num {
+  font-size: 56px;
+  color: var(--accent-2);
+  text-shadow: 4px 4px 0 rgba(255, 163, 0, 0.35);
+}
+
+/* ---------- 좌우 플레이어 사이드 ---------- */
+.g1-side {
+  position: absolute;
+  bottom: 40px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.g1-side--p1 {
+  left: 24px;
+}
+.g1-side--p2 {
+  right: 24px;
+  flex-direction: row-reverse;
+}
+
+.g1-you-tag {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  font-size: 10px;
+  color: var(--accent-2);
+  white-space: nowrap;
+}
+.g1-side--p2 .g1-you-tag {
+  left: auto;
+  right: 0;
+}
+
+/* 세로 픽셀 게이지 탑 — 현재숫자/100 비율 (PLAN §3.1) */
+.g1-gauge {
+  position: relative;
+  width: 32px;
+  height: 208px;
+  background: var(--bg-deep);
+  border: 2px solid var(--surface-3);
+  overflow: hidden;
+}
+.g1-gauge-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+.g1-side--p1 .g1-gauge-fill {
+  background: var(--p1);
+}
+.g1-side--p2 .g1-gauge-fill {
+  background: var(--p2);
+}
+/* 8px 블록 스택 홈 — 2색 교차(디더 관례) 하드 스톱 라인 */
+.g1-gauge-grid {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to top,
+    transparent 0 6px,
+    var(--bg-deep) 6px 8px
+  );
+  pointer-events: none;
+}
+/* 타겟 높이 옐로 마커 */
+.g1-gauge-marker {
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  height: 2px;
+  background: var(--accent-2);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+  z-index: 1;
+}
+
+/* 현재숫자 판넬 */
+.g1-value-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 96px;
+  padding: 8px 12px;
+  background: var(--bg-deep);
+  border: 2px solid var(--surface-3);
+}
+.g1-side--p1 .g1-value-panel {
+  border-color: var(--p1);
+}
+.g1-side--p2 .g1-value-panel {
+  border-color: var(--p2);
+}
+.g1-value-role {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.g1-side--p1 .g1-value-role {
+  color: var(--p1);
+}
+.g1-side--p2 .g1-value-role {
+  color: var(--p2);
+}
+.g1-value-num {
+  font-size: 32px;
+  color: var(--text);
+}
+.g1-side--p1 .g1-value-num {
+  color: var(--p1);
+}
+.g1-side--p2 .g1-value-num {
+  color: var(--p2);
+}
+/* 타겟 일치 순간 — 옐로 스왑 (숫자와 판넬 링) */
+.g1-value-panel.is-matched {
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 2px var(--accent-2);
+}
+.g1-value-panel.is-matched .g1-value-num {
+  color: var(--accent-2);
+}
+
+/* 일치 유지 하트 3칸 (1초당 1칸 — PLAN §3.1) */
+.g1-hearts {
+  display: flex;
+  gap: 4px;
+  font-size: 14px;
+  line-height: 1;
+}
+.g1-heart {
+  color: var(--surface-3);
+}
+.g1-heart.on {
+  color: var(--p2);
+}
+.g1-hold-tag {
+  position: absolute;
+  top: -16px;
+  right: -8px;
+  font-size: 10px;
+  color: var(--accent-2);
+  background: var(--bg-deep);
+  padding: 2px 4px;
+  border: 2px solid var(--accent-2);
+}
+
+/* ---------- 라운드 인트로 스탬프 ---------- */
+.g1-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.6);
+  background-image:
+    repeating-conic-gradient(rgba(0, 0, 0, 0.3) 0% 25%, transparent 0% 50%);
+  background-size: 4px 4px;
+}
+.g1-intro-text {
+  font-size: 40px;
+  color: var(--accent-2);
+  text-shadow: 4px 4px 0 var(--bg-deep);
+}
+
+/* ---------- 하단 조작키 안내 ---------- */
+.g1-keys {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 32px;
+  width: 100%;
+  max-width: 880px;
+}
+.g1-keygroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.g1-keygroup-label {
+  font-size: 14px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.g1-keyrow {
+  display: flex;
+  gap: 16px;
+}
+.g1-keyrow .px-keycap {
+  width: auto;
+  min-width: 48px;
+  padding: 0 8px;
+}
+/* Keycap 아이콘 슬롯의 한글 라벨 (픽셀폰트는 한글 미지원) */
+.g1-kr-icon {
+  font-family: var(--font-kr);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.g1-keys-hint {
+  color: var(--text-soft);
+  font-size: 12px;
+  padding-bottom: 16px;
+}
+
+/* 좁은 화면 대응 */
+@media (max-width: 640px) {
+  .g1-hud {
+    flex-wrap: wrap;
+  }
+  .g1-keys {
+    gap: 16px;
+  }
+  .g1-target-num {
+    font-size: 40px;
+  }
+  .g1-gauge {
+    height: 144px;
+  }
+}

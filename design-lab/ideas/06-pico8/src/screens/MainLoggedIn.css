@@ -1,0 +1,98 @@
+/* S2 메인 — 로그인 후 (scr-main-in) 전용 스타일 — lobby 에이전트 소유 */
+
+.min-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 32px 32px;
+  gap: 24px;
+}
+
+/* 우상단 헤더: 인사말 + 로그아웃 + 설정 키캡 */
+.min-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+.min-greet {
+  font-size: 18px;
+  color: var(--text);
+}
+.min-greet .min-nick {
+  color: var(--accent-2);
+}
+
+.min-logout {
+  font-family: var(--font-kr);
+  font-size: 16px;
+  color: var(--text-dim);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.min-logout:hover {
+  color: var(--accent);
+}
+
+/* 본문: 좌 2/3 타이틀+메뉴 / 우 1/3 리더보드 카트리지 */
+.min-body {
+  flex: 1;
+  display: flex;
+  gap: 32px;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.min-left {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+}
+
+.min-title {
+  font-family: var(--font-pixel);
+  font-size: 48px;
+  line-height: 1;
+  text-shadow: 4px 4px 0 var(--bg-deep);
+  user-select: none;
+}
+
+.min-tagline {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--accent-2);
+  margin-top: 16px;
+  text-align: center;
+}
+
+.min-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 320px;
+  max-width: 100%;
+}
+
+.min-right {
+  flex: 1;
+  min-width: 280px;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+@media (max-width: 860px) {
+  .min-body {
+    flex-direction: column;
+    align-items: center;
+  }
+  .min-right {
+    width: 100%;
+    max-width: 480px;
+  }
+}

@@ -23,5 +23,10 @@
     "port": 5105,
     "dist": "ideas/05-obsidian/dist",
     "name": "05 Obsidian Protocol"
+  },
+  {
+    "port": 5106,
+    "dist": "ideas/06-pico8/dist",
+    "name": "06 PICO-8 Playground"
   }
 ]

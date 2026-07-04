@@ -1,0 +1,71 @@
+/* S6 온라인 게임하기 패널 (modal-online) 전용 스타일 — lobby 에이전트 소유 */
+
+.onl-heading {
+  font-family: var(--font-kr);
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+
+/* 코드 슬롯 — 검정 바탕 + 픽셀폰트 (생성 전 언더스코어 점멸 / 생성 후 옐로 코드) */
+.onl-code-slot {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  background: var(--bg-deep);
+  border: 2px solid var(--surface-3);
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.onl-code-slot .onl-code-empty {
+  color: var(--text-soft);
+}
+.onl-code-slot .onl-code-value {
+  color: var(--accent-2);
+}
+
+.onl-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.onl-row:last-child {
+  margin-bottom: 0;
+}
+
+.onl-row-label {
+  font-size: 16px;
+  color: var(--text);
+  flex: none;
+  width: 96px;
+}
+
+/* COPIED! 그린 토스트 — 스냅 팝 */
+.onl-copied {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--ok);
+  animation: px-pop 0.12s steps(2, jump-none);
+  white-space: nowrap;
+}
+
+.onl-join-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onl-copied {
+    animation: none;
+  }
+}

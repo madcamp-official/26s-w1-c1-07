@@ -1,0 +1,86 @@
+/* S4 설정 모달 (modal-settings) 전용 스타일 — lobby 에이전트 소유
+   팔레트/모션 규칙: PLAN §1 (PICO-8 16색, steps(n)만) */
+
+.set-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.set-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  color: var(--text);
+}
+
+.set-label .set-cursor {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--accent);
+}
+
+.set-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 숫자 입력 — 검정 바탕 + 픽셀폰트, 스테퍼 사이 (직접 타이핑 겸용) */
+.set-num {
+  width: 88px;
+  height: 40px;
+  text-align: center;
+  background: var(--bg-deep);
+  color: var(--text);
+  border: 2px solid var(--surface-3);
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  caret-color: var(--accent-2);
+  outline: none;
+  /* 값 변경(리마운트) 시 1프레임 옐로 플래시 — PLAN §2 S4 */
+  animation: set-flash 0.18s steps(1, jump-none);
+}
+.set-num:focus {
+  border-color: var(--accent);
+}
+/* number input 스피너 제거 — 스테퍼 키캡이 그 역할 */
+.set-num::-webkit-outer-spin-button,
+.set-num::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.set-num[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+@keyframes set-flash {
+  0% {
+    color: var(--accent-2);
+    border-color: var(--accent-2);
+  }
+  100% {
+    color: var(--text);
+  }
+}
+
+.set-unit {
+  font-size: 14px;
+  color: var(--text-dim);
+  min-width: 48px;
+}
+
+.set-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .set-num {
+    animation: none;
+  }
+}
