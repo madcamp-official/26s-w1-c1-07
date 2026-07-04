@@ -1,5 +1,10 @@
 [
   {
+    "port": 5100,
+    "dist": "/Users/siheom-yong/programming/madpump/26s-w1-c1-07-designlab/design-lab/compare",
+    "name": "00 비교 갤러리"
+  },
+  {
     "port": 5101,
     "dist": "ideas/01-neo-brutal/dist",
     "name": "01 Neo-Brutal"
@@ -28,5 +33,25 @@
     "port": 5106,
     "dist": "ideas/06-pico8/dist",
     "name": "06 PICO-8 Playground"
+  },
+  {
+    "port": 5107,
+    "dist": "/Users/siheom-yong/programming/madpump/26s-w1-c1-07-designlab/design-lab/ideas/07-gym-class/dist",
+    "name": "07 GYM CLASS (worktree)"
+  },
+  {
+    "port": 5108,
+    "dist": "/Users/siheom-yong/programming/madpump/26s-w1-c1-07-designlab/design-lab/ideas/08-chrome-y2k/dist",
+    "name": "08 CHROME MILLENNIUM (worktree)"
+  },
+  {
+    "port": 5109,
+    "dist": "/Users/siheom-yong/programming/madpump/26s-w1-c1-07-designlab/design-lab/ideas/09-specimen-lab/dist",
+    "name": "09 SPECIMEN LAB (worktree)"
+  },
+  {
+    "port": 5110,
+    "dist": "/Users/siheom-yong/programming/madpump/26s-w1-c1-07-designlab/design-lab/ideas/10-gauge-station/dist",
+    "name": "10 펌프장 계기판 (worktree)"
   }
 ]
