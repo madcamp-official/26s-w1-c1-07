@@ -1,0 +1,11 @@
+/* Card 스타일 (아키텍트 소유) — PLAN §1.5 */
+
+.nc-card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 0;
+}
+
+.nc-card__body {
+  padding: 18px;
+}

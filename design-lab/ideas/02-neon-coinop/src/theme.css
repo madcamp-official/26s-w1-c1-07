@@ -1,0 +1,443 @@
+/**
+ * NEON COIN-OP — 신스웨이브 아케이드 디자인 시스템 (PLAN.md §1 정본)
+ * (아키텍트 소유 — 구현 에이전트 수정 금지. 화면 전용 스타일은 각 화면 파일 옆 css로.)
+ *
+ * 제공 유틸 클래스 카탈로그:
+ *  폰트      .font-arcade(Press Start 2P) / .font-display(Gugi)  — 본문은 기본 산세리프
+ *  글로우    .glow-text .glow-box  (currentColor / --glow-color 기반, §1.1 공식)
+ *  색 헬퍼   .c-accent .c-accent2 .c-p1 .c-p2 .c-error .c-win .c-muted
+ *  모션      .anim-sign-on(점등 플리커) .anim-blink(steps 점멸) .anim-shake(에러 셰이크)
+ *  프레임    .corner-brackets(모서리 L브래킷, --bracket-color) .crt-bezel(인게임 스테이지)
+ *  배경      .crt-overlay(전역 스캔라인 — App이 1장 렌더) .vanish-grid(소실점 그리드)
+ *  부품      .marquee-strip(카드/모달 상단 간판) .lamp / .lamp.lit(라운드 램프)
+ *           .neon-input(터미널 입력 래퍼) .unit-chip(단위 pill)
+ */
+
+/* ---------------------------------------------------------------- 토큰 §1.1 */
+:root {
+  --bg: #0d0221;
+  --bg-raised: #1a0b2e;
+  --surface: #241640;
+  --surface-deep: #160a33;
+  --text: #f4f0ff;
+  --text-muted: #9d8fbf;
+  --accent: #fdf500;
+  --accent2: #d300c5;
+  --p1: #05d9e8;
+  --p1-dim: #0a3a4a;
+  --p2: #ff2a6d;
+  --p2-dim: #4a0a26;
+  --error: #ff3864;
+  --win: #39ff88;
+
+  --hairline: rgba(211, 0, 197, 0.35); /* 퍼플 헤어라인 */
+  --font-arcade: 'Press Start 2P', monospace;
+  --font-display: 'Gugi', sans-serif;
+  --font-body: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+}
+
+/* ---------------------------------------------------------------- 전역 */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  outline: none;
+}
+
+::placeholder {
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+::selection {
+  background: var(--accent2);
+  color: var(--text);
+}
+
+/* ---------------------------------------------------------------- 폰트 */
+.font-arcade {
+  font-family: var(--font-arcade);
+  /* Press Start 2P — 10px 미만 금지 (§1.2) */
+  font-size: max(10px, 1em);
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+}
+
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+
+/* ---------------------------------------------------------------- 색 헬퍼 */
+.c-accent { color: var(--accent); }
+.c-accent2 { color: var(--accent2); }
+.c-p1 { color: var(--p1); }
+.c-p2 { color: var(--p2); }
+.c-error { color: var(--error); }
+.c-win { color: var(--win); }
+.c-muted { color: var(--text-muted); }
+
+/* ---------------------------------------------------------------- 글로우 §1.1 */
+.glow-text {
+  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+}
+
+/* 박스 글로우 — --glow-color(rgb triplet 아님, 색상값)와 --glow-color-a(투명 배합용) 지정.
+   예) style={{ '--glow-color': 'var(--p1)' }} + className="glow-box" */
+.glow-box {
+  --glow-color: var(--accent2);
+  box-shadow:
+    0 0 6px var(--glow-color),
+    0 0 20px color-mix(in srgb, var(--glow-color) 45%, transparent),
+    inset 0 0 8px color-mix(in srgb, var(--glow-color) 25%, transparent);
+}
+
+/* ---------------------------------------------------------------- 모션 §1.4 */
+/* 네온 점등: off → 2회 플리커 → on (400ms, steps) */
+@keyframes sign-on {
+  0% { opacity: 0; }
+  29% { opacity: 0; }
+  30% { opacity: 1; }
+  44% { opacity: 1; }
+  45% { opacity: 0; }
+  59% { opacity: 0; }
+  60% { opacity: 1; }
+  74% { opacity: 1; }
+  75% { opacity: 0; }
+  84% { opacity: 0; }
+  85% { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+.anim-sign-on {
+  animation: sign-on 400ms steps(1, end) both;
+}
+
+/* "INSERT COIN" 점멸: 1s 주기 steps(1), 50% duty — 부드러운 pulse 금지 */
+@keyframes hard-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.anim-blink {
+  animation: hard-blink 1s steps(1, end) infinite;
+}
+
+/* 에러 수평 셰이크 1회 */
+@keyframes h-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+
+.anim-shake {
+  animation: h-shake 260ms linear both;
+}
+
+/* 타이머 임박(≤5초) — 옐로↔핑크 교차 점멸 */
+@keyframes urgent-flash {
+  0%, 49% { color: var(--accent); }
+  50%, 100% { color: var(--p2); }
+}
+
+.anim-urgent {
+  animation: urgent-flash 600ms steps(1, end) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-sign-on,
+  .anim-blink,
+  .anim-shake,
+  .anim-urgent {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------- CRT 오버레이 (App이 1장 렌더) */
+.crt-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.22) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+/* 가장자리 비네팅 */
+.crt-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, 0.45) 100%);
+}
+
+/* ---------------------------------------------------------------- 소실점 그리드 §1.3 */
+/* 메인 계열 화면(S1·S2·S5·S8) 하단 1/3에 절대 배치할 것.
+   사용: <div className="vanish-grid" aria-hidden /> (부모 position:relative)
+   인게임 배경엔 .vanish-grid.dim(20%)을 사용 */
+.vanish-grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 34%;
+  pointer-events: none;
+  overflow: hidden;
+  /* 수평선(멀어지는 가로줄) — 아래로 갈수록 간격 확대 */
+  background:
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--accent2) 60%, transparent) 0,
+      transparent 2px
+    )
+    top / 100% 100% no-repeat;
+}
+
+.vanish-grid::before {
+  /* 세로줄: 지평선 소실점으로 수렴하는 부챗살 */
+  content: '';
+  position: absolute;
+  inset: -100% -50% 0;
+  background: repeating-conic-gradient(
+    from 89deg at 50% 0,
+    color-mix(in srgb, var(--accent2) 45%, transparent) 0deg 0.28deg,
+    transparent 0.28deg 6deg
+  );
+}
+
+.vanish-grid::after {
+  /* 가로줄(원근 간격) + 지평선 글로우 밴드 */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--p2) 35%, transparent),
+      transparent 18%
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--accent2) 50%, transparent) 0 1px,
+      transparent 1px 9%
+    );
+  mask-image: linear-gradient(to bottom, black, black 85%, transparent);
+}
+
+.vanish-grid.dim {
+  opacity: 0.2;
+}
+
+/* ---------------------------------------------------------------- 코너 브래킷 §1.3 */
+/* 히어로 패널 네 모서리의 12px L자 브래킷. --bracket-color로 색 지정 */
+.corner-brackets {
+  position: relative;
+  --bracket-color: var(--accent2);
+}
+
+.corner-brackets::before,
+.corner-brackets::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+}
+
+.corner-brackets::before {
+  top: -2px;
+  left: -2px;
+  border-top: 2px solid var(--bracket-color);
+  border-left: 2px solid var(--bracket-color);
+}
+
+.corner-brackets::after {
+  bottom: -2px;
+  right: -2px;
+  border-bottom: 2px solid var(--bracket-color);
+  border-right: 2px solid var(--bracket-color);
+}
+
+/* 나머지 두 모서리는 내부 helper 요소로 (컴포넌트가 <i className="cb2" /> 렌더) */
+.corner-brackets > .cb2 {
+  position: absolute;
+  inset: -2px;
+  pointer-events: none;
+}
+
+.corner-brackets > .cb2::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  border-top: 2px solid var(--bracket-color);
+  border-right: 2px solid var(--bracket-color);
+}
+
+.corner-brackets > .cb2::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-bottom: 2px solid var(--bracket-color);
+  border-left: 2px solid var(--bracket-color);
+}
+
+/* ---------------------------------------------------------------- CRT 베젤 §1.3 (인게임 game-stage) */
+.crt-bezel {
+  position: relative;
+  background: var(--bg-raised);
+  border: 14px solid #000;
+  border-radius: 12px; /* 베젤 모서리만 라운딩 — 브라운관 실루엣 */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p1) 55%, transparent);
+  overflow: hidden;
+}
+
+/* 타이머 임박 시 베젤 헤어라인 명멸 — 스테이지에 .urgent 추가 */
+@keyframes bezel-pulse {
+  0%, 49% { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p2) 80%, transparent), inset 0 0 24px color-mix(in srgb, var(--p2) 25%, transparent); }
+  50%, 100% { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p1) 55%, transparent); }
+}
+
+.crt-bezel.urgent {
+  animation: bezel-pulse 600ms steps(1, end) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crt-bezel.urgent {
+    animation: none;
+    box-shadow: inset 0 0 0 1px var(--p2);
+  }
+}
+
+/* ---------------------------------------------------------------- 마퀴 스트립 §1.5 (카드/모달 상단 간판) */
+.marquee-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--surface-deep);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.marquee-strip .marquee-title {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.08em;
+}
+
+/* ---------------------------------------------------------------- 램프 §1.3 */
+/* 아케이드 캐비닛 원형 램프. 점등: .lit + --lamp-color 지정 */
+.lamp {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--surface-deep);
+  border: 1px solid var(--hairline);
+  flex: none;
+}
+
+.lamp.lit {
+  --lamp-color: var(--accent);
+  background: var(--lamp-color);
+  border-color: var(--lamp-color);
+  box-shadow: 0 0 6px var(--lamp-color), 0 0 14px color-mix(in srgb, var(--lamp-color) 45%, transparent);
+}
+
+/* ---------------------------------------------------------------- 단위 칩 (S4 "round"/"초") */
+.unit-chip {
+  display: inline-block;
+  padding: 2px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ---------------------------------------------------------------- 터미널 입력 §1.5 */
+/* 사용: <label className="neon-input"><span className="prompt">&gt;</span><input …/></label>
+   에러: .neon-input.error */
+.neon-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-deep);
+  border-bottom: 2px solid var(--p1);
+  padding: 10px 12px;
+  transition: box-shadow 120ms;
+}
+
+.neon-input .prompt {
+  color: var(--p1);
+  font-family: var(--font-arcade);
+  font-size: 12px;
+  opacity: 0;
+}
+
+.neon-input:focus-within .prompt {
+  opacity: 1;
+}
+
+.neon-input:focus-within {
+  box-shadow: 0 6px 12px -6px color-mix(in srgb, var(--p1) 70%, transparent);
+}
+
+.neon-input input {
+  flex: 1;
+  color: var(--p1);
+  caret-color: var(--p1);
+  min-width: 0;
+}
+
+.neon-input.error {
+  border-bottom-color: var(--error);
+  box-shadow: 0 6px 12px -6px color-mix(in srgb, var(--error) 70%, transparent);
+}
+
+.neon-input.error input,
+.neon-input.error .prompt {
+  color: var(--error);
+  caret-color: var(--error);
+}

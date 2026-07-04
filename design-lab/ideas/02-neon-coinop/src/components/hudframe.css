@@ -1,0 +1,75 @@
+/* HudFrame 스타일 (아키텍트 소유) — PLAN §1.5 공통 HUD 프레임 */
+
+.nc-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--surface-deep);
+  border: 1px solid var(--hairline);
+}
+
+.nc-hud__profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.nc-hud__profile--p2 {
+  justify-content: flex-end;
+}
+
+.nc-hud__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.nc-hud__meta--end {
+  align-items: flex-end;
+}
+
+.nc-hud__name {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nc-hud__you {
+  font-size: 9px;
+  vertical-align: 2px;
+}
+
+/* 라운드 램프 — 중앙을 향해 배열 (P2 쪽은 역순) */
+.nc-hud__lamps {
+  display: flex;
+  gap: 5px;
+}
+
+.nc-hud__lamps.reverse {
+  flex-direction: row-reverse;
+}
+
+.nc-hud__timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.nc-hud__time-caption,
+.nc-hud__round-caption {
+  font-size: 9px;
+  font-size: max(10px, 9px); /* Press Start 2P 10px 미만 금지 보정 */
+}
+
+.nc-hud__secs {
+  font-size: 26px;
+  line-height: 1.1;
+}

@@ -1,0 +1,118 @@
+/* S6 온라인 게임하기 패널 전용 스타일 (lobby 에이전트 소유). PLAN §2-S6 */
+
+.s6-title {
+  text-align: center;
+  font-size: 22px;
+  letter-spacing: 0.12em;
+  margin-bottom: 20px;
+}
+
+/* ---- 히어로 CTA ---- */
+.s6-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.s6-insert {
+  font-size: 11px;
+  text-align: center;
+}
+
+/* ---- 서브 섹션 ---- */
+.s6-sub {
+  background: var(--surface-deep);
+  border: 1px solid var(--hairline);
+  padding: 16px;
+}
+
+.s6-sub-title {
+  text-align: center;
+  font-size: 15px;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  margin-bottom: 14px;
+}
+
+.s6-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* 코드 표시 슬롯 */
+.s6-code-slot {
+  flex: 1;
+  min-width: 170px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  background: #000;
+  border: 1px solid var(--hairline);
+  padding: 6px 10px;
+}
+
+.s6-code {
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  word-break: break-all;
+  text-align: center;
+}
+
+.s6-code-placeholder {
+  font-size: 12px;
+  letter-spacing: 0.2em;
+}
+
+.s6-code-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.s6-copied {
+  font-size: 10px;
+}
+
+/* OR 구분선 */
+.s6-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.s6-or::before,
+.s6-or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--hairline);
+}
+
+.s6-or-chip {
+  font-size: 10px;
+  padding: 3px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+}
+
+/* 코드 입력 행 */
+.s6-join-label {
+  flex: none;
+  font-size: 15px;
+  color: var(--text-muted);
+}
+
+.s6-join-field {
+  flex: 1;
+  min-width: 180px;
+}
+
+.s6-join-error {
+  margin-top: 6px;
+  font-size: 12px;
+}

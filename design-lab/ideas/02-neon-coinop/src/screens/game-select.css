@@ -1,0 +1,227 @@
+/* S8 게임 선택 전용 스타일 (lobby 에이전트 소유). PLAN §2-S8 아케이드 캐비닛 오락실 */
+
+.s8-root {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.s8-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.s8-wordmark {
+  font-size: 14px;
+  letter-spacing: 0.06em;
+}
+
+.s8-header-spacer {
+  width: 96px; /* 좌측 버튼과 균형 — 워드마크 중앙 정렬용 */
+}
+
+.s8-caption {
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.32em;
+  margin-top: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- 캐비닛 열 ---- */
+.s8-floor {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(20px, 4vw, 56px);
+  padding: 24px 24px 96px;
+  position: relative;
+  z-index: 1;
+  flex-wrap: wrap;
+}
+
+/* 세로로 긴 캐비닛 실루엣 */
+.s8-cabinet {
+  --cab-color: var(--accent2);
+  width: clamp(190px, 22vw, 240px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 0;
+  padding: 0 0 16px;
+  text-align: center;
+}
+
+.s8-cabinet:hover {
+  border-color: var(--cab-color);
+  box-shadow:
+    0 0 6px var(--cab-color),
+    0 0 20px color-mix(in srgb, var(--cab-color) 45%, transparent);
+}
+
+/* 상단 마퀴 — hover 시 그 캐비닛만 점등 (attract mode) */
+.s8-marquee {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--surface-deep);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.s8-marquee-title {
+  font-size: 12px;
+  color: color-mix(in srgb, var(--cab-color) 55%, var(--text-muted));
+}
+
+.s8-cabinet:hover .s8-marquee-title {
+  color: var(--cab-color);
+  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+}
+
+.s8-cabinet:hover .s8-marquee .lamp {
+  background: var(--cab-color);
+  border-color: var(--cab-color);
+  box-shadow: 0 0 6px var(--cab-color);
+}
+
+/* 스크린 영역 */
+.s8-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 150px;
+  margin: 14px;
+  background: var(--bg-raised);
+  border: 6px solid #000;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.s8-name {
+  font-size: 18px;
+  color: var(--text);
+  margin-top: 4px;
+}
+
+/* 컨트롤 패널 도트 (캐비닛 버튼 2개) */
+.s8-panel {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.s8-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--surface-deep);
+}
+
+.s8-dot--p1 { border: 2px solid var(--p1); }
+.s8-dot--p2 { border: 2px solid var(--p2); }
+
+/* ---- 픽토그램 ---- */
+.s8-picto {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+/* 게임1: 세븐세그먼트풍 '87' + ↑↓ */
+.s8-picto--g1 {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.s8-g1-num {
+  font-size: 30px;
+  color: var(--accent);
+  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+}
+
+.s8-g1-arrow {
+  font-size: 10px;
+}
+
+.s8-g1-arrow--up { color: var(--p1); }
+.s8-g1-arrow--down { color: var(--p2); }
+
+/* 게임2: 낙하 총알 트레일 3줄 */
+.s8-picto--g2 {
+  gap: 22px;
+  align-items: flex-start;
+  padding-top: 18px;
+}
+
+.s8-g2-trail {
+  width: 4px;
+  height: 64px;
+  background: linear-gradient(to bottom, transparent, var(--accent));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.s8-g2-trail:nth-child(2) { height: 92px; margin-top: -10px; }
+.s8-g2-trail:nth-child(3) { height: 48px; margin-top: 14px; }
+
+.s8-cabinet:hover .s8-g2-trail {
+  transform: translateY(8px);
+  transition: transform 120ms steps(2, end);
+}
+
+/* 게임3: 교차 검 2자루 + 지그재그 파도 */
+.s8-picto--g3 {
+  flex-direction: column;
+  gap: 14px;
+}
+
+.s8-g3-blades {
+  position: relative;
+  width: 64px;
+  height: 56px;
+}
+
+.s8-g3-blade {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 60px;
+  height: 3px;
+}
+
+.s8-g3-blade--p1 {
+  background: var(--p1);
+  box-shadow: 0 0 6px var(--p1);
+  transform: translate(-50%, -50%) rotate(38deg);
+}
+
+.s8-g3-blade--p2 {
+  background: var(--p2);
+  box-shadow: 0 0 6px var(--p2);
+  transform: translate(-50%, -50%) rotate(-38deg);
+}
+
+.s8-g3-wave {
+  width: 80%;
+  height: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .s8-cabinet:hover .s8-g2-trail {
+    transform: none;
+    transition: none;
+  }
+}

@@ -1,0 +1,149 @@
+/* S1 메인 — 비로그인 (auth 에이전트 소유) — attract mode 타이틀 스크린 (PLAN §2-S1) */
+
+.s1-root {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- 우상단 헤더: 구글 로그인 + 설정 코인 버튼 ---- */
+.s1-header {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.s1-google-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border: 1px solid rgba(244, 240, 255, 0.4); /* 화이트 헤어라인 (PLAN §2-S1) */
+  color: var(--text);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  font-family: var(--font-body);
+}
+
+.s1-google-btn:hover:not(:disabled) {
+  border-color: rgba(244, 240, 255, 0.85);
+}
+
+.s1-google-btn:active:not(:disabled) {
+  background: var(--surface-deep);
+}
+
+.s1-google-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.s1-google-btn svg {
+  flex: none;
+}
+
+/* ---- 중앙 히어로: 네온 로고 + CTA 스택 ---- */
+.s1-hero {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 96px 24px 72px;
+}
+
+.s1-logo {
+  display: flex;
+  gap: 0.12em;
+  font-size: clamp(42px, 8.5vw, 92px);
+  line-height: 1;
+  user-select: none;
+}
+
+.s1-logo-mad {
+  color: var(--p2);
+  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+}
+
+.s1-logo-pump {
+  color: var(--p1);
+  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+}
+
+/* 고장 램프 개그 — PUMP의 마지막 P가 간헐적으로 깜빡 (steps, 평시 대부분 점등) */
+@keyframes s1-faulty-lamp {
+  0%, 78% { opacity: 1; }
+  79%, 81% { opacity: 0.15; }
+  82%, 85% { opacity: 1; }
+  86%, 88% { opacity: 0.15; }
+  89%, 100% { opacity: 1; }
+}
+
+.s1-logo-faulty {
+  animation: s1-faulty-lamp 7s steps(1, end) infinite;
+  animation-delay: 1.2s;
+}
+
+.s1-tagline {
+  margin-top: 18px;
+  font-size: 12px;
+  letter-spacing: 0.34em;
+}
+
+/* CTA 세로 스택 */
+.s1-cta {
+  margin-top: 56px;
+  width: min(380px, 84vw);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.s1-insert {
+  text-align: center;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+/* ---- 하단 티커 스트립 (장식) ---- */
+.s1-ticker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  border-top: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  padding: 9px 0;
+}
+
+.s1-ticker__rail {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  animation: s1-ticker-scroll 22s linear infinite;
+}
+
+@keyframes s1-ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .s1-logo-faulty,
+  .s1-ticker__rail {
+    animation: none;
+  }
+}
