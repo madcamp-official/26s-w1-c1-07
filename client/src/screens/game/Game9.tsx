@@ -27,7 +27,8 @@ import { useNavigate } from 'react-router-dom';
 import { game9, G9, GAME_DURATION } from '@madpump/shared';
 import type { Game9State, GameInputEvent } from '@madpump/shared';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
-import { useOnlineGame } from '../../net/useOnlineGame';
+import { useOnlineRender } from '../../net/useOnlineRender';
+import { sendInput as onlineSendInput } from '../../net/online';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
 import {
   exitMatch,
@@ -470,14 +471,18 @@ export default function Game9() {
   const flow = useFlow();
   const navigate = useNavigate();
 
-  // 진짜 서버 온라인 훅. null=오프라인(로컬 시뮬/봇). truthy면 서버 권위 상태를 렌더 + 내 입력만 전송.
-  const online = useOnlineGame(9);
-  // stale closure 방지: 키보드 콜백이 항상 최신 online을 보게 ref 미러.
-  const onlineRef = useRef(online);
-  onlineRef.current = online;
+  // 온라인 렌더 훅(성능 표준). 활성/역할만 선택 구독 → 라운드 경계에서만 리렌더.
+  // 서버 스냅샷은 stateRef로 미러(리렌더 없이)하고, per-snapshot HUD/디버그 반영만 onSnapshot에서.
+  const { isOnline, myRole, stateRef } = useOnlineRender<Game9State>(9, (s) => {
+    setDebugGame(s);
+    const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
+    setHudMs(Math.ceil(remainingMs / 1000) * 1000);
+  });
+  // stale closure 방지: 키보드 콜백이 항상 최신 '온라인 활성 여부'를 보게 ref 미러.
+  const isOnlineRef = useRef(isOnline);
+  isOnlineRef.current = isOnline;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stateRef = useRef<Game9State | null>(null);
   const actionsRef = useRef<GameInputEvent[]>([]);
   const botRef = useRef<{ last: 'KeyU' | 'KeyI' | null; nextAt: number }>({ last: null, nextAt: 0 });
   const fxRef = useRef<Fx[]>([]);
@@ -512,19 +517,6 @@ export default function Game9() {
     c.getContext('2d')?.scale(dpr, dpr);
   }, []);
 
-  // 서버 권위 상태 미러링 — online.state가 올 때마다 로컬 ref/디버그/HUD에 반영.
-  // (로컬 판정 없음. draw-only 루프가 이 stateRef를 읽어 그린다.)
-  useEffect(() => {
-    const on = online;
-    if (!on || !on.state) return;
-    const s = on.state as Game9State;
-    stateRef.current = s;
-    setDebugGame(s);
-    const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
-    setHudMs(Math.ceil(remainingMs / 1000) * 1000);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online?.state]);
-
   // 키보드 — 로컬 어댑터. GameInputEvent 큐 적재 + 램프 점등.
   // 온라인이면 P2 키는 봇이 대행하므로 흡수하지 않는다.
   useEffect(() => {
@@ -534,8 +526,7 @@ export default function Game9() {
         // 진짜 서버 온라인: 로컬 큐/봇 미사용 — 내 입력만 서버로 전송.
         // 4키 아무거나 눌러도 내 슬롯으로 감(서버가 role로 슬롯을 재기입).
         //   슬롯A = 주키(KeyQ/KeyU), 슬롯B = 보조키(KeyW/KeyI).
-        const on = onlineRef.current;
-        if (on) {
+        if (isOnlineRef.current) {
           // 온라인은 U/I 두 키만(요구사항). U=주키(slotA), I=보조키(slotB). Q/W는 무시.
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           if (e.type === 'down') {
@@ -543,7 +534,7 @@ export default function Game9() {
             else flashI();
           }
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
-          on.sendInput(slot, e.type, e.t ?? performance.now() / 1000);
+          onlineSendInput(slot, e.type, e.t ?? performance.now() / 1000);
           return;
         }
 
@@ -569,7 +560,7 @@ export default function Game9() {
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
     // ── 온라인: 서버 상태만 그리는 draw-only 루프(step·봇·result보고 없음) ──
-    if (online) {
+    if (isOnline) {
       // 첫 스냅샷 전에도 그릴 게 있도록 중립 초기 상태를 준비(렌더 전용, step 안 함)
       if (!stateRef.current) {
         stateRef.current = game9.create(Math.random);
@@ -660,7 +651,7 @@ export default function Game9() {
         }
       } else if (!reportedRef.current && now - resultAtRef.current >= RESULT_FX_MS) {
         // 온라인은 서버가 round:end를 구동하므로 화면은 보고하지 않는다.
-        if (online) return;
+        if (isOnline) return;
         // 슬램 연출을 짧게 보여준 뒤 라운드 종료 1회 보고 → ResultOverlay
         reportedRef.current = true;
         if (s.result) reportRoundEnd(toMatchResult(s.result));
@@ -685,7 +676,7 @@ export default function Game9() {
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online, flow.gameId, flow.phase, flow.currentRound]);
+  }, [isOnline, myRole, flow.gameId, flow.phase, flow.currentRound]);
 
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
@@ -735,25 +726,25 @@ export default function Game9() {
 
       {/* 온스크린 키캡. 온라인은 U/I 두 키만 쓰므로, 내 역할(색) 쪽 컨트롤만 표기·점등한다.
           오프라인은 기존 2인 레이아웃(Q/W ↔ U/I) 유지. */}
-      {online ? (
+      {isOnline ? (
         <div className="g9-keys g9-keys--online">
           <div className="g9-keys__group">
             <span
-              className={`g9-keys__tag font-arcade ${online.role === 'P1' ? 'c-p1' : 'c-p2'}`}
+              className={`g9-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}
             >
-              YOU · {online.role === 'P1' ? '파랑' : '빨강'} · 번갈아 당기기
+              YOU · {myRole === 'P1' ? '파랑' : '빨강'} · 번갈아 당기기
             </span>
             <KeyCap
-              role={online.role}
+              role={myRole ?? 'P2'}
               keyChar="U"
-              icon={online.role === 'P1' ? '◀' : '▶'}
+              icon={myRole === 'P1' ? '◀' : '▶'}
               lit={uLit}
               label="당기기"
             />
             <KeyCap
-              role={online.role}
+              role={myRole ?? 'P2'}
               keyChar="I"
-              icon={online.role === 'P1' ? '◀' : '▶'}
+              icon={myRole === 'P1' ? '◀' : '▶'}
               lit={iLit}
               label="당기기"
             />

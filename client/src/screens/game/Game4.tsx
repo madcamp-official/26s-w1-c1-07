@@ -27,7 +27,8 @@ import { game4, G4, GAME_DURATION } from '@madpump/shared';
 import type { Game4State, Obstacle, GameInputEvent } from '@madpump/shared';
 import type { MatchResult } from '@/shell';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
-import { useOnlineGame } from '../../net/useOnlineGame';
+import { useOnlineRender } from '../../net/useOnlineRender';
+import { sendInput as onlineSendInput } from '../../net/online';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
 import {
   exitMatch,
@@ -530,6 +531,40 @@ function drawScene(
 }
 
 // ---------------------------------------------------------------------------
+// 스냅샷 사이 보간(외삽) — 서버 스냅샷을 dt초만큼 각 오브젝트 '자기 속도'로 전진시킨
+// 표시용 상태를 만든다. 스냅샷에 vy·grounded·obstacles가 이미 있어 ID 매칭이 불필요하고
+// 추가 지연도 0. 착지/방향전환 순간만 미세 오차이며 다음 스냅샷이 즉시 교정한다.
+// 30/60Hz 스냅샷을 60fps 렌더로 부드럽게 잇는 게 목적(장애물 순간이동·점프 계단 제거).
+//  · 장애물: x -= OBST_SPEED·dt (좌진행).
+//  · 공룡: 코어와 동일한 반암시적 오일러로 점프 아크(중력·패스트폴)를 전진.
+//  · elapsed: 지면 대시·별·그리드 스크롤을 장애물과 같은 속도로 유지(백그라운드 저더 방지).
+// ---------------------------------------------------------------------------
+function extrapolate(s: Game4State, dt: number): Game4State {
+  let y = s.y;
+  let vy = s.vy;
+  let grounded = s.grounded;
+  if (!grounded) {
+    const g = G4.GRAVITY * (s.ducking ? G4.FASTFALL_MULT : 1);
+    vy -= g * dt;
+    y += vy * dt;
+    if (y <= 0) {
+      y = 0;
+      vy = 0;
+      grounded = true;
+    }
+  }
+  return {
+    ...s,
+    elapsed: s.elapsed + dt,
+    y,
+    vy,
+    grounded,
+    runPhase: s.runPhase + dt,
+    obstacles: s.obstacles.map((o) => ({ ...o, x: o.x - G4.OBST_SPEED * dt, phase: o.phase + dt })),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 컴포넌트
 // ---------------------------------------------------------------------------
 export default function Game4() {
@@ -538,7 +573,6 @@ export default function Game4() {
   const navigate = useNavigate();
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stateRef = useRef<Game4State | null>(null);
   const actionsRef = useRef<GameInputEvent[]>([]);
   const fxRef = useRef<Fx[]>([]);
   const passedRef = useRef<WeakSet<Obstacle>>(new WeakSet());
@@ -556,22 +590,19 @@ export default function Game4() {
   const [uLit, flashU] = useKeyLamp();
   const [iLit, flashI] = useKeyLamp();
 
-  // 온라인 훅: 이 게임(id 4)이 현재 서버 매치의 라운드면 truthy.
-  //  null → 오프라인/직접진입(기존 로컬 시뮬·mock 봇 경로 100% 유지).
-  //  truthy → 로컬 시뮬/봇/판정을 끄고 서버 state를 렌더 + 내 입력만 서버로 전송.
-  const online = useOnlineGame(4);
-  // stale closure 방지 — 입력 핸들러가 항상 최신 online을 참조하도록 ref로 미러.
-  const onlineRef = useRef(online);
-  onlineRef.current = online;
-
-  // 서버 권위 상태 미러링 — online.state가 올 때마다 로컬 ref/디버그 브리지에 반영.
-  useEffect(() => {
-    const on = online;
-    if (!on || !on.state) return;
-    stateRef.current = on.state as Game4State;
-    setDebugGame(on.state as Game4State);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online?.state]);
+  // 온라인 렌더 훅(성능 구조 표준) — 이 게임(id 4)이 현재 서버 매치의 라운드면 isOnline.
+  //  · isOnline=false → 오프라인/직접진입(기존 로컬 시뮬·mock 봇 경로 100% 유지).
+  //  · isOnline=true  → 로컬 시뮬/봇/판정을 끄고 서버 state를 렌더 + 내 입력만 서버로 전송.
+  // 활성/역할만 '선택 구독'(라운드 경계에서만 리렌더), 서버 스냅샷(60Hz)은 stateRef/snapAtRef로
+  // 미러(리렌더 없음). per-snapshot 작업(디버그 브리지·HUD 시간)은 onSnapshot으로 위임.
+  const { isOnline, myRole, stateRef, snapAtRef } = useOnlineRender<Game4State>(4, (s) => {
+    setDebugGame(s); // 디버그 브리지 — 스냅샷마다 갱신(리렌더 유발 안 함)
+    const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
+    setHudMs(Math.ceil(remainingMs / 1000) * 1000); // 초 양자화 → ~1/s만 리렌더
+  });
+  // 키보드 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref.
+  const isOnlineRef = useRef(isOnline);
+  isOnlineRef.current = isOnline;
 
   // direct-URL 복구 + 이탈 시 디버그 브리지 정리
   useEffect(() => {
@@ -598,8 +629,7 @@ export default function Game4() {
       (e) => {
         // 진짜 서버 온라인이 활성이면: 내 입력만 서버로 전송(로컬 큐/봇 미사용).
         // 어느 역할이든 서버가 role로 재기입하므로 4키 아무거나 눌러도 내 슬롯으로 감.
-        const on = onlineRef.current;
-        if (on) {
+        if (isOnlineRef.current) {
           // 온라인은 U/I 두 키만(요구사항). U=주키(slotA=점프), I=보조키(slotB=숙이기). Q/W는 무시.
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           if (e.type === 'down') {
@@ -609,7 +639,7 @@ export default function Game4() {
           // I(보조키=숙이기)는 홀드 — 로컬 시각용 ducking 반영
           if (e.code === 'KeyI') setDucking(e.type === 'down');
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
-          on.sendInput(slot, e.type, e.t);
+          onlineSendInput(slot, e.type, e.t);
           return;
         }
         // ── 오프라인(+ mock-online 봇) 경로 — 기존 동작 그대로 ──
@@ -634,24 +664,28 @@ export default function Game4() {
   // 라운드 수명주기: state 생성 → rAF 루프(step + draw) → 결과 보고
   useEffect(() => {
     // ── 온라인(서버 권위): 로컬 시뮬/봇/판정 없이 서버 상태만 그린다(draw-only) ──
-    if (online) {
+    if (isOnline) {
+      // 첫 스냅샷 전이면 초기 create 상태를 렌더용으로만 세팅(판정 아님 — onSnapshot이 곧 덮어씀).
+      if (!stateRef.current) {
+        const seed = game4.create(Math.random);
+        stateRef.current = seed;
+        setDebugGame(seed);
+        setHudMs(GAME_DURATION * 1000);
+      }
       let raf = 0;
-      const loop = () => {
+      const loop = (now: number) => {
+        raf = requestAnimationFrame(loop);
         const ctx = canvasRef.current?.getContext('2d');
-        if (ctx) {
-          let s = stateRef.current;
-          if (!s) {
-            // 첫 스냅샷 전 — 초기 create 상태를 그린다(미러 effect가 곧 덮어씀)
-            s = game4.create(Math.random);
-            stateRef.current = s;
-            setDebugGame(s);
-          }
-          const now = performance.now();
+        const s = stateRef.current;
+        if (ctx && s) {
           const disp = getPlayerDisplays(getFlow());
           fxRef.current = fxRef.current.filter((f) => now - f.t < 1200);
-          drawScene(ctx, s, fxRef.current, now, disp.P1.isYou, disp.P2.isYou);
+          // 스냅샷 사이 외삽: 마지막 스냅샷을 경과 dt만큼 자기 속도로 전진(최대 50ms 캡).
+          // 종료(result) 시엔 외삽하지 않는다(파편/러쉬 연출을 서버 최종 상태 그대로 유지).
+          const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
+          const view = extraDt > 0 && s.result === null ? extrapolate(s, extraDt) : s;
+          drawScene(ctx, view, fxRef.current, now, disp.P1.isYou, disp.P2.isYou);
         }
-        raf = requestAnimationFrame(loop);
       };
       raf = requestAnimationFrame(loop);
       return () => cancelAnimationFrame(raf);
@@ -779,7 +813,7 @@ export default function Game4() {
         }
       } else if (!reportedRef.current && now - resultAtRef.current >= RESULT_FX_MS) {
         // 충돌/생존 연출을 짧게 보여준 뒤 라운드 종료 1회 보고 → ResultOverlay
-        if (online) return; // 온라인은 서버가 round:end 구동 — 화면은 관여 안 함
+        if (isOnline) return; // 온라인은 서버가 round:end 구동 — 화면은 관여 안 함
         reportedRef.current = true;
         if (s.result) reportRoundEnd(toMatchResult(s.result));
       }
@@ -794,7 +828,7 @@ export default function Game4() {
 
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [online, flow.gameId, flow.phase, flow.currentRound]);
+  }, [isOnline, myRole, flow.gameId, flow.phase, flow.currentRound]);
 
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
@@ -843,29 +877,29 @@ export default function Game4() {
       </div>
 
       {/* 온스크린 키캡 — 실제 배정 키 표기(SPEC Q2), 입력 순간 램프 점등. W는 홀드라 ducking 반영 */}
-      {online ? (
+      {isOnline ? (
         // 온라인: U/I 두 키만 쓰고 내 역할만 조작 — 내 색·내 역할의 동작으로 표기.
         // 비대칭 게임(P1=주자, P2=스포너)이라 역할별로 U(주키)/I(보조키) 동작이 다름.
         <div className="g4-keys g4-keys--online">
           <div className="g4-keys__group">
             <span
-              className={`g4-keys__tag font-arcade ${online.role === 'P1' ? 'c-p1' : 'c-p2'}`}
+              className={`g4-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}
             >
-              YOU · {online.role === 'P1' ? '파랑 · RUN' : '빨강 · SPAWN'}
+              YOU · {myRole === 'P1' ? '파랑 · RUN' : '빨강 · SPAWN'}
             </span>
             <KeyCap
-              role={online.role}
+              role={myRole ?? 'P2'}
               keyChar="U"
-              icon={online.role === 'P1' ? '▲' : '▂'}
+              icon={myRole === 'P1' ? '▲' : '▂'}
               lit={uLit}
-              label={online.role === 'P1' ? '점프' : '선인장'}
+              label={myRole === 'P1' ? '점프' : '선인장'}
             />
             <KeyCap
-              role={online.role}
+              role={myRole ?? 'P2'}
               keyChar="I"
-              icon={online.role === 'P1' ? '▼' : '▔'}
+              icon={myRole === 'P1' ? '▼' : '▔'}
               lit={iLit}
-              label={online.role === 'P1' ? '숙이기' : '새'}
+              label={myRole === 'P1' ? '숙이기' : '새'}
             />
           </div>
         </div>

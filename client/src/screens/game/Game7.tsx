@@ -43,7 +43,8 @@ import {
   startOfflineGame,
   useFlow,
 } from '../../state/flow';
-import { useOnlineGame } from '../../net/useOnlineGame';
+import { useOnlineRender } from '../../net/useOnlineRender';
+import { sendInput as onlineSendInput } from '../../net/online';
 import { setDebugGame, useDebugScreen } from '../../debug';
 import ResultOverlay from './ResultOverlay';
 import './game7.css';
@@ -520,18 +521,21 @@ export default function Game7() {
   const flow = useFlow();
   const navigate = useNavigate();
 
-  // 서버 온라인 훅 — 이 게임(7)이 온라인 매치의 현재 라운드면 truthy.
-  // truthy면 로컬 시뮬/봇을 끄고 서버 상태를 그리고 내 입력만 전송한다. null이면 오프라인 100% 유지.
-  const online = useOnlineGame(7);
-  // stale closure 방지: 입력 핸들러(빈 deps effect)가 항상 최신 online을 보게 한다.
-  const onlineRef = useRef(online);
-  onlineRef.current = online;
-  // 온라인 여부(안정 boolean). 루프 effect deps에 online 객체(매 렌더 새 참조)를 넣으면
-  // effect가 매 렌더 재실행되며 rAF를 취소해 draw 루프가 굶어 죽는다(frames=0). boolean으로 안정화.
-  const isOnline = online != null;
+  // 온라인 렌더 훅(성능 표준) — 활성/역할만 선택 구독(라운드 경계에서만 리렌더),
+  // 서버 스냅샷 → stateRef 미러링은 직접 스토어 구독(리렌더 없이). per-snapshot HUD 반영은 onSnapshot으로.
+  //  · stateRef.current = 최신 서버 스냅샷, snapAtRef.current = 수신시각(로컬 커서 파생 기준).
+  //  · isOnline/myRole은 안정 원시값 → 루프 effect deps에 넣어도 churn 없음(rAF 굶음 방지).
+  const { isOnline, myRole, stateRef, snapAtRef } = useOnlineRender<Game7State>(7, (s) => {
+    // 서버 스냅샷마다: 디버그 브리지 + HUD 남은시간(초 양자화). stateRef/snapAtRef는 훅이 갱신.
+    setDebugGame(s);
+    const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
+    setHudMs(Math.ceil(remainingMs / 1000) * 1000);
+  });
+  // 키보드 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref.
+  const isOnlineRef = useRef(isOnline);
+  isOnlineRef.current = isOnline;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stateRef = useRef<Game7State | null>(null);
   const eventsRef = useRef<GameInputEvent[]>([]);
   const fxRef = useRef<Fx[]>([]);
   const winLineRef = useRef<WinLine | null>(null);
@@ -544,10 +548,9 @@ export default function Game7() {
     flashAt: 0,
   });
   const reducedRef = useRef(false);
-  // 온라인 커서 로컬 파생용: 마지막 서버 스냅샷의 turnClock과 수신시각.
-  //   커서는 시간-결정적(스캔)이라 서버가 브로드캐스트할 필요 없음(요구사항). 클라가 로컬 클럭으로
-  //   부드럽게 굴리고, 놓는 순간의 '고른 칸'만 서버로 보낸다(sendInput cell).
-  const snapRef = useRef({ turnClock: 0, at: 0 });
+  // 온라인 커서 로컬 파생용: 커서는 시간-결정적(스캔)이라 서버가 브로드캐스트할 필요 없음(요구사항).
+  //   기준점은 마지막 스냅샷의 turnClock(=stateRef.current.turnClock)과 수신시각(snapAtRef.current) —
+  //   클라가 로컬 클럭으로 부드럽게 굴리고, 놓는 순간의 '고른 칸'만 서버로 보낸다(sendInput cell).
   const localCursorRef = useRef(0);
 
   /** HUD 남은 시간(초 단위 양자화 — 리렌더 절약) */
@@ -580,20 +583,7 @@ export default function Game7() {
     c.getContext('2d')?.scale(dpr, dpr);
   }, []);
 
-  // 서버 상태 미러링 — online.state가 올 때마다 로컬 stateRef/디버그/HUD에 반영.
-  // (Game7은 game useState 없이 stateRef로 그리므로 setGame 대신 stateRef.current를 갱신)
-  useEffect(() => {
-    const on = online;
-    if (!on || !on.state) return;
-    const s = on.state as Game7State;
-    stateRef.current = s;
-    // 로컬 커서 파생 기준점 갱신: 이 스냅샷의 turnClock을 수신시각과 함께 저장.
-    snapRef.current = { turnClock: s.turnClock, at: performance.now() };
-    setDebugGame(s);
-    const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
-    setHudMs(Math.ceil(remainingMs / 1000) * 1000);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online?.state]);
+  // (서버 상태 미러링은 useOnlineRender의 onSnapshot 콜백으로 이동 — 리렌더 없이 stateRef/HUD 갱신)
 
   // 키보드 — GameInputEvent 큐 수집 + 램프 점등. 온라인 P2(U/I)는 봇이 대행하므로 흡수.
   useEffect(() => {
@@ -604,8 +594,7 @@ export default function Game7() {
         // 온라인은 U/I 두 키만 사용(요구사항). U=놓기(slotA), I=방해(slotB). Q/W는 무시.
         // 서버가 슬롯을 내 role의 물리키로 재기입하므로 접속자는 자기 캐릭터를 조종한다.
         // 놓기(U)는 로컬 커서로 고른 칸(localCursorRef)을 함께 보낸다 — 서버가 커서를 관리하지 않는다.
-        const on = onlineRef.current;
-        if (on) {
+        if (isOnlineRef.current) {
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           if (e.type === 'down') {
             if (e.code === 'KeyU') lampRef.current.flashU();
@@ -613,7 +602,7 @@ export default function Game7() {
           }
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
           const cell = e.code === 'KeyU' ? localCursorRef.current : undefined;
-          on.sendInput(slot, e.type, e.t, cell);
+          onlineSendInput(slot, e.type, e.t, cell);
           return;
         }
         // ── 오프라인(로컬 2인 / flow.mode==='online'이면 P2 봇) — 회귀 금지 ──
@@ -638,7 +627,7 @@ export default function Game7() {
   useEffect(() => {
     // ── 서버 온라인: draw-only (로컬 step·봇·reportRoundEnd 없음) ──
     if (isOnline) {
-      // 첫 스냅샷 전에는 초기 create 상태(빈 판)를 그린다. 미러링 effect가 서버 state로 덮어쓴다.
+      // 첫 스냅샷 전에는 초기 create 상태(빈 판)를 그린다. 훅의 onSnapshot이 서버 state로 덮어쓴다.
       if (!stateRef.current) stateRef.current = game7.create(Math.random);
       let oraf = 0;
       const oloop = (now: number) => {
@@ -649,10 +638,10 @@ export default function Game7() {
         // 캔버스 준비(octx)와 무관하게 매 프레임 갱신 — 놓기 입력이 이 값을 '고른 칸'으로 서버에 보낸다.
         let drawn = s;
         if (s.result === null) {
-          const snap = snapRef.current;
-          const base = snap.at > 0 ? snap.turnClock : s.turnClock;
-          const elapsedSinceSnap = snap.at > 0 ? (now - snap.at) / 1000 : 0;
-          const localTurnClock = Math.min(G7.TURN_TIME, base + elapsedSinceSnap);
+          // 마지막 스냅샷의 turnClock(=s.turnClock, stateRef가 곧 최신 스냅샷) + 수신 후 경과(snapAtRef).
+          const at = snapAtRef.current;
+          const elapsedSinceSnap = at > 0 ? (now - at) / 1000 : 0;
+          const localTurnClock = Math.min(G7.TURN_TIME, s.turnClock + elapsedSinceSnap);
           const localCursor = Math.min(
             G7.CELLS - 1,
             Math.max(0, Math.floor(localTurnClock / G7.CELL_TIME)),
@@ -763,7 +752,7 @@ export default function Game7() {
           fxRef.current.push({ kind: 'glitch', t: now });
         }
       } else if (!reportedRef.current && now - resultAtRef.current >= RESULT_FX_MS) {
-        if (online) return; // 온라인은 서버가 round:end 구동 — 화면은 보고하지 않음(방어적 가드)
+        if (isOnline) return; // 온라인은 서버가 round:end 구동 — 화면은 보고하지 않음(방어적 가드)
         // 승리 라인/글리치를 짧게 보여준 뒤 라운드 종료 1회 보고 → ResultOverlay
         reportedRef.current = true;
         reportRoundEnd(s.result === 'P1' ? 'P1_WIN' : s.result === 'P2' ? 'P2_WIN' : 'DRAW');
@@ -782,9 +771,9 @@ export default function Game7() {
 
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-    // isOnline(안정 boolean)로 게이팅 — online 객체를 넣으면 매 렌더 재실행되어 rAF가 굶는다.
+    // isOnline/myRole(안정 원시값)로 게이팅 — online 객체를 넣으면 매 렌더 재실행되어 rAF가 굶는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOnline, flow.gameId, flow.phase, flow.currentRound]);
+  }, [isOnline, myRole, flow.gameId, flow.phase, flow.currentRound]);
 
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
@@ -833,15 +822,15 @@ export default function Game7() {
       </div>
 
       {/* 온스크린 키캡 — 실제 배정 키 표기(SPEC Q2), 입력 순간 램프 점등 */}
-      {online ? (
+      {isOnline ? (
         // 온라인: U/I 두 키만 사용 → 로컬 플레이어(내 role)의 컨트롤만 내 색으로 표기.
         <div className="g7-keys g7-keys--online">
           <div className="g7-keys__group">
-            <span className={`g7-keys__tag font-arcade ${online.role === 'P1' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {online.role === 'P1' ? '파랑' : '빨강'} · PLACE
+            <span className={`g7-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}>
+              YOU · {myRole === 'P1' ? '파랑' : '빨강'} · PLACE
             </span>
-            <KeyCap role={online.role} keyChar="U" icon="●" lit={uLit} label="놓기" />
-            <KeyCap role={online.role} keyChar="I" icon="✦" lit={iLit} label="방해" />
+            <KeyCap role={myRole ?? 'P2'} keyChar="U" icon="●" lit={uLit} label="놓기" />
+            <KeyCap role={myRole ?? 'P2'} keyChar="I" icon="✦" lit={iLit} label="방해" />
           </div>
           <span className="g7-keys__hint font-arcade c-muted">AIM SCANNER · FIRST 3-ROW WINS</span>
         </div>

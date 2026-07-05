@@ -41,7 +41,8 @@ import {
   useFlow,
 } from '../../state/flow';
 import { setDebugGame, useDebugScreen } from '../../debug';
-import { useOnlineGame } from '../../net/useOnlineGame';
+import { useOnlineRender } from '../../net/useOnlineRender';
+import { sendInput as onlineSendInput } from '../../net/online';
 import ResultOverlay from './ResultOverlay';
 import './game5.css';
 
@@ -486,6 +487,28 @@ function botEvents(s: Game5State, now: number, mem: BotMemory): GameInputEvent[]
 }
 
 // ---------------------------------------------------------------------------
+// 스냅샷 사이 보간(외삽) — 서버 스냅샷을 dt초만큼 각 오브젝트 '자기 속도'로 전진시킨
+// 표시용 상태를 만든다. 총알·몬스터는 vx/vy로, 대포는 ROT_SPEED·dir로 회전 전진.
+// 스냅샷에 속도/방향이 이미 있어 ID 매칭 불필요하고 추가 지연 0. 방향전환(토글) 순간만
+// 미세 오차이며 다음 스냅샷이 즉시 교정한다. 30/60Hz 스냅샷을 60fps 렌더로 부드럽게 잇는 게 목적.
+// (표시용 얕은 복사 — 원본 state는 읽기만, 판정 비침범)
+// ---------------------------------------------------------------------------
+function extrapolate(s: Game5State, dt: number): Game5State {
+  return {
+    ...s,
+    p1Angle: s.p1Angle + G5.ROT_SPEED * s.p1Dir * dt,
+    p2Angle: s.p2Angle + G5.ROT_SPEED * s.p2Dir * dt,
+    shots: s.shots.map((sh) => ({ ...sh, x: sh.x + sh.vx * dt, y: sh.y + sh.vy * dt })),
+    monsters: s.monsters.map((m) => ({
+      ...m,
+      x: m.x + m.vx * dt,
+      y: m.y + m.vy * dt,
+      anim: m.anim + dt,
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 컴포넌트
 // ---------------------------------------------------------------------------
 export default function Game5() {
@@ -493,14 +516,7 @@ export default function Game5() {
   const flow = useFlow();
   const navigate = useNavigate();
 
-  // ── 온라인 훅: null이면 오프라인(로컬 2인/봇) 100% 기존 동작 ──
-  const online = useOnlineGame(5);
-  // 입력 핸들러(옛 클로저)가 항상 최신 online을 보도록 ref로 미러
-  const onlineRef = useRef(online);
-  onlineRef.current = online;
-
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stateRef = useRef<Game5State | null>(null);
   const actionsRef = useRef<GameInputEvent[]>([]);
   const fxRef = useRef<Fx[]>([]);
   const reportedRef = useRef(false);
@@ -519,6 +535,20 @@ export default function Game5() {
   const [iLit, flashI] = useKeyLamp();
   const lampRef = useRef({ flashU, flashI });
   lampRef.current = { flashU, flashI };
+
+  // ── 온라인 렌더 훅(성능 표준): 활성/역할만 선택 구독 → 라운드 경계에서만 리렌더.
+  //    서버 스냅샷은 stateRef/snapAtRef에 직접 미러(리렌더 없음), per-snapshot HUD 반영은 onSnapshot.
+  //    isOnline=false면 오프라인(로컬 2인/봇) 100% 기존 동작.
+  const { isOnline, myRole, stateRef, snapAtRef } = useOnlineRender<Game5State>(5, (s) => {
+    setDebugGame(s);
+    // 오프라인 루프의 setHudMs/setScores를 서버 상태로 대체(HUD 라이브 유지) — 값 바뀔 때만 리렌더.
+    const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
+    setHudMs(Math.ceil(remainingMs / 1000) * 1000);
+    setScores({ p1: s.p1Score, p2: s.p2Score });
+  });
+  // 키보드 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref.
+  const isOnlineRef = useRef(isOnline);
+  isOnlineRef.current = isOnline;
 
   // direct-URL 복구 + prefers-reduced-motion 기록 + 디버그 브리지 정리
   useEffect(() => {
@@ -540,21 +570,6 @@ export default function Game5() {
     c.getContext('2d')?.scale(dpr, dpr);
   }, []);
 
-  // 서버 권위 상태 미러링 — online.state가 올 때마다 로컬 ref/파생 상태에 반영.
-  // (Game5는 game useState가 없어 stateRef + HUD/스코어 useState가 렌더 소스)
-  useEffect(() => {
-    const on = online;
-    if (!on || !on.state) return;
-    const s = on.state as Game5State;
-    stateRef.current = s;
-    setDebugGame(s);
-    // 오프라인 루프의 setHudMs/setScores를 서버 상태로 대체(HUD 라이브 유지)
-    const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
-    setHudMs(Math.ceil(remainingMs / 1000) * 1000);
-    setScores({ p1: s.p1Score, p2: s.p2Score });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online?.state]);
-
   // 키보드 — GameInputEvent 큐 수집 + 램프 점등.
   // P1 q/w, P2 u/i. 온라인이면 P2 키는 봇 대행이므로 흡수하지 않는다.
   useEffect(() => {
@@ -563,8 +578,7 @@ export default function Game5() {
       (e) => {
         // ── 서버 온라인: 로컬 큐/봇 없이 서버로만 전송 ──
         // 내가 어느 role이든 서버가 role로 재기입하므로 4키 아무거나 내 슬롯으로 감.
-        const on = onlineRef.current;
-        if (on) {
+        if (isOnlineRef.current) {
           // 온라인은 U/I 두 키만(요구사항). U=주키(slotA), I=보조키(slotB). Q/W는 무시.
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           if (e.type === 'down') {
@@ -572,7 +586,7 @@ export default function Game5() {
             else flashI();
           }
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
-          on.sendInput(slot, e.type, e.t ?? performance.now() / 1000);
+          onlineSendInput(slot, e.type, e.t ?? performance.now() / 1000);
           return;
         }
 
@@ -599,7 +613,7 @@ export default function Game5() {
   // 라운드 수명주기: state 생성 → rAF 루프(step+draw) → 결과 보고
   useEffect(() => {
     // ── 온라인: 서버 상태만 그리는 draw-only 루프 (step·봇·result보고 없음) ──
-    if (online) {
+    if (isOnline) {
       // 첫 스냅샷 전엔 빈 캔버스 대신 정적 create 상태를 렌더(절대 step하지 않음)
       if (!stateRef.current) stateRef.current = game5.create(Math.random);
       let raf = 0;
@@ -612,7 +626,11 @@ export default function Game5() {
           const now = performance.now();
           fxRef.current = fxRef.current.filter((f) => now - f.t < 1400);
           const disp = getPlayerDisplays(getFlow());
-          drawScene(ctx, s, fxRef.current, now, disp.P1.isYou, disp.P2.isYou, reduceRef.current);
+          // 스냅샷 사이 외삽: 마지막 스냅샷을 경과 dt만큼 각 오브젝트 자기 속도로 전진(최대 50ms 캡).
+          // 종료(result) 후엔 외삽하지 않는다(총알/몬스터가 판정 위치를 지나쳐 보이지 않게).
+          const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
+          const view = extraDt > 0 && s.result === null ? extrapolate(s, extraDt) : s;
+          drawScene(ctx, view, fxRef.current, now, disp.P1.isYou, disp.P2.isYou, reduceRef.current);
         }
         raf = requestAnimationFrame(loop);
       };
@@ -750,7 +768,7 @@ export default function Game5() {
         }
       } else if (!reportedRef.current && now - resultAtRef.current >= RESULT_FX_MS) {
         // 온라인은 서버가 round:end를 구동하므로 화면은 보고하지 않는다
-        if (onlineRef.current) return;
+        if (isOnline) return;
         // 폭발/생존 연출을 짧게 보여준 뒤 라운드 종료 1회 보고 → ResultOverlay
         reportedRef.current = true;
         if (s.result) reportRoundEnd(toMatchResult(s.result));
@@ -783,7 +801,7 @@ export default function Game5() {
       clearInterval(watchdog);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online, flow.gameId, flow.phase, flow.currentRound]);
+  }, [isOnline, myRole, flow.gameId, flow.phase, flow.currentRound]);
 
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
@@ -846,15 +864,15 @@ export default function Game5() {
       </div>
 
       {/* 온스크린 키캡 — 실제 배정 키(SPEC Q2) + 입력 순간 램프 점등 */}
-      {online ? (
+      {isOnline ? (
         // 온라인: 로컬 플레이어(U/I)만, 내 색으로. U=방향전환(slotA) / I=발사(slotB).
         <div className="g5-keys g5-keys--online">
           <div className="g5-keys__group">
-            <span className={`g5-keys__tag font-arcade ${online.role === 'P1' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {online.role === 'P1' ? '파랑' : '빨강'}
+            <span className={`g5-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}>
+              YOU · {myRole === 'P1' ? '파랑' : '빨강'}
             </span>
-            <KeyCap role={online.role} keyChar="U" icon="⇄" lit={uLit} label="방향전환" />
-            <KeyCap role={online.role} keyChar="I" icon="◉" lit={iLit} label="발사" />
+            <KeyCap role={myRole ?? 'P2'} keyChar="U" icon="⇄" lit={uLit} label="방향전환" />
+            <KeyCap role={myRole ?? 'P2'} keyChar="I" icon="◉" lit={iLit} label="발사" />
           </div>
           <span className="g5-keys__hint font-arcade">SHOOT THE INVADERS</span>
         </div>

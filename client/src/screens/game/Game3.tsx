@@ -34,7 +34,8 @@ import {
   useFlow,
 } from '../../state/flow';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
-import { useOnlineGame } from '../../net/useOnlineGame';
+import { useOnlineRender } from '../../net/useOnlineRender';
+import { sendInput as onlineSendInput } from '../../net/online';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
 import ResultOverlay from './ResultOverlay';
 import './game3.css';
@@ -162,15 +163,20 @@ export default function Game3() {
   const flow = useFlow();
   const navigate = useNavigate();
 
-  // 실서버 온라인 훅 — 이 게임(id=3)이 온라인 매치 현재 라운드면 truthy.
-  // truthy면 로컬 시뮬/봇을 끄고 서버 상태를 렌더 + 내 입력만 전송한다.
-  const online = useOnlineGame(3);
-  const onlineRef = useRef(online); // 입력 핸들러가 최신 online을 보도록(stale closure 방지)
-  onlineRef.current = online;
-
   // 초기 상태를 유효한 create()로 둔다(온라인 카운트다운 등 첫 서버 스냅샷 전에도 feed/p1/p2가 존재).
   const [game, setGame] = useState<Game3State | null>(() => game3.create(Math.random));
-  const gameRef = useRef<Game3State | null>(null);
+
+  // 온라인 렌더 훅(성능 구조 표준) — 활성/역할만 '선택 구독'하고 서버 스냅샷은 stateRef로 미러링한다
+  // (스토어 전체 구독/effect churn 제거). truthy(isOnline)면 로컬 시뮬/봇을 끄고 서버 상태를 렌더 +
+  // 내 입력만 전송한다. 이 화면은 canvas가 아니라 DOM/SVG를 game state로 그리므로, per-snapshot 작업
+  // (= 이 게임의 'draw')은 onSnapshot에서 setGame으로 수행한다(새 스냅샷 참조에서만 실제 리렌더).
+  const { isOnline, myRole, stateRef } = useOnlineRender<Game3State>(3, (s) => {
+    setGame(s); // 서버 권위 스냅샷을 DOM/SVG로 렌더(=draw)
+    setDebugGame(s);
+  });
+  // 입력 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref.
+  const isOnlineRef = useRef(isOnline);
+  isOnlineRef.current = isOnline;
   const queueRef = useRef<GameInputEvent[]>([]);
   const reportedRef = useRef(false);
   const reportTimerRef = useRef<number | null>(null);
@@ -193,7 +199,7 @@ export default function Game3() {
   // direct-URL 복구: 매치 컨텍스트가 없으면 오프라인 게임3으로 (§3.3).
   // 단, 실서버 온라인(online) 매치면 오프라인 flow로 오염시키지 않는다.
   useEffect(() => {
-    if (online) return;
+    if (isOnline) return;
     const f = getFlow();
     if (f.phase === 'idle' || f.gameId !== 3) startOfflineGame(3);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -204,7 +210,7 @@ export default function Game3() {
     const f = getFlow();
     if (f.gameId !== 3 || f.currentRound < 1) return;
     const st = game3.create(Math.random);
-    gameRef.current = st;
+    stateRef.current = st;
     queueRef.current = [];
     reportedRef.current = false;
     botRef.current = null;
@@ -212,22 +218,13 @@ export default function Game3() {
     setDebugGame(st);
   }, [flow.gameId, flow.currentRound]);
 
-  // 온라인(실서버): 서버 권위 상태가 올 때마다 로컬 game/ref에 미러링.
-  // 이 화면은 DOM/SVG를 game state로 렌더하므로, 이 setGame이 곧 매 스냅샷의 "draw"다.
-  // state가 null이면 아직 첫 스냅샷 전 — 로컬 create 상태를 그대로 그린다(덮어쓰지 않음).
-  useEffect(() => {
-    const on = online;
-    if (!on || !on.state) return;
-    gameRef.current = on.state as Game3State;
-    setGame(on.state as Game3State);
-    setDebugGame(on.state);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online?.state]);
+  // 온라인(실서버) 스냅샷 미러링은 위 useOnlineRender의 onSnapshot이 담당한다(setGame=draw).
+  // 이 화면은 DOM/SVG를 game state로 렌더하므로 onSnapshot의 setGame이 곧 매 스냅샷의 "draw"다.
 
   // 키보드: KeyQ/KeyU=공격(key1), KeyW/KeyI=회피(key2). now=라운드 경과초.
   useEffect(() => {
     const detach = attachLocalKeyboard(
-      () => gameRef.current?.elapsed ?? 0,
+      () => stateRef.current?.elapsed ?? 0,
       (e) => {
         const isP1 = e.code === 'KeyQ' || e.code === 'KeyW';
         const role: PlayerRole = isP1 ? 'P1' : 'P2';
@@ -236,13 +233,12 @@ export default function Game3() {
         // 실서버 온라인: 로컬 큐/봇을 쓰지 않고 서버로만 전송(down/up 모두).
         // 슬롯 A=주키(Q/U), B=보조키(W/I). 내가 어느 role이든 서버가 slot으로 재기입하므로
         // 로컬 4키(Q/W/U/I) 아무거나 눌러도 내 슬롯 입력으로 전송된다.
-        const on = onlineRef.current;
-        if (on) {
+        if (isOnlineRef.current) {
           // 온라인은 U/I 두 키만(요구사항). U=주키(slotA), I=보조키(slotB). Q/W는 무시.
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
           flashRef.current[role][key](); // 램프 점등은 유지(U/I → P2측)
-          on.sendInput(slot, e.type, e.t ?? performance.now() / 1000);
+          onlineSendInput(slot, e.type, e.t ?? performance.now() / 1000);
           return;
         }
 
@@ -262,9 +258,9 @@ export default function Game3() {
   // 게임 루프 — rAF(전경) + interval 워치독(백그라운드 탭 대비). 공유 시계(last)로 이중진행 방지.
   useEffect(() => {
     // 온라인(실서버): 로컬 step/봇/결과보고를 돌리지 않는다.
-    // 이 화면은 canvas가 없고 DOM/SVG를 game state로 렌더 → 미러 effect의 setGame이
+    // 이 화면은 canvas가 없고 DOM/SVG를 game state로 렌더 → onSnapshot의 setGame이
     // 매 서버 스냅샷마다 리렌더(=draw)를 구동하므로 별도 draw 루프가 필요 없다.
-    if (online) return;
+    if (isOnline) return;
 
     let raf = 0;
     let last = performance.now();
@@ -272,7 +268,7 @@ export default function Game3() {
     const step = (now: number) => {
       const dtMs = clamp(now - last, 0, 250);
       last = now;
-      const st = gameRef.current;
+      const st = stateRef.current;
       if (!st || st.result !== null) return;
       const dt = dtMs / 1000;
 
@@ -296,13 +292,13 @@ export default function Game3() {
       const inputs = queueRef.current;
       queueRef.current = [];
       const next = game3.step(st, inputs, dt);
-      gameRef.current = next;
+      stateRef.current = next;
       setGame({ ...next }); // 코어는 동일 객체를 반환 → clone으로 새 참조 강제(매 프레임 리렌더)
       setDebugGame(next);
 
       // 승패 확정 → 링아웃/타임업 연출 후 라운드 결과 보고 (라운드당 1회)
       // 온라인은 서버가 round:end 를 구동하므로 화면은 결과 보고에 관여하지 않는다.
-      if (onlineRef.current) return;
+      if (isOnlineRef.current) return;
       if (next.result !== null && !reportedRef.current) {
         reportedRef.current = true;
         const effEdge = effEdgeOf(next.waterLevel);
@@ -326,7 +322,7 @@ export default function Game3() {
       cancelAnimationFrame(raf);
       clearInterval(iv);
     };
-  }, [online]);
+  }, [isOnline, myRole]);
 
   // 언마운트 정리
   useEffect(
@@ -339,7 +335,7 @@ export default function Game3() {
 
   // ------------------------------------------------------------------ 파생값
   // 레거시 오프라인 mock 봇 모드(flow.mode==='online') — P2 라벨을 'CPU'로 표기.
-  // 실서버 온라인은 위쪽 useOnlineGame(3) 훅(online)이 담당한다.
+  // 실서버 온라인은 위쪽 useOnlineRender(3) 훅(isOnline/myRole)이 담당한다.
   const flowOnline = flow.mode === 'online';
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
@@ -590,21 +586,21 @@ export default function Game3() {
         </section>
 
         {/* 하단: 온스크린 키캡(실제 배정 키 표기 — SPEC Q2) + 스탠스 피드백 */}
-        {online ? (
+        {isOnline ? (
           // 온라인: 로컬 플레이어(내 역할)의 U/I 컨트롤만, 내 색으로 표기.
           // 펜싱은 대칭 게임(P1/P2 동작 동일: U=공격, I=회피)이라 아이콘/라벨은 역할과 무관.
           <footer className="g3-controls g3-controls--online">
-            <div className={`g3-pad ${online.role === 'P1' ? 'g3-pad--p1' : 'g3-pad--p2'}`}>
-              <div className={`g3-stance ${online.role === 'P1' ? 'c-p1' : 'c-p2'}`}>
+            <div className={`g3-pad ${myRole === 'P1' ? 'g3-pad--p1' : 'g3-pad--p2'}`}>
+              <div className={`g3-stance ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}>
                 <span className="g3-stance__label">
-                  YOU · {online.role === 'P1' ? '파랑' : '빨강'}
+                  YOU · {myRole === 'P1' ? '파랑' : '빨강'}
                 </span>
                 <span className="g3-stance__icon">
-                  {POSE_ICON[online.role === 'P1' ? pose1 : pose2]}
+                  {POSE_ICON[myRole === 'P1' ? pose1 : pose2]}
                 </span>
               </div>
-              <KeyCap role={online.role} keyChar="U" icon="⚔" label="공격" lit={litP2Atk} />
-              <KeyCap role={online.role} keyChar="I" icon="🛡" label="회피" lit={litP2Dod} />
+              <KeyCap role={myRole ?? 'P2'} keyChar="U" icon="⚔" label="공격" lit={litP2Atk} />
+              <KeyCap role={myRole ?? 'P2'} keyChar="I" icon="🛡" label="회피" lit={litP2Dod} />
             </div>
             <div className="g3-hint c-muted">
               실시간 넉백 — 공격(⚔)은 상대를 밀고, 회피(🛡)로 막으면 되받아친다 · 밀물이 링을 조인다 ·

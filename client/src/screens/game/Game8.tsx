@@ -30,7 +30,8 @@ import { game8, G8, GAME_DURATION, magmaSurfaceY } from '@madpump/shared';
 import type { Game8State, GameInputEvent } from '@madpump/shared';
 import type { MatchResult } from '@/shell';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
-import { useOnlineGame } from '../../net/useOnlineGame';
+import { useOnlineRender } from '../../net/useOnlineRender';
+import { sendInput as onlineSendInput } from '../../net/online';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
 import {
   exitMatch,
@@ -422,6 +423,26 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game8State, fx: readonly Fx
 }
 
 // ---------------------------------------------------------------------------
+// 스냅샷 사이 외삽(보간) — 서버 스냅샷을 dt초만큼 각 오브젝트 '자기 물리'로 전진시킨 표시용 복사본.
+//  · 탄: 수평 등속(x += vx·dt). 기체: 중력 적분(vy += G·dt, y += vy·dt) — 코어 step과 동일 공식.
+//  · vx/vy가 스냅샷에 이미 있어 ID 매칭 불필요·추가지연 0. 점프/반전 순간만 미세오차이며
+//    다음 스냅샷이 즉시 교정. 30/60Hz 스냅샷을 60fps로 부드럽게 잇는다(탄·기체 순간이동 제거).
+//  · result 확정 시엔 호출하지 않는다(승패 위치는 서버값 그대로).
+// ---------------------------------------------------------------------------
+function extrapolate(s: Game8State, dt: number): Game8State {
+  const p1Vy = Math.min(G8.MAX_FALL, s.p1Vy + G8.GRAVITY * dt);
+  const p2Vy = Math.min(G8.MAX_FALL, s.p2Vy + G8.GRAVITY * dt);
+  return {
+    ...s,
+    p1Vy,
+    p1Y: s.p1Y + p1Vy * dt,
+    p2Vy,
+    p2Y: s.p2Y + p2Vy * dt,
+    bullets: s.bullets.map((b) => ({ ...b, x: b.x + b.vx * dt })),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 컴포넌트
 // ---------------------------------------------------------------------------
 export default function Game8() {
@@ -429,8 +450,16 @@ export default function Game8() {
   const flow = useFlow();
   const navigate = useNavigate();
 
+  // ── 온라인 렌더 훅(성능 표준): 활성/역할만 선택 구독 → 값이 바뀌는 라운드 경계에서만 리렌더.
+  //   스냅샷은 stateRef/snapAtRef로 미러(리렌더 유발 안 함), per-snapshot 작업은 onSnapshot에 위임.
+  const { isOnline, myRole, stateRef, snapAtRef } = useOnlineRender<Game8State>(8, (s) => {
+    setDebugGame(s); // 디버그 브리지 — 스냅샷마다 갱신(기존 미러 effect 본문)
+  });
+  // 입력 핸들러(장수 리스너)가 항상 최신 '온라인 활성 여부'를 보게 하는 stale-closure 방지 ref
+  const isOnlineRef = useRef(isOnline);
+  isOnlineRef.current = isOnline;
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stateRef = useRef<Game8State | null>(null);
   const actionsRef = useRef<GameInputEvent[]>([]);
   const botRef = useRef<BotRefs>({ jumpAt: 0, fireAt: 0 });
   const fxRef = useRef<Fx[]>([]);
@@ -438,6 +467,14 @@ export default function Game8() {
   const resultAtRef = useRef(0);
   const mountAtRef = useRef(0);
   const reduceRef = useRef(false);
+  /** 온라인 로컬 예측: 내 기체의 점프 입력 대기 플래그(KeyU down에서 set, 루프에서 소비) */
+  const jumpPendingRef = useRef(false);
+  /** 온라인 로컬 예측된 내 기체 y (null=아직 스냅샷 전/스냅 필요) */
+  const predYRef = useRef<number | null>(null);
+  /** 온라인 로컬 예측된 내 기체 vy(중력 적분 상태) */
+  const predVyRef = useRef(0);
+  /** 예측 적분용 직전 렌더 프레임 시각(performance.now) */
+  const lastFrameRef = useRef(0);
 
   const [hudMs, setHudMs] = useState(GAME_DURATION * 1000);
 
@@ -447,21 +484,6 @@ export default function Game8() {
   const [iLit, flashI] = useKeyLamp();
   const lampRef = useRef({ flashU, flashI });
   lampRef.current = { flashU, flashI };
-
-  // ── 온라인 훅: 이 게임(id 8)이 현재 온라인 라운드면 truthy. null이면 100% 오프라인 동작.
-  const online = useOnlineGame(8);
-  // 입력 핸들러(장수 리스너)가 항상 최신 online을 보게 하는 stale-closure 방지 ref
-  const onlineRef = useRef(online);
-  onlineRef.current = online;
-
-  // 서버 상태 미러링 — online.state가 올 때마다 로컬 stateRef/디버그에 반영(로컬 판정 없음)
-  useEffect(() => {
-    const on = online;
-    if (!on || !on.state) return;
-    stateRef.current = on.state as Game8State;
-    setDebugGame(on.state as Game8State);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online?.state]);
 
   // direct-URL 복구 + 디버그 브리지 정리
   useEffect(() => {
@@ -489,16 +511,20 @@ export default function Game8() {
       (e) => {
         // 진짜 서버 온라인: 로컬 큐/봇 안 씀 → 서버로만 전송. 내 역할은 서버가 role로 재기입하므로
         // 4키(Q/W/U/I) 아무거나 눌러도 내 슬롯으로 간다(A=주키 Q·U / B=보조키 W·I).
-        const on = onlineRef.current;
-        if (on) {
-          // 온라인은 U/I 두 키만(요구사항). U=주키(slotA), I=보조키(slotB). Q/W는 무시.
+        if (isOnlineRef.current) {
+          // 온라인은 U/I 두 키만(요구사항). U=주키(slotA=점프), I=보조키(slotB=발사). Q/W는 무시.
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
-          const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
-          on.sendInput(slot, e.type, e.t ?? performance.now() / 1000);
-          if (e.type === 'down') {
-            if (e.code === 'KeyU') flashU();
-            else flashI();
+          if (e.code === 'KeyU') {
+            // U=내 기체 점프. down 엣지를 로컬 예측(즉시 상승)에도 반영 — 어느 역할이든 U=내 점프.
+            if (e.type === 'down') {
+              jumpPendingRef.current = true;
+              flashU();
+            }
+          } else if (e.type === 'down') {
+            flashI();
           }
+          const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
+          onlineSendInput(slot, e.type, e.t ?? performance.now() / 1000);
           return;
         }
         // ── 오프라인 경로(그대로) — f.mode==='online'은 로컬 봇 대전(P2 키 흡수) ──
@@ -524,21 +550,53 @@ export default function Game8() {
   // 라운드 수명주기: state 생성 → rAF 루프(step+draw) → 결과 보고.
   // 탭 백그라운드로 rAF가 멈춰도 워치독 interval이 타이머(10초→DRAW)를 진행시킨다.
   useEffect(() => {
-    if (online) {
+    if (isOnline) {
       // 온라인: 서버 권위 상태만 그린다(step·봇·판정보고 없음).
       // 첫 스냅샷 전(state=null)에는 초기 create 상태를 그려 빈 캔버스를 피한다.
       if (!stateRef.current) stateRef.current = game8.create(Math.random);
       mountAtRef.current = performance.now();
+      predYRef.current = null; // 입장/재진입 경계 — 다음 스냅샷에서 내 기체 예측을 다시 스냅
+      jumpPendingRef.current = false;
       let raf = 0;
-      const loop = () => {
+      const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
         const ctx = canvasRef.current?.getContext('2d');
         const s = stateRef.current;
         if (!ctx || !s) return;
-        const now = performance.now();
         fxRef.current = fxRef.current.filter((f) => now - f.t < 1200);
         const players = getPlayerDisplays(getFlow());
-        drawScene(ctx, s, fxRef.current, now, {
+
+        // (남의 것) 스냅샷 사이 외삽: 마지막 스냅샷을 경과 dt만큼 각 오브젝트 물리로 전진(최대 50ms 캡).
+        //  탄=수평 등속(vx), 기체=중력 적분. 종료(result) 시엔 외삽하지 않는다(서버 위치 그대로).
+        const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
+        let view = extraDt > 0 && s.result === null ? extrapolate(s, extraDt) : s;
+
+        // (내 캐릭터) 내 기체는 live 입력으로 로컬 예측 → 점프 즉각 반응·롤백 제거.
+        //  화해: 매 프레임 서버값으로 약하게 수렴 + 큰 어긋남(라운드리셋/사망)만 스냅.
+        if (myRole && s.result === null) {
+          const frameDt = lastFrameRef.current ? Math.min(0.05, (now - lastFrameRef.current) / 1000) : 0;
+          const myY = myRole === 'P1' ? s.p1Y : s.p2Y;
+          const myVy = myRole === 'P1' ? s.p1Vy : s.p2Vy;
+          let py = predYRef.current;
+          let pvy = predVyRef.current;
+          if (py === null || Math.abs(myY - py) > 80) {
+            py = myY; // 초기/라운드리셋/큰 desync 스냅
+            pvy = myVy;
+          }
+          if (jumpPendingRef.current) {
+            pvy = -G8.JUMP_V; // 점프 즉시 반영(코어와 동일한 임펄스)
+            jumpPendingRef.current = false;
+          }
+          pvy = Math.min(G8.MAX_FALL, pvy + G8.GRAVITY * frameDt); // 중력 적분(서버와 동일 공식)
+          py = py + pvy * frameDt;
+          py += (myY - py) * 0.08; // 서버로 약하게 수렴(지연·적분 드리프트 보정)
+          predYRef.current = py;
+          predVyRef.current = pvy;
+          view = myRole === 'P1' ? { ...view, p1Y: py, p1Vy: pvy } : { ...view, p2Y: py, p2Vy: pvy };
+        }
+        lastFrameRef.current = now;
+
+        drawScene(ctx, view, fxRef.current, now, {
           p1IsYou: players.P1.isYou,
           p2IsYou: players.P2.isYou,
           mountAt: mountAtRef.current,
@@ -633,7 +691,7 @@ export default function Game8() {
         }
       } else if (!reportedRef.current && now - resultAtRef.current >= RESULT_FX_MS) {
         // 온라인은 서버가 round:end를 구동 → 화면은 결과 보고에 관여하지 않는다.
-        if (onlineRef.current) return;
+        if (isOnline) return;
         // 피격/사망 연출을 짧게 보여준 뒤 1회 보고 → ResultOverlay(phase 전환 → 이 effect cleanup)
         reportedRef.current = true;
         if (s.result) reportRoundEnd(toMatchResult(s.result));
@@ -667,7 +725,7 @@ export default function Game8() {
       cancelAnimationFrame(raf);
       clearInterval(watchdog);
     };
-  }, [online, flow.gameId, flow.phase, flow.currentRound]);
+  }, [isOnline, myRole, flow.gameId, flow.phase, flow.currentRound]);
 
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
@@ -720,15 +778,15 @@ export default function Game8() {
       </div>
 
       {/* 온스크린 키캡 — 실제 배정 키(SPEC Q2), 입력 순간 램프 점등 */}
-      {online ? (
+      {isOnline ? (
         // 온라인: 로컬 플레이어 컨트롤만(U=점프 / I=발사), 내 색으로 표기
         <div className="g8-keys g8-keys--online">
           <div className="g8-keys__group">
-            <span className={`g8-keys__tag font-arcade ${online.role === 'P1' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {online.role === 'P1' ? '파랑' : '빨강'} · HOVER · FIRE
+            <span className={`g8-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}>
+              YOU · {myRole === 'P1' ? '파랑' : '빨강'} · HOVER · FIRE
             </span>
-            <KeyCap role={online.role} keyChar="U" icon="▲" lit={uLit} label="점프" />
-            <KeyCap role={online.role} keyChar="I" icon="◉" lit={iLit} label="발사" />
+            <KeyCap role={myRole ?? 'P2'} keyChar="U" icon="▲" lit={uLit} label="점프" />
+            <KeyCap role={myRole ?? 'P2'} keyChar="I" icon="◉" lit={iLit} label="발사" />
           </div>
         </div>
       ) : (

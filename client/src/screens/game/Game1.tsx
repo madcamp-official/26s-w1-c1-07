@@ -44,7 +44,8 @@ import {
 } from '../../state/flow';
 import { setDebugGame, useDebugScreen } from '../../debug';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
-import { useOnlineGame } from '../../net/useOnlineGame';
+import { useOnlineRender } from '../../net/useOnlineRender';
+import { sendInput as onlineSendInput } from '../../net/online';
 import ResultOverlay from './ResultOverlay';
 import './game1.css';
 
@@ -53,16 +54,40 @@ interface ValuePulse {
   until: number;
 }
 
+// ---------------------------------------------------------------------------
+// 스냅샷 사이 보간(외삽) — 서버 스냅샷을 dt초만큼 각 플레이어 값을 '자기 속도'로 전진시킨
+// 표시용 상태를 만든다. 속도=rate×(gauge/GAUGE_REF)·방향=up−down (코어 advance와 동일 공식).
+// 스냅샷에 rate/gauge/down/up이 모두 있어 ID 매칭 불필요·추가 지연 0. 다음 스냅샷이 즉시 교정한다.
+// 30/60Hz 스냅샷을 60fps 렌더로 부드럽게 잇는 게 목적(빠른 카운트업의 계단 제거 → 오프라인 캐던스와 일치).
+// ---------------------------------------------------------------------------
+
+const clampValue = (v: number): number => Math.min(G1.RANGE_MAX, Math.max(G1.RANGE_MIN, v));
+
+function extrapolate(s: Game1State, dt: number): Game1State {
+  const p1Dir = (s.p1Up ? 1 : 0) - (s.p1Down ? 1 : 0);
+  const p2Dir = (s.p2Up ? 1 : 0) - (s.p2Down ? 1 : 0);
+  const p1Speed = s.p1Rate * (s.p1Gauge / G1.GAUGE_REF);
+  const p2Speed = s.p2Rate * (s.p2Gauge / G1.GAUGE_REF);
+  return {
+    ...s,
+    p1: clampValue(s.p1 + p1Dir * p1Speed * dt),
+    p2: clampValue(s.p2 + p2Dir * p2Speed * dt),
+  };
+}
+
 export default function Game1() {
   useDebugScreen('scr-game1');
   const flow = useFlow();
   const navigate = useNavigate();
 
-  // 진짜 서버 온라인이 활성이면 이 훅이 { state, role, sendInput, ... }를 반환(오프라인이면 null).
-  const online = useOnlineGame(1);
-  // 입력 핸들러(빈 deps effect) 등이 항상 최신 online을 보게 하는 stale-closure 방지 ref.
-  const onlineRef = useRef(online);
-  onlineRef.current = online;
+  // 온라인 렌더 훅(성능 표준): 활성/역할만 선택 구독(라운드 경계에서만 리렌더) +
+  // 서버 스냅샷을 stateRef에 미러(리렌더 없이). per-snapshot 작업(디버그 브리지)은 콜백으로 위임.
+  const { isOnline, myRole, stateRef, snapAtRef } = useOnlineRender<Game1State>(1, (s) => {
+    setDebugGame(s);
+  });
+  // 입력 핸들러(빈 deps effect)가 항상 최신 '온라인 활성 여부'를 보게 하는 stale-closure 방지 ref.
+  const isOnlineRef = useRef(isOnline);
+  isOnlineRef.current = isOnline;
 
   const [game, setGame] = useState<Game1State>(() => game1.create(Math.random));
   const gameRef = useRef(game);
@@ -91,8 +116,7 @@ export default function Game1() {
   useEffect(() => {
     const push = (e: GameInputEvent) => {
       // 서버 온라인 활성: 로컬 큐/봇 없이 서버로만 전송. 램프는 시각 피드백으로 유지.
-      const on = onlineRef.current;
-      if (on) {
+      if (isOnlineRef.current) {
         // 온라인은 U/I 두 키만(요구사항). U=주키(slotA), I=보조키(slotB). Q/W는 무시.
         // 서버가 슬롯을 내 role의 물리키로 재기입하므로 접속자는 자기 캐릭터를 조종한다.
         if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
@@ -101,7 +125,7 @@ export default function Game1() {
           else lampRef.current.flashP2Up();
         }
         const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
-        on.sendInput(slot, e.type, e.t);
+        onlineSendInput(slot, e.type, e.t);
         return;
       }
 
@@ -148,32 +172,33 @@ export default function Game1() {
     setDebugGame(s);
   }, [flow.currentRound, flow.phase, flow.gameId]);
 
-  // 서버 권위 상태 미러링 — online.state가 올 때마다 로컬 game/ref에 반영해 렌더 소스로 쓴다.
-  // (state가 null이면 아직 첫 스냅샷 전 → 초기 create 상태를 그대로 그린다)
-  useEffect(() => {
-    const on = online;
-    if (!on || !on.state) return;
-    gameRef.current = on.state as Game1State;
-    setGame(on.state as Game1State);
-    setDebugGame(on.state);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online?.state]);
+  // (서버 권위 상태 미러링은 useOnlineRender가 담당 — 스냅샷마다 stateRef에 미러하고
+  //  per-snapshot 작업(setDebugGame)은 위 훅 콜백으로 위임. 별도 미러 effect 불필요.)
 
   // rAF 게임 루프 — step + 디버그 브리지 + 결과 보고.
   // 탭이 백그라운드/오클루전이면 rAF가 멈추므로 interval 워치독이 대신 스텝을 밟는다 (QA 자동화 대응).
   useEffect(() => {
-    // 온라인(서버 권위): 로컬 step·봇·결과보고 없이 서버 상태만 매 프레임 페인트한다.
-    // 이 화면의 페인트 = 상태 미러(gameRef.current)를 새 참조로 setGame 하는 React 리렌더
-    // (오프라인 루프가 매 프레임 호출하던 `setGame({ ...next })` 렌더를 그대로 재사용).
-    if (online) {
+    // 온라인(서버 권위): 로컬 step·봇·결과보고 없이 서버 스냅샷(stateRef)만 매 프레임 페인트한다.
+    // 이 화면의 페인트 = 상태를 새 참조로 setGame 하는 React 리렌더(DOM 게임이라 캔버스 blit 대신 리렌더).
+    // 스냅샷 churn은 useOnlineRender가 흡수(리렌더 없이 stateRef 미러) → 여기서는 프레임당 1회만 렌더.
+    if (isOnline) {
+      // 첫 스냅샷 전이면 초기 create 상태를 렌더용으로만 세팅(판정 아님 — onSnapshot이 곧 덮어씀).
+      if (!stateRef.current) {
+        const seed = game1.create(Math.random);
+        stateRef.current = seed;
+        setGame({ ...seed });
+        setDebugGame(seed);
+      }
       let raf = 0;
-      const draw = () => {
-        const s = gameRef.current;
-        if (s) setGame({ ...s });
-      };
-      const loop = () => {
-        draw();
+      const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
+        const s = stateRef.current;
+        if (!s) return;
+        // 스냅샷 사이 외삽: 마지막 스냅샷을 경과 dt(≤50ms)만큼 각 플레이어 값을 '자기 속도'로 전진.
+        // 값(p1/p2)만 대상 — 코어 advance와 동일 공식. 종료(result≠null) 시엔 외삽하지 않는다.
+        const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
+        const view = extraDt > 0 && s.result === null ? extrapolate(s, extraDt) : s;
+        setGame({ ...view }); // 새 참조로 강제 리렌더(스냅샷/외삽 객체를 clone)
       };
       raf = requestAnimationFrame(loop);
       return () => cancelAnimationFrame(raf);
@@ -246,7 +271,7 @@ export default function Game1() {
 
       if (next.result !== null) {
         stopped = true; // 루프 정지 — ResultOverlay가 phase를 보고 표시
-        if (onlineRef.current) return; // 온라인: 서버가 round:end 구동, 화면은 결과 보고에 관여 안 함
+        if (isOnlineRef.current) return; // 온라인: 서버가 round:end 구동, 화면은 결과 보고에 관여 안 함
         if (!reportedRef.current) {
           reportedRef.current = true;
           reportRoundEnd(
@@ -271,7 +296,7 @@ export default function Game1() {
       cancelAnimationFrame(raf);
       clearInterval(watchdog);
     };
-  }, [online, flow.phase, flow.currentRound]);
+  }, [isOnline, myRole, flow.phase, flow.currentRound]);
 
   const displays = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
@@ -396,16 +421,16 @@ export default function Game1() {
 
       {/* 하단 조작키 안내 — 실제 배정 키 표기 (SPEC Q2) + 입력 순간 램프 점등 */}
       {/* 온라인은 U/I 두 키만 쓰므로 내 역할(role) 컨트롤만 내 색으로 표시. 오프라인은 기존 2인 레이아웃 유지. */}
-      {online ? (
+      {isOnline ? (
         <footer className="g1-pads g1-pads--online">
           <div className="g1-pad-group">
             <span
-              className={`g1-pads-tag font-arcade ${online.role === 'P1' ? 'c-p1' : 'c-p2'}`}
+              className={`g1-pads-tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}
             >
-              YOU · {online.role === 'P1' ? '파랑' : '빨강'}
+              YOU · {myRole === 'P1' ? '파랑' : '빨강'}
             </span>
-            <KeyCap role={online.role} keyChar="U" icon="▼" label="내리기" lit={p2DownLit} />
-            <KeyCap role={online.role} keyChar="I" icon="▲" label="올리기" lit={p2UpLit} />
+            <KeyCap role={myRole ?? 'P2'} keyChar="U" icon="▼" label="내리기" lit={p2DownLit} />
+            <KeyCap role={myRole ?? 'P2'} keyChar="I" icon="▲" label="올리기" lit={p2UpLit} />
           </div>
           <span className="g1-pads-hint font-arcade">MATCH THE TARGET · HOLD 1 SEC</span>
         </footer>

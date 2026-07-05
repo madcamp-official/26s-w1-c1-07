@@ -43,7 +43,8 @@ import {
   useFlow,
 } from '../../state/flow';
 import { setDebugGame, useDebugScreen } from '../../debug';
-import { useOnlineGame } from '../../net/useOnlineGame';
+import { useOnlineRender } from '../../net/useOnlineRender';
+import { sendInput as onlineSendInput } from '../../net/online';
 import ResultOverlay from './ResultOverlay';
 import './game6.css';
 
@@ -426,16 +427,20 @@ export default function Game6() {
   const flow = useFlow();
   const navigate = useNavigate();
 
-  // 서버 온라인 훅 — 이 게임(6)이 온라인 매치의 현재 라운드면 { state, role, sendInput } 반환.
-  // truthy면 로컬 시뮬/봇/판정을 끄고 서버 권위 상태만 렌더 + 내 입력만 서버로 전송한다.
-  // null(오프라인)이면 기존 동작과 100% 동일.
-  const online = useOnlineGame(6);
-  // 입력 핸들러(마운트 시 1회 등록)가 최신 online을 보게 하는 ref — stale closure 방지.
-  const onlineRef = useRef(online);
-  onlineRef.current = online;
+  // 온라인 렌더 훅(성능 표준) — 활성/역할만 '선택 구독'해서 라운드 경계에서만 리렌더하고,
+  // 서버 스냅샷은 stateRef에 직접 미러(리렌더 유발 안 함). per-snapshot HUD/디버그 반영은
+  // onSnapshot으로 위임 → 60Hz 스냅샷이 60Hz 리렌더로 번지던 churn 제거.
+  // isOnline이면 로컬 시뮬/봇/판정을 끄고 서버 권위 상태만 렌더 + 내 입력만 서버로 전송한다.
+  const { isOnline, myRole, stateRef } = useOnlineRender<Game6State>(6, (s) => {
+    setDebugGame(s); // 디버그 브리지 — 스냅샷마다 갱신
+    // HUD 남은 시간(서버 elapsed 기반, 초 단위 양자화 — 값 동일 스냅샷은 리렌더 없음)
+    setHudMs(Math.ceil(Math.max(0, (GAME_DURATION - s.elapsed) * 1000) / 1000) * 1000);
+  });
+  // 키보드 핸들러(마운트 시 1회 등록)가 최신 '온라인 활성 여부'를 보게 하는 ref — stale closure 방지.
+  const isOnlineRef = useRef(isOnline);
+  isOnlineRef.current = isOnline;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stateRef = useRef<Game6State | null>(null);
   const eventsRef = useRef<GameInputEvent[]>([]);
   const p1ScrollRef = useRef(0);
   const p2ScrollRef = useRef(0);
@@ -481,30 +486,23 @@ export default function Game6() {
     c.getContext('2d')?.scale(dpr, dpr);
   }, []);
 
-  // 서버 상태 미러링 — online.state가 올 때마다 로컬 stateRef/디버그에 반영(렌더가 서버 권위 상태를 그림).
-  useEffect(() => {
-    const on = online;
-    if (!on || !on.state) return;
-    stateRef.current = on.state as Game6State;
-    setDebugGame(on.state as Game6State);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online?.state]);
+  // (서버 상태 → stateRef/디버그/HUD 미러링은 useOnlineRender + 위 onSnapshot 콜백이 담당.
+  //  리렌더 없이 stateRef.current를 갱신하므로 별도 미러 effect가 필요없다.)
 
   // 키보드 — GameInputEvent 큐 수집 + 램프 점등. 온라인 P2(u/i)는 봇이 대행.
   useEffect(() => {
     const detach = attachLocalKeyboard(
       () => performance.now() / 1000,
       (e) => {
-        const on = onlineRef.current;
         // ── 서버 온라인: U/I 두 키만(요구사항). U=주키(slotA), I=보조키(slotB). Q/W는 무시 ──
-        if (on) {
+        if (isOnlineRef.current) {
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           if (e.type === 'down') {
             if (e.code === 'KeyU') lampRef.current.flashU();
             else lampRef.current.flashI();
           }
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
-          on.sendInput(slot, e.type, e.t);
+          onlineSendInput(slot, e.type, e.t);
           return;
         }
         // ── 오프라인(기존 그대로) — mock-online이면 P2(u/i)는 봇이 대행 ──
@@ -530,8 +528,8 @@ export default function Game6() {
   // 라운드 수명주기: state 생성 → rAF 루프(step + draw) → 결과 보고
   useEffect(() => {
     // ── 서버 온라인: step·봇·결과보고 없이 서버 상태만 그리는 draw-only 루프 ──
-    if (online) {
-      // 첫 스냅샷 전이면 중립 초기 상태를 placeholder로 그린다(서버 state 오면 미러링 effect가 덮어씀).
+    if (isOnline) {
+      // 첫 스냅샷 전이면 중립 초기 상태를 placeholder로 그린다(스냅샷 오면 onSnapshot이 덮어씀).
       if (!stateRef.current) {
         const init = game6.create(Math.random);
         stateRef.current = init;
@@ -552,9 +550,7 @@ export default function Game6() {
         p1ScrollRef.current += (s.p1Idx - p1ScrollRef.current) * ease;
         p2ScrollRef.current += (s.p2Idx - p2ScrollRef.current) * ease;
 
-        // HUD 남은 시간(서버 elapsed 기반, 초 단위 양자화 — 값 동일 프레임은 리렌더 없음)
-        setHudMs(Math.ceil(Math.max(0, (GAME_DURATION - s.elapsed) * 1000) / 1000) * 1000);
-
+        // (HUD 남은 시간은 onSnapshot에서 스냅샷마다 갱신 — 렌더 루프에서 setState 하지 않는다.)
         fxRef.current = fxRef.current.filter((f) => now - f.t < 900);
         const displays = getPlayerDisplays(getFlow());
         drawScene(ctx, s, {
@@ -660,7 +656,7 @@ export default function Game6() {
           fxRef.current.push({ kind: 'chroma', t: now });
         }
       } else if (!reportedRef.current && now - resultAtRef.current >= RESULT_FX_MS) {
-        if (onlineRef.current) return; // 온라인은 서버가 round:end 구동 — 화면은 결과 보고 안 함
+        if (isOnline) return; // 온라인은 서버가 round:end 구동 — 화면은 결과 보고 안 함
         reportedRef.current = true;
         if (s.result) reportRoundEnd(toMatchResult(s.result));
       }
@@ -690,7 +686,7 @@ export default function Game6() {
 
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [online, flow.gameId, flow.phase, flow.currentRound]);
+  }, [isOnline, myRole, flow.gameId, flow.phase, flow.currentRound]);
 
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
@@ -739,15 +735,15 @@ export default function Game6() {
       </div>
 
       {/* 온스크린 키캡 — 실제 배정 키 표기 (SPEC Q2), 입력 순간 램프 점등 */}
-      {online ? (
+      {isOnline ? (
         // 온라인: 로컬 플레이어(U/I)만, 내 색으로. U=왼쪽 패드, I=오른쪽 패드.
         <div className="g6-keys g6-keys--online">
           <div className="g6-keys__group">
-            <span className={`g6-keys__tag font-arcade ${online.role === 'P1' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {online.role === 'P1' ? '파랑' : '빨강'} · PUMP
+            <span className={`g6-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}>
+              YOU · {myRole === 'P1' ? '파랑' : '빨강'} · PUMP
             </span>
-            <KeyCap role={online.role} keyChar="U" icon="◀" lit={uLit} label="왼쪽" />
-            <KeyCap role={online.role} keyChar="I" icon="▶" lit={iLit} label="오른쪽" />
+            <KeyCap role={myRole ?? 'P2'} keyChar="U" icon="◀" lit={uLit} label="왼쪽" />
+            <KeyCap role={myRole ?? 'P2'} keyChar="I" icon="▶" lit={iLit} label="오른쪽" />
           </div>
           <span className="g6-keys__hint font-arcade c-muted">HIT THE GLOWING PAD</span>
         </div>

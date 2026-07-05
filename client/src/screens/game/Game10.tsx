@@ -38,7 +38,8 @@ import {
   useFlow,
 } from '../../state/flow';
 import { setDebugGame, useDebugScreen } from '../../debug';
-import { useOnlineGame } from '../../net/useOnlineGame';
+import { useOnlineRender } from '../../net/useOnlineRender';
+import { sendInput as onlineSendInput } from '../../net/online';
 import ResultOverlay from './ResultOverlay';
 import './game10.css';
 
@@ -356,14 +357,7 @@ export default function Game10() {
   const flow = useFlow();
   const navigate = useNavigate();
 
-  // 서버 온라인(권위) 훅. null=오프라인(지금과 100% 동일 동작).
-  const online = useOnlineGame(10);
-  // 입력 핸들러가 최신 online을 보게 하는 stale-closure 방지 ref
-  const onlineRef = useRef(online);
-  onlineRef.current = online;
-
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stateRef = useRef<Game10State | null>(null);
   const eventsRef = useRef<GameInputEvent[]>([]);
   const fxRef = useRef<Fx[]>([]);
   const hot1Ref = useRef<Cell[]>([]);
@@ -378,6 +372,18 @@ export default function Game10() {
   /** HUD 남은 시간(초 단위 양자화 — 리렌더 절약) */
   const [hudMs, setHudMs] = useState(GAME_DURATION * 1000);
 
+  // 서버 온라인(권위) 렌더 훅 — 활성/역할만 선택 구독(값 바뀌는 라운드 경계에서만 리렌더).
+  //  · 스냅샷 → stateRef/snapAtRef 미러링은 훅이 리렌더 없이 처리.
+  //  · per-snapshot HUD/디버그 반영만 onSnapshot으로 위임 → 값이 실제 바뀔 때만 리렌더(초 양자화).
+  const { isOnline, myRole, stateRef, snapAtRef } = useOnlineRender<Game10State>(10, (s) => {
+    setDebugGame(s);
+    const remMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
+    setHudMs(Math.ceil(remMs / 1000) * 1000);
+  });
+  // 입력 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref(stale-closure 방지)
+  const isOnlineRef = useRef(isOnline);
+  isOnlineRef.current = isOnline;
+
   const [qLit, flashQ] = useKeyLamp();
   const [wLit, flashW] = useKeyLamp();
   const [uLit, flashU] = useKeyLamp();
@@ -387,23 +393,12 @@ export default function Game10() {
   // (온라인 매치가 활성이면 flow는 OnlineController가 세팅하므로 오프라인 복구를 걸지 않는다)
   useEffect(() => {
     const f = getFlow();
-    if (!online && (f.phase === 'idle' || f.gameId !== 10)) startOfflineGame(10);
+    if (!isOnline && (f.phase === 'idle' || f.gameId !== 10)) startOfflineGame(10);
     return () => setDebugGame(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 서버 권위 상태 미러링 — online.state가 올 때마다 로컬 ref/디버그 브리지에 반영.
-  // (setGame 상태가 없는 화면이라 stateRef + setDebugGame + HUD 잔여시간만 갱신)
-  useEffect(() => {
-    const on = online;
-    if (!on || !on.state) return;
-    const s = on.state as Game10State;
-    stateRef.current = s;
-    setDebugGame(s);
-    const remMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
-    setHudMs(Math.ceil(remMs / 1000) * 1000);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online?.state]);
+  // (서버 스냅샷 → stateRef/snapAtRef 미러링 + per-snapshot HUD/디버그 반영은 useOnlineRender가 처리)
 
   // 캔버스 해상도 초기화(dpr 스케일)
   useEffect(() => {
@@ -424,12 +419,11 @@ export default function Game10() {
         // 서버 온라인 활성: 로컬 큐/봇 대신 서버로만 전송.
         // 슬롯 A=좌회전(Q·U) / B=우회전(W·I) — 내 역할은 서버가 role로 재기입하므로
         // 4키 아무거나 눌러도 내 슬롯으로 간다. 램프 점등은 눌린 물리 키 기준으로 유지.
-        const on = onlineRef.current;
-        if (on) {
+        if (isOnlineRef.current) {
           // 온라인은 U/I 두 키만(요구사항). U=주키(slotA), I=보조키(slotB). Q/W는 무시.
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
-          on.sendInput(slot, e.type, e.t ?? performance.now() / 1000);
+          onlineSendInput(slot, e.type, e.t ?? performance.now() / 1000);
           if (e.type === 'down') {
             if (e.code === 'KeyU') flashU();
             else flashI();
@@ -461,7 +455,7 @@ export default function Game10() {
   useEffect(() => {
     // ── 온라인(서버 권위): step·봇·판정·결과보고 없이 서버 state만 그린다 ──
     // 기존 오프라인 루프가 매 프레임 호출하던 drawScene()을 그대로 재사용한다.
-    if (online) {
+    if (isOnline) {
       let raf = 0;
       const recordHot = (arr: Cell[], lastRef: { current: Cell }, x: number, y: number) => {
         const l = lastRef.current;
@@ -480,9 +474,17 @@ export default function Game10() {
           recordHot(hot2Ref.current, lastHead2Ref, s.gx2, s.gy2);
           fxRef.current = fxRef.current.filter((f) => now - f.t < 1400);
           const disp = getPlayerDisplays(getFlow());
+          // 스냅샷 사이 외삽: 머리칸(gx/gy)·궤적(occ)은 충돌 정본이라 절대 전진시키지 않고,
+          // 렌더 보간용 frac(다음칸 진행률, 노즈 길이)만 자기 속도(1칸/STEP)로 채운다.
+          // 코어가 매 프레임 frac를 갱신하던 오프라인 노즈 램프를 온라인에서도 재현(0~1 캡).
+          const extraDt = Math.min(G10.STEP, Math.max(0, (now - snapAtRef.current) / 1000));
+          const view =
+            extraDt > 0 && s.result === null
+              ? { ...s, frac: Math.min(1, s.frac + extraDt / G10.STEP) }
+              : s;
           drawScene(
             ctx,
-            s,
+            view,
             fxRef.current,
             hot1Ref.current,
             hot2Ref.current,
@@ -624,7 +626,7 @@ export default function Game10() {
         // 크래시 연출을 짧게 보여준 뒤 라운드 종료 1회 보고 → ResultOverlay
         reportedRef.current = true;
         stopped = true;
-        if (online) return; // 온라인은 서버가 round:end 구동 — 화면은 보고하지 않음
+        if (isOnline) return; // 온라인은 서버가 round:end 구동 — 화면은 보고하지 않음
         if (s.result) reportRoundEnd(toMatchResult(s.result));
       }
 
@@ -659,7 +661,7 @@ export default function Game10() {
       cancelAnimationFrame(raf);
       clearInterval(watchdog);
     };
-  }, [online, flow.gameId, flow.phase, flow.currentRound, flashU, flashI]);
+  }, [isOnline, myRole, flow.gameId, flow.phase, flow.currentRound, flashU, flashI]);
 
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
@@ -714,14 +716,14 @@ export default function Game10() {
       </div>
 
       {/* 온스크린 키캡 — 실제 배정 키(SPEC Q2) + 입력 순간 램프 점등 */}
-      {online ? (
+      {isOnline ? (
         <div className="g10-keys g10-keys--online">
           <div className="g10-keys__group">
-            <span className={`g10-keys__tag font-arcade ${online.role === 'P1' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {online.role === 'P1' ? '파랑' : '빨강'} · CYCLE
+            <span className={`g10-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}>
+              YOU · {myRole === 'P1' ? '파랑' : '빨강'} · CYCLE
             </span>
-            <KeyCap role={online.role} keyChar="U" icon="↺" lit={uLit} label="좌회전" />
-            <KeyCap role={online.role} keyChar="I" icon="↻" lit={iLit} label="우회전" />
+            <KeyCap role={myRole ?? 'P2'} keyChar="U" icon="↺" lit={uLit} label="좌회전" />
+            <KeyCap role={myRole ?? 'P2'} keyChar="I" icon="↻" lit={iLit} label="우회전" />
           </div>
           <span className="g10-keys__hint font-arcade">U 좌회전 · I 우회전 — TURN TO SURVIVE</span>
         </div>
