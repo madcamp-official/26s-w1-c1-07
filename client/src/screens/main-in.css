@@ -125,3 +125,27 @@
     margin-top: 32px;
   }
 }
+
+/* ── 코인 시스템 (S2 확장) ── */
+.s2-coins {
+  font-size: 13px;
+  align-self: center;
+  margin-right: 8px;
+}
+
+.s2-theme-btn {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 30;
+  padding: 10px 16px;
+  background: var(--surface-deep, #100c20);
+  border: 1px solid color-mix(in srgb, var(--accent2) 55%, transparent);
+  color: var(--text);
+  font-size: 14px;
+  transition: box-shadow 120ms, border-color 120ms;
+}
+.s2-theme-btn:hover {
+  border-color: var(--accent2);
+  box-shadow: 0 0 12px -3px var(--accent2);
+}

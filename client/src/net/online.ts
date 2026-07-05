@@ -47,6 +47,10 @@ export interface OnlineState {
   lastRoundResult: GameResult | null
   matchResult: SlotResult | null
   recordedMatchId: string | null
+  /** 매치 정산으로 인한 내 코인 증감 (match:end 수신 시) */
+  coinDelta: number | null
+  /** 정산 후 내 보유 코인 */
+  coinBalance: number | null
   error: string | null
 }
 
@@ -68,6 +72,8 @@ const INITIAL: OnlineState = {
   lastRoundResult: null,
   matchResult: null,
   recordedMatchId: null,
+  coinDelta: null,
+  coinBalance: null,
   error: null,
 }
 
@@ -165,9 +171,15 @@ function wire(s: Socket) {
   s.on(EV.roundEnd, (m: { result: GameResult }) =>
     onlineStore.set({ phase: 'round-result', lastRoundResult: m.result }),
   )
-  s.on(EV.matchEnd, (m: { result: SlotResult; recordedMatchId: string }) => {
+  s.on(EV.matchEnd, (m: { result: SlotResult; recordedMatchId: string; coinDelta?: number; coinBalance?: number }) => {
     startRequestedForRoom = null // 같은 방 재대결 허용
-    onlineStore.set({ phase: 'match-end', matchResult: m.result, recordedMatchId: m.recordedMatchId })
+    onlineStore.set({
+      phase: 'match-end',
+      matchResult: m.result,
+      recordedMatchId: m.recordedMatchId,
+      coinDelta: m.coinDelta ?? null,
+      coinBalance: m.coinBalance ?? null,
+    })
   })
   s.on(EV.matchAborted, () => {
     startRequestedForRoom = null
@@ -176,32 +188,41 @@ function wire(s: Socket) {
   s.on('disconnect', () => onlineStore.set({ connected: false }))
 }
 
-// ── 액션 ──
-export function joinQueue(): void {
-  socket?.emit(EV.queueJoin)
-  onlineStore.set({ phase: 'queue' })
+// ── 액션 (bet: 이 매치에 거는 코인 — 서버가 보유량 재검증) ──
+export function joinQueue(bet: number): Promise<{ ok: boolean; message?: string }> {
+  return new Promise((resolve) => {
+    if (!socket) return resolve({ ok: false, message: '연결 안 됨' })
+    socket.emit(EV.queueJoin, { bet }, (ack: { ok: boolean; message?: string }) => {
+      if (ack?.ok) {
+        onlineStore.set({ phase: 'queue' })
+        resolve({ ok: true })
+      } else resolve({ ok: false, message: ack?.message })
+    })
+  })
 }
 export function leaveQueue(): void {
   socket?.emit(EV.queueLeave)
   onlineStore.set({ phase: 'idle' })
 }
-export function createRoom(): Promise<RoomSnapshot | null> {
+export function createRoom(bet: number): Promise<{ room: RoomSnapshot | null; message?: string }> {
   return new Promise((resolve) => {
-    socket?.emit(EV.roomCreate, {}, (ack: { ok: boolean; data?: RoomSnapshot }) => {
+    if (!socket) return resolve({ room: null, message: '연결 안 됨' })
+    socket.emit(EV.roomCreate, { bet }, (ack: { ok: boolean; data?: RoomSnapshot; message?: string }) => {
       if (ack?.ok && ack.data) {
         onlineStore.set({ room: ack.data, phase: 'room' })
-        resolve(ack.data)
-      } else resolve(null)
+        resolve({ room: ack.data })
+      } else resolve({ room: null, message: ack?.message })
     })
   })
 }
-export function joinRoom(code: string): Promise<boolean> {
+export function joinRoom(code: string, bet: number): Promise<{ ok: boolean; message?: string }> {
   return new Promise((resolve) => {
-    socket?.emit(EV.roomJoin, { code }, (ack: { ok: boolean; data?: RoomSnapshot }) => {
+    if (!socket) return resolve({ ok: false, message: '연결 안 됨' })
+    socket.emit(EV.roomJoin, { code, bet }, (ack: { ok: boolean; data?: RoomSnapshot; message?: string }) => {
       if (ack?.ok && ack.data) {
         onlineStore.set({ room: ack.data, phase: 'room' })
-        resolve(true)
-      } else resolve(false)
+        resolve({ ok: true })
+      } else resolve({ ok: false, message: ack?.message })
     })
   })
 }

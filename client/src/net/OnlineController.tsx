@@ -47,6 +47,14 @@ export default function OnlineController() {
       <div className="onl-overlay" data-testid="online-match-end">
         <div className={`onl-result font-arcade glow-text ${cls}`}>{label}</div>
         <div className="onl-sub font-arcade">MATCH OVER</div>
+        {o.coinDelta !== null && (
+          <div className="onl-coins font-arcade" data-testid="online-coin-result">
+            <span className={o.coinDelta > 0 ? 'win' : o.coinDelta < 0 ? 'lose' : 'draw'}>
+              {o.coinDelta > 0 ? `+${o.coinDelta}` : o.coinDelta} COIN
+            </span>
+            {o.coinBalance !== null && <span className="onl-coins-balance"> · 보유 {o.coinBalance}</span>}
+          </div>
+        )}
         <button
           type="button"
           className="onl-btn font-display"

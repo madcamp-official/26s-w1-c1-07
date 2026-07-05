@@ -12,7 +12,7 @@ import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
 import fstatic from '@fastify/static'
 import { Server as IOServer } from 'socket.io'
-import { EV, type GameInputMsg, type RoomSnapshot } from '@madpump/shared'
+import { EV, nextUnlock, type BetPayload, type GameInputMsg, type RoomSnapshot } from '@madpump/shared'
 import { prisma } from './db'
 import {
   SESSION_COOKIE,
@@ -98,16 +98,64 @@ app.post('/api/login', async (req, reply) => {
   reply.setCookie(SESSION_COOKIE, sid, cookieOpts())
   return {
     status: 'USER',
-    user: { id: user.id.toString(), nickname: user.nickname, imageUrl: null, groupName },
+    user: {
+      id: user.id.toString(),
+      nickname: user.nickname,
+      imageUrl: null,
+      groupName,
+      coins: user.coins,
+      unlockedCount: user.unlockedCount,
+    },
   }
 })
 
 app.get('/api/me', async (req) => {
   const s = getSession(req.cookies[SESSION_COOKIE])
   if (!s) return { status: 'ANON', user: null }
+  // 코인/해금은 수시로 변하므로 세션이 아니라 DB에서 최신값을 읽는다
+  const u = await prisma.appUser.findFirst({ where: { id: s.userId, deletedAt: null } })
+  if (!u) return { status: 'ANON', user: null }
   return {
     status: 'USER',
-    user: { id: s.userId.toString(), nickname: s.nickname, imageUrl: s.imageUrl, groupName: s.groupName },
+    user: {
+      id: s.userId.toString(),
+      nickname: s.nickname,
+      imageUrl: s.imageUrl,
+      groupName: s.groupName,
+      coins: u.coins,
+      unlockedCount: u.unlockedCount,
+    },
+  }
+})
+
+// ── REST: 오프라인 게임 해금 ────────────────────────────────────
+// 해금 순서는 UNLOCK_ORDER(2→7→4→8→5→9→10)로 강제 — 클라는 "다음 것"만 해금 요청 가능.
+app.post('/api/unlock', async (req, reply) => {
+  const s = getSession(req.cookies[SESSION_COOKIE])
+  if (!s) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: '로그인 필요' } })
+  const u = await prisma.appUser.findFirst({ where: { id: s.userId, deletedAt: null } })
+  if (!u) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: '로그인 필요' } })
+
+  const next = nextUnlock(u.unlockedCount)
+  if (!next) return reply.code(400).send({ error: { code: 'ALL_UNLOCKED', message: '모든 게임이 해금됨' } })
+  if (u.coins < next.cost) {
+    return reply.code(400).send({ error: { code: 'NOT_ENOUGH_COINS', message: `코인 부족 (필요: ${next.cost})` } })
+  }
+
+  // 조건부 갱신(코인·해금수 동시 검증)으로 중복 클릭/동시 요청에도 이중 차감 방지
+  const updated = await prisma.appUser.updateMany({
+    where: { id: u.id, unlockedCount: u.unlockedCount, coins: { gte: next.cost } },
+    data: { coins: { decrement: next.cost }, unlockedCount: { increment: 1 } },
+  })
+  if (updated.count === 0) {
+    return reply.code(409).send({ error: { code: 'CONFLICT', message: '다시 시도해주세요' } })
+  }
+  const fresh = await prisma.appUser.findUniqueOrThrow({ where: { id: u.id } })
+  return {
+    status: 'OK',
+    unlockedGameId: next.gameId,
+    coins: fresh.coins,
+    unlockedCount: fresh.unlockedCount,
   }
 })
 
@@ -217,6 +265,15 @@ function ackErr(code: string, message: string) {
   return { ok: false as const, code, message }
 }
 
+/** 베팅액 검증 — 0 이상 정수 & 보유 코인 이하. 유효하면 그 값, 아니면 null */
+async function validateBet(userId: bigint, raw: unknown): Promise<number | null> {
+  const bet = Number(raw ?? 0)
+  if (!Number.isInteger(bet) || bet < 0) return null
+  const u = await prisma.appUser.findFirst({ where: { id: userId, deletedAt: null }, select: { coins: true } })
+  if (!u || bet > u.coins) return null
+  return bet
+}
+
 function startMatchForRoom(room: Room) {
   if (room.members.length < 2) return
   // 멱등: 이미 매치 중이면 재시작 금지(호스트 auto-start가 room:state마다 중복 emit되는 것 방지).
@@ -228,6 +285,7 @@ function startMatchForRoom(room: Room) {
     socketId: ma.socketId,
     nickname: ma.nickname,
     imageUrl: ma.imageUrl,
+    bet: ma.bet,
   }
   const b: Participant = {
     userId: mb.userId,
@@ -235,6 +293,7 @@ function startMatchForRoom(room: Room) {
     socketId: mb.socketId,
     nickname: mb.nickname,
     imageUrl: mb.imageUrl,
+    bet: mb.bet,
   }
   room.status = 'in_match'
   const runner = new MatchRunner(io, room, a, b)
@@ -251,16 +310,20 @@ io.on('connection', (socket) => {
   })
 
   // ── 코드방 ──
-  socket.on(EV.roomCreate, (payload: { rounds?: number }, ack: (r: unknown) => void) => {
+  socket.on(EV.roomCreate, async (payload: { rounds?: number } & Partial<BetPayload>, ack: (r: unknown) => void) => {
     if (findRoomByUser(userId)) return ack(ackErr('ALREADY_IN_ROOM', '이미 방에 있음'))
+    const bet = await validateBet(s.userId, payload?.bet)
+    if (bet === null) return ack(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (보유 코인 한도 내 정수)'))
+    if (findRoomByUser(userId)) return ack(ackErr('ALREADY_IN_ROOM', '이미 방에 있음')) // await 사이 재검사
     const code = genRoomCode()
     const room: Room = {
       code,
       hostUserId: userId,
       status: 'waiting',
       rounds: payload?.rounds ?? 3,
+      kind: 'code',
       members: [
-        { userId, nickname: s.nickname, imageUrl: s.imageUrl, socketId: socket.id, role: 'P1', ready: false },
+        { userId, nickname: s.nickname, imageUrl: s.imageUrl, socketId: socket.id, role: 'P1', ready: false, bet },
       ],
     }
     rooms.set(code, room)
@@ -268,13 +331,15 @@ io.on('connection', (socket) => {
     ack(ackOk<RoomSnapshot>(roomSnapshot(room)))
   })
 
-  socket.on(EV.roomJoin, (payload: { code: string }, ack: (r: unknown) => void) => {
+  socket.on(EV.roomJoin, async (payload: { code: string } & Partial<BetPayload>, ack: (r: unknown) => void) => {
+    const bet = await validateBet(s.userId, payload?.bet)
+    if (bet === null) return ack(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (보유 코인 한도 내 정수)'))
     const room = rooms.get(payload?.code)
     if (!room) return ack(ackErr('NOT_FOUND', '방 없음'))
     if (room.members.length >= 2) return ack(ackErr('ROOM_FULL', '정원 초과'))
     if (findRoomByUser(userId)) return ack(ackErr('ALREADY_IN_ROOM', '이미 방에 있음'))
     room.members.push({
-      userId, nickname: s.nickname, imageUrl: s.imageUrl, socketId: socket.id, role: 'P2', ready: false,
+      userId, nickname: s.nickname, imageUrl: s.imageUrl, socketId: socket.id, role: 'P2', ready: false, bet,
     })
     socket.join(room.code)
     ack(ackOk<RoomSnapshot>(roomSnapshot(room)))
@@ -306,15 +371,23 @@ io.on('connection', (socket) => {
   socket.on(EV.roomLeave, () => leaveRoom())
 
   // ── 빠른시작 (글로벌 FIFO) ──
-  socket.on(EV.queueJoin, () => {
-    if (findRoomByUser(userId) || quickQueue.some((q) => q.userId === userId)) return
-    quickQueue.push({ userId, nickname: s.nickname, imageUrl: s.imageUrl, socketId: socket.id })
+  socket.on(EV.queueJoin, async (payload: Partial<BetPayload>, ack?: (r: unknown) => void) => {
+    if (findRoomByUser(userId) || quickQueue.some((q) => q.userId === userId)) {
+      return ack?.(ackErr('ALREADY_IN_ROOM', '이미 방/큐에 있음'))
+    }
+    const bet = await validateBet(s.userId, payload?.bet)
+    if (bet === null) return ack?.(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (보유 코인 한도 내 정수)'))
+    if (findRoomByUser(userId) || quickQueue.some((q) => q.userId === userId)) {
+      return ack?.(ackErr('ALREADY_IN_ROOM', '이미 방/큐에 있음')) // await 사이 재검사
+    }
+    quickQueue.push({ userId, nickname: s.nickname, imageUrl: s.imageUrl, socketId: socket.id, bet })
+    ack?.(ackOk({ queued: true }))
     if (quickQueue.length >= 2) {
       const p1 = quickQueue.shift()!
       const p2 = quickQueue.shift()!
       const code = genRoomCode()
       const room: Room = {
-        code, hostUserId: p1.userId, status: 'waiting', rounds: 3,
+        code, hostUserId: p1.userId, status: 'waiting', rounds: 3, kind: 'quick',
         members: [
           { ...p1, role: 'P1', ready: true },
           { ...p2, role: 'P2', ready: true },

@@ -82,3 +82,22 @@
 @media (prefers-reduced-motion: reduce) {
   .onl-youbanner__card { animation: none; }
 }
+
+/* 매치 종료 오버레이 — 코인 정산 표시 */
+.onl-coins {
+  font-size: 16px;
+  letter-spacing: 0.08em;
+}
+.onl-coins .win {
+  color: var(--win, #3dff8e);
+}
+.onl-coins .lose {
+  color: var(--error, #ff5470);
+}
+.onl-coins .draw {
+  color: var(--text-muted);
+}
+.onl-coins-balance {
+  color: var(--text-muted);
+  font-size: 12px;
+}

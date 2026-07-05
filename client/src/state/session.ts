@@ -27,6 +27,10 @@ export interface SessionState {
   /** 분반 이름 (예: '1분반') */
   groupName: string | null;
   user: SessionUser | null;
+  /** 보유 코인 (비로그인 시 0) — 서버 /api/me 가 정본, 여기는 미러 */
+  coins: number;
+  /** 오프라인 게임 해금 수 (UNLOCK_ORDER 앞에서부터 n개 — shared/coins.ts) */
+  unlockedCount: number;
 }
 
 const INITIAL: SessionState = {
@@ -34,6 +38,8 @@ const INITIAL: SessionState = {
   nickname: null,
   groupName: null,
   user: null,
+  coins: 0,
+  unlockedCount: 0,
 };
 
 export const sessionStore = createStore<SessionState>(INITIAL);
@@ -54,6 +60,8 @@ interface ServerUser {
   nickname: string;
   imageUrl: string | null;
   groupName?: string | null;
+  coins?: number;
+  unlockedCount?: number;
 }
 
 /** 유저 id로 아바타 색 인덱스 결정 (0~7 고정 매핑) */
@@ -69,7 +77,30 @@ function setLoggedInUser(u: ServerUser): void {
     nickname: u.nickname,
     groupName: u.groupName ?? null,
     user: { id: u.id, avatarColorIndex: avatarIndexOf(u.id), imageUrl: u.imageUrl },
+    coins: u.coins ?? 0,
+    unlockedCount: u.unlockedCount ?? 0,
   });
+}
+
+/** 코인/해금 상태만 갱신 (해금 API 응답, 매치 정산 반영용) */
+export function updateWallet(coins: number, unlockedCount?: number): void {
+  sessionStore.set(unlockedCount === undefined ? { coins } : { coins, unlockedCount });
+}
+
+/**
+ * 다음 게임 해금 (POST /api/unlock) — 성공 시 지갑 갱신.
+ * @returns 성공: { unlockedGameId } / 실패: { error: 사용자 표시용 메시지 }
+ */
+export async function unlockNextGame(): Promise<{ unlockedGameId?: number; error?: string }> {
+  try {
+    const res = await fetch(`${SERVER_URL}/api/unlock`, { method: 'POST', credentials: 'include' });
+    const data = await res.json();
+    if (!res.ok) return { error: data?.error?.message ?? '해금 실패' };
+    updateWallet(data.coins, data.unlockedCount);
+    return { unlockedGameId: data.unlockedGameId };
+  } catch {
+    return { error: '서버 연결 실패' };
+  }
 }
 
 /**

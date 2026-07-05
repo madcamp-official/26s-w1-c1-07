@@ -5,21 +5,34 @@
  * PLAN §2-S6: "온라인 게임하기 — VS MODE" 마퀴 + [빠른 시작](옐로 히어로, INSERT COIN ▶ 점멸)
  *   + surface-deep 서브 섹션 "게임 만들기 / 참가하기" — 1행 코드 생성(생성 전 점멸 슬롯 →
  *   생성 후 옐로 대형 코드 + 복사 COPIED! + 톱니) / OR 칩 / 2행 코드 입력 + 확인.
- * SPEC QA-S6-01~09:
- *   빠른 시작 → openModal('matching') / 코드 생성 → createRoomCode() + 2.5초 뒤 mock 상대
- *   입장(matchFound → navigate) / 코드 확인 → 형식 검증(isValidRoomCode) 후 openModal('matching')
+ * SPEC QA-S6-01~09 + 코인 베팅:
+ *   빠른 시작/코드 생성/코드 입력 각각 실행 전 "코인 베팅" 단계가 끼어든다 —
+ *   보유 코인 한도 내 정수를 텍스트필드로 입력(0 허용). 서버가 보유량 재검증.
+ *   빠른 시작 → 베팅 → openModal('matching') / 코드 생성 → 베팅 → 코드 표시
+ *   / 코드 확인 → 형식 검증(isValidRoomCode) → 베팅 → openModal('matching')
  *   / 톱니 → S4 열고 닫히면 이 패널로 복귀 / 배경 클릭 닫기(타이머 정리).
  * 열림 조건: flow.modal === 'online'.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Button, CoinButton, Modal } from '../components';
 import { closeModal, isValidRoomCode, openModal, useFlow } from '../state/flow';
+import { useSession } from '../state/session';
 import { connectOnline, createRoom, joinQueue, joinRoom } from '../net/online';
 import './online.css';
 
+/** 베팅 창이 실행할 대기 액션 */
+type BetFor = 'quick' | 'create' | 'join';
+
 export default function OnlineModal() {
   const flow = useFlow();
+  const session = useSession();
   const open = flow.modal === 'online';
+
+  /** 코인 베팅 단계 (null = 일반 패널) */
+  const [betFor, setBetFor] = useState<BetFor | null>(null);
+  const [betInput, setBetInput] = useState('0');
+  const [betError, setBetError] = useState<string | null>(null);
+  const [betBusy, setBetBusy] = useState(false);
 
   /** 생성된 코드 (이번 패널 세션 로컬 표시용 — 닫으면 리셋) */
   const [createdCode, setCreatedCode] = useState<string | null>(null);
@@ -56,6 +69,10 @@ export default function OnlineModal() {
       setCopied(false);
       setJoinCode('');
       setJoinError(null);
+      setBetFor(null);
+      setBetInput('0');
+      setBetError(null);
+      setBetBusy(false);
     }
   }, [flow.modal]);
 
@@ -68,18 +85,57 @@ export default function OnlineModal() {
     [],
   );
 
-  const onQuickStart = async () => {
-    clearJoinTimer();
-    await connectOnline(); // 세션 확인 + 소켓
-    joinQueue(); // 글로벌 FIFO 큐 (2명 모이면 서버가 자동 매칭·시작)
-    openModal('matching'); // 대기 연출 — 매칭되면 OnlineController가 게임으로 이동
+  /** 각 액션은 실행 전 "코인 베팅" 단계를 거친다 */
+  const openBet = (target: BetFor) => {
+    setBetInput('0');
+    setBetError(null);
+    setBetFor(target);
   };
 
-  const onCreateCode = async () => {
+  const onQuickStart = () => {
+    clearJoinTimer();
+    openBet('quick');
+  };
+
+  const onCreateCode = () => {
     setCopied(false);
-    await connectOnline();
-    const room = await createRoom(); // 서버가 코드 발급
-    if (room) setCreatedCode(room.code); // 상대 입장 시 서버가 자동 시작 → 자동 이동
+    openBet('create');
+  };
+
+  /** 베팅 확정 → 대기 중이던 액션 실행 */
+  const onBetConfirm = async () => {
+    if (betBusy || !betFor) return;
+    const bet = Number(betInput.trim() === '' ? '0' : betInput.trim());
+    if (!Number.isInteger(bet) || bet < 0) {
+      setBetError('0 이상의 정수를 입력해주세요');
+      return;
+    }
+    if (bet > session.coins) {
+      setBetError(`보유 코인(${session.coins})을 넘을 수 없어요`);
+      return;
+    }
+    setBetBusy(true);
+    setBetError(null);
+    await connectOnline(); // 세션 확인 + 소켓
+    if (betFor === 'quick') {
+      const r = await joinQueue(bet); // 글로벌 FIFO 큐 (2명 모이면 서버가 자동 매칭·시작)
+      setBetBusy(false);
+      if (!r.ok) return setBetError(r.message ?? '큐 진입 실패');
+      setBetFor(null);
+      openModal('matching'); // 대기 연출 — 매칭되면 OnlineController가 게임으로 이동
+    } else if (betFor === 'create') {
+      const r = await createRoom(bet); // 서버가 코드 발급
+      setBetBusy(false);
+      if (!r.room) return setBetError(r.message ?? '코드 생성 실패');
+      setCreatedCode(r.room.code); // 상대 입장 시 서버가 자동 시작 → 자동 이동
+      setBetFor(null);
+    } else {
+      const r = await joinRoom(joinCode.trim(), bet);
+      setBetBusy(false);
+      if (!r.ok) return setBetError(r.message ?? '방을 찾을 수 없어요');
+      setBetFor(null);
+      openModal('matching'); // 입장 성공 → 대기(자동 시작 시 이동)
+    }
   };
 
   const onCopy = async () => {
@@ -105,18 +161,68 @@ export default function OnlineModal() {
     openModal('settings');
   };
 
-  const onJoin = async () => {
+  const onJoin = () => {
     if (!isValidRoomCode(joinCode)) {
       setJoinError('숫자 코드를 입력해 주세요');
       return;
     }
     setJoinError(null);
     clearJoinTimer();
-    await connectOnline();
-    const ok = await joinRoom(joinCode.trim());
-    if (ok) openModal('matching'); // 입장 성공 → 대기(자동 시작 시 이동)
-    else setJoinError('방을 찾을 수 없어요');
+    openBet('join');
   };
+
+  // ── 코인 베팅 단계 ──
+  if (open && betFor) {
+    const label =
+      betFor === 'quick' ? '빠른 시작' : betFor === 'create' ? '코드 생성하기' : `코드 입장 (${joinCode.trim()})`;
+    return (
+      <Modal
+        open={open}
+        onClose={betBusy ? undefined : () => setBetFor(null)}
+        marquee="코인 베팅 — PLACE YOUR BET"
+        accentColor="var(--accent)"
+        testId="modal-bet"
+        width={440}
+      >
+        <div className="s6-bet">
+          <h2 className="font-display s6-title">코인 베팅</h2>
+          <p className="s6-bet-target font-display">{label}</p>
+          <p className="s6-bet-balance font-arcade">
+            보유 <span className="c-accent glow-text">{session.coins}</span> COIN
+          </p>
+          <p className="s6-bet-hint font-display c-muted">
+            이 매치에 걸 코인을 입력하세요 (0 ~ {session.coins})
+          </p>
+          <label className={`neon-input${betError ? ' error anim-shake' : ''}`}>
+            <span className="prompt">&gt;</span>
+            <input
+              data-testid="input-bet"
+              value={betInput}
+              inputMode="numeric"
+              autoFocus
+              aria-label="베팅할 코인"
+              onChange={(e) => {
+                setBetInput(e.target.value);
+                if (betError) setBetError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onBetConfirm();
+              }}
+            />
+          </label>
+          {betError && <p className="s6-join-error c-error">{betError}</p>}
+          <div className="s6-bet-actions">
+            <Button variant="primary" block data-testid="btn-bet-confirm" onClick={onBetConfirm} disabled={betBusy}>
+              {betBusy ? '연결 중…' : '베팅하고 시작'}
+            </Button>
+            <Button variant="tertiary" block onClick={() => setBetFor(null)} disabled={betBusy}>
+              ← 돌아가기
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal
@@ -127,7 +233,12 @@ export default function OnlineModal() {
       testId="modal-online"
       width={640}
     >
-      <h2 className="font-display s6-title">온라인 게임하기</h2>
+      <h2 className="font-display s6-title">
+        온라인 게임하기
+        <span className="s6-coin-badge font-arcade" title="보유 코인">
+          🪙 {session.coins}
+        </span>
+      </h2>
 
       {/* 히어로 CTA — 빠른 시작 */}
       <div className="s6-hero">

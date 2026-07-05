@@ -91,12 +91,21 @@ export interface RoundEndMsg {
   wins: { P1: number; P2: number } // 누적(라운드 역할 기준 표시용)
 }
 
-/** match:end — game_match INSERT 커밋 후에만 */
+/** [C→S] queue:join / room:create / room:join 에 실리는 베팅액 (보유 코인 한도 내 정수) */
+export interface BetPayload {
+  bet: number
+}
+
+/** match:end — game_match INSERT 커밋 후에만. 플레이어별 개별 전송(코인 정산 결과 포함) */
 export interface MatchEndMsg {
   matchId: string
   result: SlotResult // 매치 최종(슬롯 기준)
   recordedMatchId: string // game_match.id
   playedAt: string
+  /** 이 매치로 인한 내 코인 증감 (빠른시작: ±자기 베팅 / 코드방: 승자 +패자 베팅) */
+  coinDelta: number
+  /** 정산 후 내 보유 코인 */
+  coinBalance: number
 }
 
 export interface MatchAbortedMsg {

@@ -13,7 +13,7 @@ import type { GameId, LeaderboardEntry, PerGameStats } from '@/shell';
 import { Button, Card, CoinButton, LeaderboardTable } from '../components';
 import type { MyRankRow } from '../components';
 import { useDebugScreen } from '../debug';
-import { logout, useSession } from '../state/session';
+import { logout, restoreSession, useSession } from '../state/session';
 import { openModal } from '../state/flow';
 import { SERVER_URL } from '../net/config';
 import './main-in.css';
@@ -63,6 +63,11 @@ export default function MainLoggedIn() {
   const [top3, setTop3] = useState<LeaderboardEntry[]>([]);
   const [myRank, setMyRank] = useState<MyRankRow | undefined>(undefined);
 
+  // 매치 정산/해금으로 코인이 변했을 수 있으니 메인 복귀 시 지갑 새로고침
+  useEffect(() => {
+    void restoreSession();
+  }, []);
+
   // 마운트마다 서버에서 최신 랭킹 로드 — 매치 후 메인 복귀 시 자동 갱신
   useEffect(() => {
     let alive = true;
@@ -99,8 +104,11 @@ export default function MainLoggedIn() {
     <main data-testid="scr-main-in" className="s2-root">
       <div className="vanish-grid" aria-hidden />
 
-      {/* 우상단 헤더: 인사말 + 로그아웃 + 설정 */}
+      {/* 우상단 헤더: 인사말 + 코인 + 로그아웃 + 설정 */}
       <header className="s2-header">
+        <span className="s2-coins font-arcade c-accent glow-text" data-testid="coin-balance" title="보유 코인">
+          🪙 {session.coins}
+        </span>
         <p className="s2-greet">
           <span className="font-arcade s2-greet-tag c-p1 glow-text">PLAYER 1:</span>
           <span className="font-display s2-greet-name c-p1 glow-text">{nickname}</span>
@@ -176,6 +184,16 @@ export default function MainLoggedIn() {
           </Card>
         </section>
       </div>
+
+      {/* 우하단: 테마 변경하기 (상점 mock) */}
+      <button
+        type="button"
+        className="s2-theme-btn font-display"
+        data-testid="btn-theme-shop"
+        onClick={() => openModal('theme-shop')}
+      >
+        🎨 테마 변경하기
+      </button>
     </main>
   );
 }

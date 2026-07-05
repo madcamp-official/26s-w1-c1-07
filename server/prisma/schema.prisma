@@ -46,6 +46,10 @@ model AppUser {
   nickname         String    @db.VarChar(50)
   uploadedImageKey String?   @map("uploaded_image_key") @db.VarChar(300)
   groupId          BigInt?   @map("group_id")
+  /// 보유 코인 (시작 30) — 온라인 베팅·오프라인 게임 해금에 사용 (shared/src/coins.ts)
+  coins            Int       @default(30)
+  /// 오프라인 게임 해금 수 (0~7) — UNLOCK_ORDER 순서로 앞에서부터 n개 해금됨
+  unlockedCount    Int       @default(0) @map("unlocked_count") @db.TinyInt
   createdAt        DateTime  @default(now()) @map("created_at")
   deletedAt        DateTime? @map("deleted_at")
 
