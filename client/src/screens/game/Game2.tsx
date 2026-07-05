@@ -569,6 +569,12 @@ export default function Game2() {
   const lastCloseRef = useRef(0);
   /** 마지막 서버 스냅샷 수신 시각(performance.now) — 렌더 외삽 dt 계산용 */
   const snapAtRef = useRef(0);
+  /** 온라인 로컬 예측용: 내 닷지 키 홀드(U=왼쪽/I=오른쪽) */
+  const localHeldRef = useRef<{ left: boolean; right: boolean }>({ left: false, right: false });
+  /** 온라인 로컬 예측된 내 패들 x (null=아직 스냅샷 전) */
+  const predP2XRef = useRef<number | null>(null);
+  /** 예측 적분용 직전 렌더 프레임 시각(performance.now) */
+  const lastFrameRef = useRef(0);
 
   /** HUD 표시용 남은 시간 (초 단위 양자화 — 리렌더 절약) */
   const [hudMs, setHudMs] = useState(GAME_DURATION * 1000);
@@ -643,6 +649,9 @@ export default function Game2() {
         if (on) {
           // 온라인은 U/I 두 키만(요구사항). U=주키(slotA=왼쪽), I=보조키(slotB=오른쪽). Q/W는 무시.
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
+          // 로컬 예측용 홀드 상태(내가 닷지 P2일 때 p2X 예측에 사용). 어태커면 세팅돼도 안 읽음.
+          if (e.code === 'KeyU') localHeldRef.current.left = e.type === 'down';
+          else localHeldRef.current.right = e.type === 'down';
           if (e.type === 'down') {
             if (e.code === 'KeyU') flashU();
             else flashI();
@@ -692,10 +701,26 @@ export default function Game2() {
         if (ctx && s) {
           const p1IsYou = getPlayerDisplays(getFlow()).P1.isYou;
           fxRef.current = fxRef.current.filter((f) => now - f.t < 1200);
-          // 스냅샷 사이 프레임 보간: 마지막 스냅샷을 경과 dt만큼 외삽(최대 50ms 캡).
           const gs = s as Game2State;
-          const dt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
-          const view = dt > 0 && gs.result === null ? extrapolate(gs, dt) : gs;
+          // (남의 것) 스냅샷 사이 외삽: 마지막 스냅샷을 경과 dt만큼 속도로 전진(최대 50ms 캡).
+          const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
+          let view = extraDt > 0 && gs.result === null ? extrapolate(gs, extraDt) : gs;
+          // (내 캐릭터) 닷지(P2)면 내 패들은 live 입력으로 로컬 예측 → 즉각 반응·롤백 제거.
+          //  화해: 정지 시 서버값으로 부드럽게 수렴 + 큰 어긋남(라운드리셋 등)만 스냅.
+          if (online?.role === 'P2' && gs.result === null) {
+            const frameDt = lastFrameRef.current
+              ? Math.min(0.05, (now - lastFrameRef.current) / 1000)
+              : 0;
+            const held = localHeldRef.current;
+            const dir = (held.right ? 1 : 0) - (held.left ? 1 : 0);
+            let px = predP2XRef.current;
+            if (px === null || Math.abs(gs.p2X - px) > 150) px = gs.p2X; // 초기/라운드리셋/큰 desync 스냅
+            px = clampField(px + dir * gs.p2Speed * frameDt); // 예측 전진(서버와 동일 공식)
+            if (dir === 0) px += (gs.p2X - px) * 0.15; // 정지 시 서버로 수렴
+            predP2XRef.current = px;
+            view = { ...view, p2X: px };
+          }
+          lastFrameRef.current = now;
           drawScene(ctx, view, fxRef.current, trailRef.current, now, p1IsYou);
           drawPerfHud(ctx, now, view.rockets.length);
         }
