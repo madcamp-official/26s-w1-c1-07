@@ -438,6 +438,57 @@ function prewarmGame2(): () => void {
 }
 
 // ---------------------------------------------------------------------------
+// 성능 계측 오버레이 (튜닝용) — 캔버스에 직접 그림(React 리렌더 없음).
+//  · ` (백틱) 키로 토글, ?fps 쿼리로도 켜짐, localStorage에 상태 유지.
+//  · FPS = 최근 0.5s 평균, max = 최근 1s 내 최악 프레임시간(spike 탐지), rockets = 현재 탄 수.
+//  · 판독법: 초반 max가 한 번만 크게 튀면 마운트/콜드 spike, FPS가 계속 ~30이면 보간 문제,
+//    로켓 수 늘수록 max 상승이면 렌더(shadowBlur/gradient) 비용.
+// ---------------------------------------------------------------------------
+
+const perf = {
+  show: (() => {
+    try {
+      return localStorage.getItem('mp_fps') === '1' || /[?&]fps\b/.test(location.search);
+    } catch {
+      return false;
+    }
+  })(),
+  last: 0,
+  maxMs: 0,
+  maxAt: 0,
+  frames: 0,
+  accum: 0,
+  fps: 0,
+};
+
+function drawPerfHud(ctx: CanvasRenderingContext2D, now: number, rocketCount: number): void {
+  if (perf.last) {
+    const ms = now - perf.last;
+    perf.frames += 1;
+    perf.accum += ms;
+    if (ms > perf.maxMs || now - perf.maxAt > 1000) {
+      perf.maxMs = ms;
+      perf.maxAt = now;
+    } // 1초 롤링 최대(오래된 피크는 교체)
+    if (perf.accum >= 500) {
+      perf.fps = Math.round((perf.frames / perf.accum) * 1000);
+      perf.frames = 0;
+      perf.accum = 0;
+    }
+  }
+  perf.last = now;
+  if (!perf.show) return;
+  ctx.save();
+  ctx.font = '12px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(0,0,0,0.65)';
+  ctx.fillRect(6, 6, 210, 20);
+  ctx.fillStyle = perf.maxMs > 32 ? '#ff5b5b' : perf.maxMs > 20 ? '#ffd24a' : '#7cfc00';
+  ctx.fillText(`FPS ${perf.fps}  max ${perf.maxMs.toFixed(1)}ms  rockets ${rocketCount}`, 12, 20);
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
 // 컴포넌트
 // ---------------------------------------------------------------------------
 
@@ -508,6 +559,21 @@ export default function Game2() {
   // step·drawScene가 실제 첫 프레임 전에 최적화된 기계어로 준비된다. 반환=언마운트 정리.
   useEffect(() => prewarmGame2(), []);
 
+  // 성능 오버레이 토글 — ` (백틱). 상태는 localStorage 유지.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Backquote') return;
+      perf.show = !perf.show;
+      try {
+        localStorage.setItem('mp_fps', perf.show ? '1' : '0');
+      } catch {
+        /* localStorage 불가 — 무시 */
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // 키보드 — 로컬 어댑터. GameInputEvent를 큐에 쌓고, 램프 점등.
   // (playerL Q/W = P1, playerR U/I = P2 — 코어가 엣지/홀드 판정)
   useEffect(() => {
@@ -570,6 +636,7 @@ export default function Game2() {
           const p1IsYou = getPlayerDisplays(getFlow()).P1.isYou;
           fxRef.current = fxRef.current.filter((f) => now - f.t < 1200);
           drawScene(ctx, s, fxRef.current, trailRef.current, now, p1IsYou);
+          drawPerfHud(ctx, now, (s as Game2State).rockets?.length ?? 0);
         }
       };
       raf = requestAnimationFrame(loop);
@@ -737,6 +804,7 @@ export default function Game2() {
         const p1IsYou = getPlayerDisplays(getFlow()).P1.isYou;
         fxRef.current = fxRef.current.filter((f) => now - f.t < 1200); // 만료 이펙트 정리
         drawScene(ctx, s, fxRef.current, trailRef.current, now, p1IsYou);
+        drawPerfHud(ctx, now, s.rockets.length);
       }
     };
 
