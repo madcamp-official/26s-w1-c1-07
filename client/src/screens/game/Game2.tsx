@@ -124,6 +124,50 @@ function computeBotDir(s: Game2State): -1 | 0 | 1 {
 }
 
 // ---------------------------------------------------------------------------
+// 로켓 스프라이트 (한 번만 구움) — 매 프레임 shadowBlur+gradient 대신 blit.
+//  · head: 코어+글로우를 radial gradient로 구운 고정 스프라이트(shadowBlur 대체).
+//  · tracer: 세로 그라디언트 스트립(머리 밝음→꼬리 투명). 로켓마다 속도방향으로
+//    회전 + 꼬리길이만큼 stretch해서 그린다(속도비례 잔광 유지).
+// 로켓 N개여도 gradient 할당/ shadowBlur = 0 → 발사체 많아도 프레임 비용 일정.
+// ---------------------------------------------------------------------------
+
+let rocketSprites: { head: HTMLCanvasElement; tracer: HTMLCanvasElement } | null = null;
+function getRocketSprites(): { head: HTMLCanvasElement; tracer: HTMLCanvasElement } {
+  if (rocketSprites) return rocketSprites;
+  const HR = 18; // head 스프라이트 반경(코어+글로우 여유)
+  const head = document.createElement('canvas');
+  head.width = HR * 2;
+  head.height = HR * 2;
+  const TW = 6;
+  const TH = 64;
+  const tracer = document.createElement('canvas');
+  tracer.width = TW;
+  tracer.height = TH;
+  const hc = head.getContext('2d');
+  const tc = tracer.getContext('2d');
+  if (hc && tc) {
+    // head: 중심 밝은 코어 → 바깥 글로우 페이드 (shadowBlur=12 룩을 구움)
+    const hg = hc.createRadialGradient(HR, HR, 0, HR, HR, HR);
+    hg.addColorStop(0, 'rgba(253,245,0,1)');
+    hg.addColorStop(0.22, 'rgba(253,245,0,0.95)');
+    hg.addColorStop(0.5, 'rgba(253,245,0,0.35)');
+    hg.addColorStop(1, 'rgba(253,245,0,0)');
+    hc.fillStyle = hg;
+    hc.beginPath();
+    hc.arc(HR, HR, HR, 0, Math.PI * 2);
+    hc.fill();
+    // tracer: y=0(머리, 밝음) → y=TH(꼬리, 투명). 폭 3 중앙.
+    const tg = tc.createLinearGradient(0, 0, 0, TH);
+    tg.addColorStop(0, 'rgba(253,245,0,0.75)');
+    tg.addColorStop(1, 'rgba(253,245,0,0)');
+    tc.fillStyle = tg;
+    tc.fillRect(TW / 2 - 1.5, 0, 3, TH);
+  }
+  rocketSprites = { head, tracer };
+  return rocketSprites;
+}
+
+// ---------------------------------------------------------------------------
 // 캔버스 렌더러 (순수 그리기 — state는 읽기만)
 // ---------------------------------------------------------------------------
 
@@ -211,32 +255,23 @@ function drawScene(
   ctx.stroke();
   ctx.restore();
 
-  // --- 로켓: 옐로 네온 트레이서 (속도벡터 방향으로 잔광) ---
+  // --- 로켓: 옐로 네온 트레이서 (스프라이트 blit — shadowBlur/gradient 할당 없음) ---
+  const { head: headSprite, tracer: tracerSprite } = getRocketSprites();
+  const uToCanvas = CW / G2.W; // 논리→캔버스 스케일(꼬리 길이 환산)
   for (const r of s.rockets) {
     const bx = X(r.x);
     const by = Y(r.y);
     if (by < railP1 - 20) continue;
-    // 0.28초 전 위치 = 속도 반대 방향 잔광 꼬리
-    const tx = X(r.x - r.vx * 0.28);
-    const ty = Y(r.y - r.vy * 0.28);
+    const speed = Math.hypot(r.vx, r.vy);
+    // 꼬리 = 0.28초 이동거리(캔버스px). 로컬 +Y(머리→꼬리)를 -속도 방향에 맞춤: θ=atan2(vx,-vy)
+    const tailLen = Math.max(6, speed * 0.28 * uToCanvas);
     ctx.save();
-    const grad = ctx.createLinearGradient(tx, ty, bx, by);
-    grad.addColorStop(0, 'rgba(253,245,0,0)');
-    grad.addColorStop(1, 'rgba(253,245,0,0.75)');
-    ctx.strokeStyle = grad;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(tx, ty);
-    ctx.lineTo(bx, by);
-    ctx.stroke();
-    // 코어 도트 + 글로우
-    ctx.shadowColor = COL.accent;
-    ctx.shadowBlur = 12;
-    ctx.fillStyle = COL.accent;
-    ctx.beginPath();
-    ctx.arc(bx, by, 4.5, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.translate(bx, by);
+    ctx.rotate(Math.atan2(r.vx, -r.vy));
+    ctx.drawImage(tracerSprite, -tracerSprite.width / 2, 0, tracerSprite.width, tailLen);
     ctx.restore();
+    // 머리 글로우(고정 크기, 회전 무관) — shadowBlur 대체 스프라이트
+    ctx.drawImage(headSprite, bx - headSprite.width / 2, by - headSprite.height / 2);
   }
 
   // --- P1 발사대 (시안, 자동 왕복 + 방향 즉독) ---
