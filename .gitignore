@@ -5,6 +5,8 @@ node_modules/
 .env
 .env.*
 !.env.example
+deploy.env
+!deploy.env.example
 
 # build
 dist/
@@ -16,6 +18,7 @@ build/
 
 # os
 .DS_Store
+Thumbs.db
 
 # design-lab
 *.log
