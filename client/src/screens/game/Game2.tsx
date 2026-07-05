@@ -557,6 +557,12 @@ export default function Game2() {
   // 입력 핸들러(안정 참조)가 항상 최신 online을 보게 하는 ref (stale closure 방지).
   const onlineRef = useRef(online);
   onlineRef.current = online;
+  // rAF 루프를 스토어 churn에서 분리하기 위한 '안정 값'.
+  // online 객체는 스냅샷마다 새 참조라 effect deps로 쓰면 초당 60번 루프가 재생성된다.
+  // 라운드 내 안 변하는 원시값(활성 여부/내 역할)만 뽑아 deps로 쓰고, 루프 내부는
+  // stateRef/snapAtRef 등 ref와 getFlow()로 live 값을 읽는다 → 루프는 라운드당 1번만 생성.
+  const isOnline = online != null;
+  const myRole = online ? online.role : null;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stateRef = useRef<Game2State | null>(null);
@@ -684,7 +690,7 @@ export default function Game2() {
   // 라운드 수명주기: state 생성 → rAF 루프(step+draw) → 결과 보고
   useEffect(() => {
     // ── 온라인(서버 권위): 로컬 시뮬/봇/결과보고 없이 서버 state만 그린다(draw-only) ──
-    if (online) {
+    if (isOnline) {
       // 첫 스냅샷 전이면 초기 create 상태를 렌더용으로만 세팅(판정 아님 — 미러 effect가 곧 덮어씀).
       if (!stateRef.current) {
         const seed = game2.create(Math.random);
@@ -707,7 +713,7 @@ export default function Game2() {
           let view = extraDt > 0 && gs.result === null ? extrapolate(gs, extraDt) : gs;
           // (내 캐릭터) 닷지(P2)면 내 패들은 live 입력으로 로컬 예측 → 즉각 반응·롤백 제거.
           //  화해: 정지 시 서버값으로 부드럽게 수렴 + 큰 어긋남(라운드리셋 등)만 스냅.
-          if (online?.role === 'P2' && gs.result === null) {
+          if (myRole === 'P2' && gs.result === null) {
             const frameDt = lastFrameRef.current
               ? Math.min(0.05, (now - lastFrameRef.current) / 1000)
               : 0;
@@ -879,7 +885,7 @@ export default function Game2() {
         }
       } else if (!reportedRef.current && now - resultAtRef.current >= RESULT_FX_MS) {
         // 온라인은 라운드/매치 전환을 서버(round:end)와 OnlineController가 구동 — 화면은 보고하지 않는다.
-        if (online) return;
+        if (isOnline) return;
         // 피격/생존 연출을 짧게 보여준 뒤 라운드 종료 1회 보고 → ResultOverlay
         reportedRef.current = true;
         if (s.result) reportRoundEnd(toMatchResult(s.result));
@@ -896,7 +902,7 @@ export default function Game2() {
 
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [online, flow.gameId, flow.phase, flow.currentRound]);
+  }, [isOnline, myRole, flow.gameId, flow.phase, flow.currentRound]);
 
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
