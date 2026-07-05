@@ -15,10 +15,10 @@
  *   result('P1'|'P2') 확정 → (RESULT_FX_MS 연출 후) reportRoundEnd(매핑) 1회 → <ResultOverlay />
  *   online 모드 → P2(회피자)는 봇 휴리스틱(KeyU/KeyI down/up 이벤트 합성), 사람은 P1(q/w)
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { game2, G2, GAME_DURATION } from '@madpump/shared';
-import type { Game2State, GameInputEvent } from '@madpump/shared';
+import type { Game2State, GameInputEvent, Role } from '@madpump/shared';
 import type { MatchResult } from '@/shell';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
@@ -32,7 +32,7 @@ import {
   useFlow,
 } from '../../state/flow';
 import { setDebugGame, useDebugScreen } from '../../debug';
-import { useOnlineGame } from '../../net/useOnlineGame';
+import { onlineStore, sendInput as onlineSendInput } from '../../net/online';
 import ResultOverlay from './ResultOverlay';
 import './game2.css';
 
@@ -551,18 +551,23 @@ export default function Game2() {
   const flow = useFlow();
   const navigate = useNavigate();
 
-  // 온라인(서버 권위) 훅 — 이 게임(id 2)이 온라인 매치의 현재 라운드면 truthy.
-  // truthy면 로컬 시뮬/봇을 끄고 서버 state를 렌더 + 내 입력만 전송한다. null이면 오프라인 100% 동일.
-  const online = useOnlineGame(2);
-  // 입력 핸들러(안정 참조)가 항상 최신 online을 보게 하는 ref (stale closure 방지).
-  const onlineRef = useRef(online);
-  onlineRef.current = online;
-  // rAF 루프를 스토어 churn에서 분리하기 위한 '안정 값'.
-  // online 객체는 스냅샷마다 새 참조라 effect deps로 쓰면 초당 60번 루프가 재생성된다.
-  // 라운드 내 안 변하는 원시값(활성 여부/내 역할)만 뽑아 deps로 쓰고, 루프 내부는
-  // stateRef/snapAtRef 등 ref와 getFlow()로 live 값을 읽는다 → 루프는 라운드당 1번만 생성.
-  const isOnline = online != null;
-  const myRole = online ? online.role : null;
+  // 온라인 활성/역할만 '선택 구독' — 스냅샷(60Hz)마다가 아니라 이 값이 바뀌는
+  // 라운드 경계에서만 리렌더. (기존 useOnlineGame은 스토어 전체 구독이라 60Hz 리렌더 유발했음)
+  //  · sig = 원시 문자열 → useSyncExternalStore가 값(Object.is)으로 비교 → 안 바뀌면 리렌더 안 함
+  const readOnlineSig = () => {
+    const o = onlineStore.get();
+    const active =
+      o.gameId === 2 &&
+      o.role != null &&
+      (o.phase === 'countdown' || o.phase === 'playing' || o.phase === 'round-result');
+    return active ? `1:${o.role}` : '0';
+  };
+  const onlineSig = useSyncExternalStore(onlineStore.subscribe, readOnlineSig, readOnlineSig);
+  const isOnline = onlineSig !== '0';
+  const myRole: Role | null = isOnline ? (onlineSig.slice(2) as Role) : null;
+  // 키보드 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref.
+  const isOnlineRef = useRef(isOnline);
+  isOnlineRef.current = isOnline;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stateRef = useRef<Game2State | null>(null);
@@ -599,20 +604,27 @@ export default function Game2() {
     return () => setDebugGame(null);
   }, []);
 
-  // 서버 권위 상태 미러링 — online.state가 올 때마다 로컬 ref/디버그/HUD에 반영(로컬 판정 없음).
-  // 오프라인(online=null)이면 즉시 리턴하므로 기존 경로에 영향 없음.
+  // 서버 스냅샷 → ref 미러링을 '직접 스토어 구독'으로 처리(리렌더 없이).
+  // 스냅샷마다 refs만 갱신하고, hp/남은시간은 '실제로 바뀔 때만' setState → 60Hz 리렌더 제거.
   useEffect(() => {
-    const on = online;
-    if (!on || !on.state) return;
-    const s = on.state as Game2State;
-    stateRef.current = s;
-    snapAtRef.current = performance.now(); // 외삽 dt 기준점 갱신
-    setDebugGame(s);
-    setHp(s.hp);
-    const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
-    setHudMs(Math.ceil(remainingMs / 1000) * 1000);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online?.state]);
+    const sync = () => {
+      const o = onlineStore.get();
+      const activeNow =
+        o.gameId === 2 &&
+        o.role != null &&
+        (o.phase === 'countdown' || o.phase === 'playing' || o.phase === 'round-result');
+      if (!activeNow || !o.serverState) return;
+      const s = o.serverState as Game2State;
+      stateRef.current = s;
+      snapAtRef.current = performance.now(); // 외삽 dt 기준점
+      setDebugGame(s);
+      setHp(s.hp); // 값 동일하면 React가 리렌더 생략
+      const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
+      setHudMs(Math.ceil(remainingMs / 1000) * 1000); // 초 양자화 → ~1/s만 리렌더
+    };
+    sync(); // 초기 1회
+    return onlineStore.subscribe(sync); // 스냅샷마다 호출되지만 리렌더는 유발 안 함
+  }, []);
 
   // 캔버스 해상도 초기화 (dpr 스케일)
   useEffect(() => {
@@ -651,8 +663,7 @@ export default function Game2() {
       (e) => {
         // 진짜 서버 온라인: 로컬 큐/봇을 쓰지 않고 서버로만 전송.
         // (KeyQ·KeyU=슬롯A, KeyW·KeyI=슬롯B. 서버가 내 role로 재기입하므로 4키 아무거나 내 슬롯으로 간다.)
-        const on = onlineRef.current;
-        if (on) {
+        if (isOnlineRef.current) {
           // 온라인은 U/I 두 키만(요구사항). U=주키(slotA=왼쪽), I=보조키(slotB=오른쪽). Q/W는 무시.
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           // 로컬 예측용 홀드 상태(내가 닷지 P2일 때 p2X 예측에 사용). 어태커면 세팅돼도 안 읽음.
@@ -663,7 +674,7 @@ export default function Game2() {
             else flashI();
           }
           const slot = e.code === 'KeyU' ? 'A' : 'B';
-          on.sendInput(slot, e.type, e.t ?? performance.now() / 1000);
+          onlineSendInput(slot, e.type, e.t ?? performance.now() / 1000);
           return;
         }
 
@@ -961,28 +972,26 @@ export default function Game2() {
       </div>
 
       {/* 온스크린 키캡 — 실제 배정 키 표기 (SPEC Q2), 입력 순간 램프 점등 */}
-      {online ? (
+      {isOnline ? (
         // 온라인: U/I 두 키만 사용. 내 역할의 동작을 내 색으로만 표시(비대칭 게임 — 역할 조건부).
         <div className="g2-keys g2-keys--online">
           <div className="g2-keys__group">
-            <span
-              className={`g2-keys__tag font-arcade ${online.role === 'P1' ? 'c-p1' : 'c-p2'}`}
-            >
-              YOU · {online.role === 'P1' ? '파랑 · ATTACK' : '빨강 · DODGE'}
+            <span className={`g2-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}>
+              YOU · {myRole === 'P1' ? '파랑 · ATTACK' : '빨강 · DODGE'}
             </span>
             <KeyCap
-              role={online.role}
+              role={myRole ?? 'P2'}
               keyChar="U"
-              icon={online.role === 'P1' ? '⇄' : '◀'}
+              icon={myRole === 'P1' ? '⇄' : '◀'}
               lit={uLit}
-              label={online.role === 'P1' ? '방향전환' : '왼쪽'}
+              label={myRole === 'P1' ? '방향전환' : '왼쪽'}
             />
             <KeyCap
-              role={online.role}
+              role={myRole ?? 'P2'}
               keyChar="I"
-              icon={online.role === 'P1' ? '◉' : '▶'}
+              icon={myRole === 'P1' ? '◉' : '▶'}
               lit={iLit}
-              label={online.role === 'P1' ? '발사' : '오른쪽'}
+              label={myRole === 'P1' ? '발사' : '오른쪽'}
             />
           </div>
         </div>
