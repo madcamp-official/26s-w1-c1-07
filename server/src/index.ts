@@ -260,6 +260,9 @@ function sanitizeGames(games?: number[]): GameId[] {
   return valid.length ? valid : [...ALL_GAME_IDS]
 }
 
+process.on("uncaughtException", (e) => console.error("[uncaughtException]", e))
+process.on("unhandledRejection", (e) => console.error("[unhandledRejection]", e))
+
 io.on('connection', (socket) => {
   const s: Session = socket.data.session
   const userId = s.userId.toString()
@@ -270,6 +273,7 @@ io.on('connection', (socket) => {
 
   // ── 코드방 ──
   socket.on(EV.roomCreate, (payload: { rounds?: number; games?: number[] }, ack: (r: unknown) => void) => {
+    if (typeof ack !== "function") return
     if (findRoomByUser(userId)) return ack(ackErr('ALREADY_IN_ROOM', '이미 방에 있음'))
     const code = genRoomCode()
     const room: Room = {
@@ -288,6 +292,7 @@ io.on('connection', (socket) => {
   })
 
   socket.on(EV.roomJoin, (payload: { code: string }, ack: (r: unknown) => void) => {
+    if (typeof ack !== "function") return
     const room = rooms.get(payload?.code)
     if (!room) return ack(ackErr('NOT_FOUND', '방 없음'))
     if (room.members.length >= 2) return ack(ackErr('ROOM_FULL', '정원 초과'))
