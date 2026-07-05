@@ -18,10 +18,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// 매치 결과 도메인 (원자값) — ERD.md note #16
+/// 매치/라운드 결과 도메인 — 값은 매치의 고정 참가자 슬롯(playerA/playerB) 기준.
+/// (게임 역할 P1/P2는 라이브 계층 전용, DB엔 저장 안 함 — BUILD_PLAN D5)
 enum MatchResult {
-  P1_WIN
-  P2_WIN
+  A_WIN
+  B_WIN
   DRAW
 }
 
@@ -49,9 +50,9 @@ model AppUser {
   createdAt        DateTime  @default(now()) @map("created_at")
   deletedAt        DateTime? @map("deleted_at")
 
-  group       UserGroup?  @relation(fields: [groupId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_user_group")
-  matchesAsP1 GameMatch[] @relation("MatchPlayer1")
-  matchesAsP2 GameMatch[] @relation("MatchPlayer2")
+  group      UserGroup?  @relation(fields: [groupId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_user_group")
+  matchesAsA GameMatch[] @relation("MatchPlayerA")
+  matchesAsB GameMatch[] @relation("MatchPlayerB")
 
   @@index([groupId], map: "ix_user_group")
   @@map("app_user")
@@ -70,37 +71,55 @@ model AdminAccount {
   @@map("admin_account")
 }
 
-/// 게임 종류 사전 (코드 미러, 시드로 관리) — ERD.md note #15
+/// 게임 종류 사전 (코드 미러, 시드로 관리) — ERD.md note #15. 시드 10행(game1~10)
 model Game {
-  id       Int     @id @db.TinyInt // 코드와 고정 매핑(1/2/3). AUTO_INCREMENT 아님 — 시드로 주입
+  id       Int     @id @db.TinyInt // 코드와 고정 매핑(1~10). AUTO_INCREMENT 아님 — 시드로 주입
   name     String  @unique(map: "uq_game_name") @db.VarChar(50)
   isActive Boolean @default(true) @map("is_active")
 
-  matches GameMatch[]
+  rounds GameRound[]
 
   @@map("game")
 }
 
-/// 매치 결과 (온라인 매치만 기록) — ERD.md note #2
+/// 매치 결과 (온라인 매치만 기록) — ERD.md note #2.
+/// 매치 = 여러 라운드(BUILD_PLAN D3). game_id는 라운드로 이동(라운드마다 게임 랜덤).
+/// result = 매치 최종 승자(playerA/playerB 슬롯 기준, 라운드 다승 집계 결과).
 model GameMatch {
   id        BigInt      @id @default(autoincrement())
-  gameId    Int         @map("game_id") @db.TinyInt
-  player1Id BigInt      @map("player1_id")
-  player2Id BigInt      @map("player2_id")
+  playerAId BigInt      @map("player_a_id")
+  playerBId BigInt      @map("player_b_id")
   result    MatchResult
   playedAt  DateTime    @default(now()) @map("played_at")
   deletedAt DateTime?   @map("deleted_at") // soft delete — ERD.md note #3
 
-  game    Game    @relation(fields: [gameId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_match_game")
-  player1 AppUser @relation("MatchPlayer1", fields: [player1Id], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_match_p1")
-  player2 AppUser @relation("MatchPlayer2", fields: [player2Id], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_match_p2")
+  playerA AppUser @relation("MatchPlayerA", fields: [playerAId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_match_pa")
+  playerB AppUser @relation("MatchPlayerB", fields: [playerBId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_match_pb")
 
+  rounds        GameRound[]
   editHistories MatchEditHistory[]
 
-  @@index([player1Id, playedAt], map: "ix_match_p1")
-  @@index([player2Id, playedAt], map: "ix_match_p2")
+  @@index([playerAId, playedAt], map: "ix_match_pa")
+  @@index([playerBId, playedAt], map: "ix_match_pb")
   @@index([playedAt], map: "ix_match_played")
   @@map("game_match")
+}
+
+/// 라운드 결과 (매치당 여러 행) — BUILD_PLAN D5.
+/// 라운드마다 게임 랜덤(gameType) + 역할 랜덤. result = 그 라운드 승자(playerA/B 슬롯 기준).
+model GameRound {
+  id         BigInt      @id @default(autoincrement())
+  matchId    BigInt      @map("match_id")
+  roundIndex Int         @map("round_index")
+  gameType   Int         @map("game_type") @db.TinyInt
+  result     MatchResult
+
+  match GameMatch @relation(fields: [matchId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "fk_round_match")
+  game  Game      @relation(fields: [gameType], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_round_game")
+
+  @@unique([matchId, roundIndex], map: "uq_round_match_idx")
+  @@index([gameType], map: "ix_round_game")
+  @@map("game_round")
 }
 
 /// 매치 결과 수정이력 (감사 로그) — ERD.md note #5

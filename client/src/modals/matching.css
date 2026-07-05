@@ -1,0 +1,47 @@
+/* S7 온라인 매칭 상태 모달 전용 스타일 (lobby 에이전트 소유). PLAN §2-S7 VS 스크린 */
+
+.s7-arena {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 6px 22px;
+}
+
+/* 대형 VS — 대기 중엔 소등(퍼플 아웃라인), 성사 시 발광 */
+.s7-vs {
+  flex: none;
+  font-size: 34px;
+  color: transparent;
+  -webkit-text-stroke: 2px color-mix(in srgb, var(--accent2) 55%, transparent);
+}
+
+.s7-vs--lit {
+  color: var(--accent);
+  -webkit-text-stroke: 0;
+}
+
+/* 상태 스트립 */
+.s7-status {
+  text-align: center;
+  border-top: 1px solid var(--hairline);
+  padding-top: 18px;
+  min-height: 64px;
+}
+
+.s7-status-en {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
+
+.s7-status-ko {
+  margin-top: 8px;
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.s7-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}

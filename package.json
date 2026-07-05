@@ -8,6 +8,9 @@
     "server",
     "client"
   ],
+  "scripts": {
+    "check:standalone": "bash scripts/check-standalone.sh"
+  },
   "engines": {
     "node": ">=20"
   }

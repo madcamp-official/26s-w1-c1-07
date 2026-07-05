@@ -1,0 +1,706 @@
+/**
+ * S12 게임3 — 펜싱 전용 스타일 (game3 에이전트 소유).
+ * PLAN §2-S12 + §3.3 "그리드 피스트와 와이어프레임 바다".
+ * 공용 theme.css 토큰/유틸만 참조 — 공용 파일은 건드리지 않는다.
+ */
+
+/* ---------------------------------------------------------------- 레이아웃 */
+.g3-root {
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 24px 20px;
+}
+
+.g3-inner {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.g3-topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.g3-hud {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- 스테이지 */
+.g3-stage {
+  position: relative;
+  flex: 1;
+  min-height: 360px;
+}
+
+.g3-arena {
+  position: absolute;
+  inset: 0;
+  /* 플랫폼 상판의 y (바닥 기준) — 검객 발 위치 계산의 정본 */
+  --deck-bottom: 15%;
+  --deck-height: 24%;
+  --sea-w: 14%;
+  --plat-w: 72%;
+}
+
+/* 승패 순간 글리치 — 크로마틱 어버레이션 1~2프레임 (§1.4) */
+@keyframes g3-glitch {
+  0%, 34% {
+    filter: drop-shadow(2px 0 var(--p1)) drop-shadow(-2px 0 var(--p2));
+    transform: translateX(1px);
+  }
+  35%, 100% {
+    filter: none;
+    transform: none;
+  }
+}
+
+.g3-arena--glitch {
+  animation: g3-glitch 240ms steps(2, end) both;
+}
+
+/* ---------------------------------------------------------------- 틱 미터 (1초 판정 진행) */
+.g3-tickmeter {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.g3-tickmeter__label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.g3-tickmeter__segs {
+  display: flex;
+  gap: 3px;
+}
+
+.g3-tickmeter__seg {
+  width: 12px;
+  height: 6px;
+  background: var(--surface-deep);
+  border: 1px solid var(--hairline);
+}
+
+.g3-tickmeter__seg.lit {
+  background: var(--accent2);
+  border-color: var(--accent2);
+}
+
+/* ---------------------------------------------------------------- 남은 칸 램프 (프로필 아래 병기 — §3.3) */
+@keyframes g3-safe-flick {
+  0% { opacity: 0; }
+  19% { opacity: 0; }
+  20% { opacity: 1; }
+  49% { opacity: 1; }
+  50% { opacity: 0; }
+  64% { opacity: 0; }
+  65% { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+.g3-safe {
+  position: absolute;
+  top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: g3-safe-flick 320ms steps(1, end) both;
+}
+
+.g3-safe--p1 { left: 14px; }
+.g3-safe--p2 { right: 14px; flex-direction: row-reverse; }
+
+.g3-safe__label {
+  font-size: 10px;
+}
+
+.g3-safe .lamps {
+  display: flex;
+  gap: 4px;
+}
+
+.g3-safe--p2 .lamps {
+  flex-direction: row-reverse;
+}
+
+/* ---------------------------------------------------------------- 바다 (와이어프레임 파도) */
+.g3-sea {
+  position: absolute;
+  bottom: 9%;
+  width: var(--sea-w);
+  height: 15%;
+  overflow: visible;
+}
+
+.g3-sea--left { left: 0; }
+.g3-sea--right { right: 0; }
+
+.g3-sea svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.g3-wave {
+  fill: none;
+  stroke: var(--p1);
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+/* steps(2)로 어긋나게 출렁 (§3.3) */
+@keyframes g3-wave-a {
+  0%, 49% { transform: translateX(0); }
+  50%, 100% { transform: translateX(6px); }
+}
+
+@keyframes g3-wave-b {
+  0%, 49% { transform: translateX(5px); }
+  50%, 100% { transform: translateX(-3px); }
+}
+
+.g3-wave--1 { opacity: 0.75; animation: g3-wave-a 1.1s steps(2, end) infinite; }
+.g3-wave--2 { opacity: 0.4; animation: g3-wave-b 1.5s steps(2, end) infinite; }
+.g3-wave--3 { opacity: 0.2; animation: g3-wave-a 1.9s steps(2, end) infinite; }
+
+/* 링아웃 스플래시 — 시안 라인 방사 (§3.3) */
+@keyframes g3-splash-ray {
+  0% { height: 0; opacity: 0; }
+  10% { height: 26px; opacity: 1; }
+  70% { height: 30px; opacity: 1; }
+  100% { height: 30px; opacity: 0; }
+}
+
+.g3-splash {
+  position: absolute;
+  left: 50%;
+  top: -6px;
+  width: 0;
+  height: 0;
+}
+
+.g3-splash i {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: var(--p1);
+  box-shadow: 0 0 6px var(--p1);
+  transform-origin: bottom center;
+  transform: rotate(calc(var(--i) * 36deg - 72deg));
+  animation: g3-splash-ray 700ms steps(4, end) both;
+}
+
+/* ---------------------------------------------------------------- 플랫폼 (그리드 피스트) */
+.g3-deck {
+  position: absolute;
+  left: var(--sea-w);
+  width: var(--plat-w);
+  bottom: var(--deck-bottom);
+  height: var(--deck-height);
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes g3-clash-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  50% { transform: translateX(2px); }
+  75% { transform: translateX(-1px); }
+}
+
+.g3-deck-top {
+  display: flex;
+  height: 34px;
+  border: 1px solid var(--hairline);
+  border-bottom: none;
+  /* 소실점 그리드 질감의 발광 상판 (§3.3) */
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--accent2) 35%, transparent) 0 1px,
+      transparent 1px 9px
+    ),
+    var(--bg-raised);
+  box-shadow: 0 -1px 10px color-mix(in srgb, var(--accent2) 25%, transparent);
+}
+
+.g3-deck-top--shake {
+  animation: g3-clash-shake 180ms steps(2, end) both;
+}
+
+.g3-cell {
+  position: relative;
+  flex: 1;
+  border-right: 1px solid color-mix(in srgb, var(--accent2) 45%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.g3-cell:last-child {
+  border-right: none;
+}
+
+/* 끝단 칸 — "여기서 떨어지면 끝" 즉독 (§3.3) */
+.g3-cell--edge {
+  box-shadow: inset 0 0 0 1px var(--error);
+  animation: hard-blink 1s steps(1, end) infinite;
+}
+
+.g3-cell-lamp {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--surface-deep);
+  border: 1px solid var(--hairline);
+}
+
+.g3-cell-lamp--p1 {
+  background: var(--p1);
+  border-color: var(--p1);
+  box-shadow: 0 0 6px var(--p1);
+}
+
+.g3-cell-lamp--p2 {
+  background: var(--p2);
+  border-color: var(--p2);
+  box-shadow: 0 0 6px var(--p2);
+}
+
+/* 옆면 — #000 (§3.3) */
+.g3-deck-face {
+  flex: 1;
+  background: #000;
+  border: 1px solid var(--hairline);
+  border-top: none;
+}
+
+/* ---------------------------------------------------------------- 검객 */
+.g3-fighter {
+  position: absolute;
+  bottom: calc(var(--deck-bottom) + var(--deck-height) - 2px);
+  width: 96px;
+  height: 108px;
+  margin-left: -48px; /* left = 칸 중심 */
+  transition: left 120ms steps(2, end); /* 1칸 하드 스텝 후퇴 (§3.3) */
+  pointer-events: none;
+}
+
+.g3-fighter--p1 { color: var(--p1); }
+.g3-fighter--p2 { color: var(--p2); }
+
+.g3-fencer {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+/* 우측 검객은 좌우 반전 */
+.g3-fighter--p2 .g3-fencer {
+  transform: scaleX(-1);
+}
+
+.g3-swordtip {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* 중립 겨눔 — 느린 idle 미세 흔들림 (§3.3) */
+@keyframes g3-idle {
+  0%, 49% { transform: translateY(0); }
+  50%, 100% { transform: translateY(1.5px); }
+}
+
+.g3-fencer--neutral g {
+  animation: g3-idle 1.6s steps(2, end) infinite;
+}
+
+.g3-fighter--p2 .g3-fencer--neutral g {
+  animation-duration: 1.9s; /* 양쪽 위상 어긋나게 */
+}
+
+/* 링아웃 낙하 — 스텝 프레임 회전 낙하 (§3.3) */
+@keyframes g3-fall {
+  0% { transform: rotate(0) translateY(0); opacity: 1; }
+  33% { transform: rotate(40deg) translateY(24px); opacity: 1; }
+  66% { transform: rotate(90deg) translateY(66px); opacity: 1; }
+  100% { transform: rotate(130deg) translateY(120px); opacity: 0; }
+}
+
+.g3-fighter--fall {
+  transform-origin: 50% 90%;
+  animation: g3-fall 900ms steps(3, end) both;
+}
+
+/* ---------------------------------------------------------------- 행동 칩 (머리 위 동시 공개) */
+@keyframes g3-chip-show {
+  0% { opacity: 1; }
+  87% { opacity: 1; }
+  88%, 100% { opacity: 0; }
+}
+
+.g3-chip {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 26px;
+  padding: 3px 6px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1;
+  background: var(--surface-deep);
+  border: 1px solid currentColor;
+  animation: g3-chip-show 900ms steps(1, end) both;
+}
+
+.g3-chip--hold {
+  animation: none; /* 라운드 종료 순간의 칩은 유지 */
+}
+
+/* 발밑 스파크 2개 (§3.3) */
+@keyframes g3-spark {
+  0% { transform: translate(0, 0); opacity: 1; }
+  100% { transform: translate(var(--sx), -14px); opacity: 0; }
+}
+
+.g3-sparks {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  width: 0;
+  height: 0;
+}
+
+.g3-sparks i {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+  animation: g3-spark 300ms steps(3, end) both;
+}
+
+.g3-sparks i:nth-child(1) { --sx: -16px; }
+.g3-sparks i:nth-child(2) { --sx: 16px; }
+
+/* ---------------------------------------------------------------- 판정 캡션 */
+@keyframes g3-callout-show {
+  0% { opacity: 1; }
+  84% { opacity: 1; }
+  85%, 100% { opacity: 0; }
+}
+
+.g3-callout {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 20px;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: g3-callout-show 800ms steps(1, end) both;
+}
+
+.g3-callout--clash {
+  color: var(--text);
+}
+
+/* 라운드 종료 대형 캡션 (RING OUT! / TIME UP!) */
+.g3-endcap {
+  position: absolute;
+  top: 26%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 34px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* 라운드 시작 사인 (FIGHT!) — 점등 후 소등, 게임 비차단 */
+@keyframes g3-intro-show {
+  0% { opacity: 0; }
+  9% { opacity: 0; }
+  10% { opacity: 1; }
+  24% { opacity: 0; }
+  30% { opacity: 1; }
+  84% { opacity: 1; }
+  85%, 100% { opacity: 0; }
+}
+
+.g3-intro {
+  position: absolute;
+  top: 44%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 22px;
+  color: var(--accent);
+  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: g3-intro-show 1600ms steps(1, end) both;
+}
+
+/* ---------------------------------------------------------------- 하단 컨트롤 (키캡 + 스탠스) */
+.g3-controls {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.g3-pad {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.g3-stance {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-deep);
+}
+
+.g3-stance__label {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-family: var(--font-arcade);
+  letter-spacing: 0.06em;
+}
+
+.g3-stance__icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.g3-hint {
+  align-self: center;
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------- 모션 축소 대응 */
+@media (prefers-reduced-motion: reduce) {
+  .g3-arena--glitch,
+  .g3-safe,
+  .g3-wave--1,
+  .g3-wave--2,
+  .g3-wave--3,
+  .g3-splash i,
+  .g3-deck-top--shake,
+  .g3-cell--edge,
+  .g3-fencer--neutral g,
+  .g3-sparks i,
+  .g3-intro {
+    animation: none;
+  }
+
+  .g3-fighter {
+    transition: none;
+  }
+
+  .g3-fighter--fall {
+    animation: none;
+    opacity: 0.25;
+  }
+
+  .g3-chip,
+  .g3-callout {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+
+/* ── 새 메커니즘 UI (로직 포팅) ── */
+
+/* ============================================================
+   게임3 — 실시간 넉백 코어용 추가 UI (neon-coinop 톤 유지, 새 요소 전용).
+   기존 클래스 재정의 없음 — g3a-* 신규 + g3-fighter 실시간 모디파이어만.
+   ============================================================ */
+
+/* 실시간 이동: 넉백 점프를 부드럽게 (1초 틱 하드스텝 → 실시간 선형) */
+.g3-fighter.g3-fighter--rt {
+  transition: left 110ms linear;
+}
+
+/* ---------------------------------------------------------------- 우세 미터(momentum) */
+.g3a-advbar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 46%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.g3a-advbar__track {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  background: var(--surface-deep);
+  border: 1px solid var(--hairline);
+  overflow: hidden;
+}
+
+.g3a-advbar__mid {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--text-muted);
+  opacity: 0.6;
+}
+
+.g3a-advbar__fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  box-shadow: 0 0 8px currentColor;
+  transition: left 120ms linear, width 120ms linear;
+}
+
+.g3a-advbar__marker {
+  position: absolute;
+  top: -2px;
+  width: 3px;
+  height: 12px;
+  margin-left: -1.5px;
+  background: var(--text);
+  box-shadow: 0 0 6px var(--text);
+  transition: left 110ms linear;
+}
+
+.g3a-advbar__cap {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 8px;
+  letter-spacing: 0.04em;
+}
+
+/* ---------------------------------------------------------------- 밀물(TIDE): 안쪽으로 차오르는 물 */
+.g3a-tide {
+  position: absolute;
+  bottom: calc(var(--deck-bottom) + var(--deck-height) - 34px);
+  height: 34px;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--p1) 46%, transparent),
+    color-mix(in srgb, var(--p1) 8%, transparent)
+  );
+  border-top: 2px solid var(--p1);
+  box-shadow: inset 0 4px 10px color-mix(in srgb, var(--p1) 30%, transparent);
+  pointer-events: none;
+  transition: width 200ms linear;
+}
+
+.g3a-tide--left {
+  left: var(--sea-w);
+}
+
+.g3a-tide--right {
+  right: var(--sea-w);
+}
+
+/* ---------------------------------------------------------------- 판정 플래시 (HIT/PARRY/WHIFF) */
+@keyframes g3a-flash-show {
+  0% { opacity: 0; transform: translate(-50%, 8px) scale(0.8); }
+  14% { opacity: 1; transform: translate(-50%, 0) scale(1.08); }
+  26% { transform: translate(-50%, 0) scale(1); }
+  74% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -12px) scale(1); }
+}
+
+.g3a-flash {
+  position: absolute;
+  top: 30%;
+  font-size: 17px;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: g3a-flash-show 850ms ease-out both;
+}
+
+/* ---------------------------------------------------------------- 콤보 배지 (검객 머리 위) */
+.g3a-combo {
+  position: absolute;
+  top: -44px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 5px;
+  font-size: 8px;
+  line-height: 1;
+  white-space: nowrap;
+  color: currentColor;
+  background: var(--surface-deep);
+  border: 1px solid currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+
+/* ---------------------------------------------------------------- 리포스트 준비 (성공 패링 직후 반격창) */
+.g3a-rip-badge {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  color: var(--accent);
+  text-shadow: 0 0 4px var(--accent), 0 0 10px var(--accent);
+}
+
+.g3-fighter.g3a-riposte .g3-fencer {
+  filter: drop-shadow(0 0 3px currentColor) drop-shadow(0 0 8px var(--accent));
+}
+
+/* ---------------------------------------------------------------- 모션 축소 대응 (신규 요소) */
+@media (prefers-reduced-motion: reduce) {
+  .g3-fighter.g3-fighter--rt {
+    transition: none;
+  }
+
+  .g3a-advbar__fill,
+  .g3a-advbar__marker,
+  .g3a-tide {
+    transition: none;
+  }
+
+  .g3a-flash {
+    animation: none;
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+}

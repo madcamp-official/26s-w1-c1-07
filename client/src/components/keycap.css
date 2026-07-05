@@ -1,0 +1,44 @@
+/* KeyCap 스타일 (아키텍트 소유) — PLAN §1.5 키캡 */
+
+.nc-keycap {
+  --kc-color: var(--p1);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 52px;
+  padding: 8px 10px;
+  background: var(--surface-deep);
+  border: 2px solid var(--kc-color);
+  border-radius: 6px; /* 키캡만 6px (§1.3 예외) */
+  color: var(--kc-color);
+}
+
+.nc-keycap--p1 { --kc-color: var(--p1); }
+.nc-keycap--p2 { --kc-color: var(--p2); }
+
+/* 입력 순간 램프 점등 — 트랜지션 없는 순간 반응 (§1.4) */
+.nc-keycap.lit {
+  background: color-mix(in srgb, var(--kc-color) 22%, var(--surface-deep));
+  box-shadow:
+    0 0 6px var(--kc-color),
+    0 0 20px color-mix(in srgb, var(--kc-color) 45%, transparent);
+  text-shadow: 0 0 4px currentColor;
+}
+
+.nc-keycap__icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.nc-keycap__char {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.nc-keycap__label {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1;
+}

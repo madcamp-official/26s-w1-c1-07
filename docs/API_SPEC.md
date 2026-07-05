@@ -1,1176 +1,901 @@
-I've verified all five source files against the drafts (types.ts, game1/2/3.ts, schema.prisma). Key confirmations: `createGame2State` never calls rng (only `tickGame2` at FIRE does); `game3.ts` `pending[a.player]=a.type` trusts the payload's player with no role check; `game1.ts` `tick` sets `DRAW` on `elapsedMs >= timeLimitMs`; `Game2State` has no tick counter (only `elapsedMs`); `GameMatch.id` is BigInt autoincrement with no external-id column. Now synthesizing.
+# MADPUMP API·JSON·DB 명세서 (v1 — game-lab 튜닝로직 기준)
 
-# MADPUMP API 명세서 (v0 초안)
+> **정본 순위 (읽기 전 필독).** 이 문서는 세 초안(API 표면 · 게임별 JSON · DB 입출력)을 종합한 **하위 파생 문서**다. 충돌 시 상위 정본이 이긴다.
+> 1. **`docs/TECH_STACK.md`** (스택·인증·넷코드 방침의 정본)
+> 2. **`docs/ERD.md`** → 이를 옮긴 **`/Users/siheom-yong/programming/madpump/26s-w1-c1-07/server/prisma/schema.prisma`** (DB 스키마의 정본. 스키마 변경은 ERD.md를 먼저 고친다)
+> 3. **game-lab 게임 코어 코드** (게임 상태·판정 로직의 정본. worktree `.../scratchpad/wt-gametest/game-lab/shared/src/games/*`)
+> 4. **이 문서** (위 셋을 조립한 전송·데이터 계약. 위와 어긋나면 위가 맞다)
+>
+> 코드 근거 경로 주의: `game{1,2,3}/*.ts`, `types.ts`, `render{1,2,3}.ts`, `registry.ts`, `GameScreen.tsx`, `keyboard.ts` = **game-lab worktree** 기준. `schema.prisma` = **main 저장소**(`/Users/siheom-yong/programming/madpump/26s-w1-c1-07/server/prisma/schema.prisma`) 기준 — game-lab worktree엔 없다.
 
-> **목적**: MADPUMP(1:1 대결 웹 미니게임 플랫폼)의 인증·로비·인게임 실시간·데이터흐름·영속화 API를 실행 가능한 수준으로 정의하는 단일 구현 명세.
+---
 
-> **정본 순위 (읽는 사람 필독)**: 이 문서는 **구현 명세 *초안(v0)*이며 검토 대기 상태**다. 상위 정본은 `docs/TECH_STACK.md`(스택·네트워크 모델·구현 우선순위)와 `docs/ERD.md`(DB 스키마 정본, `server/prisma/schema.prisma`는 그 미러)이다. **이 문서와 상위 정본이 충돌하면 상위 정본이 이긴다.** 스키마 변경 제안은 반드시 `docs/ERD.md`를 먼저 갱신한 뒤 `schema.prisma`에 반영한다. 여기서 `(미확정)`으로 표시된 항목은 결정권자 확정 전까지 구현하지 않는다.
+## TL;DR (한 화면 요약)
+
+- **전송 표면은 게임 수와 무관하게 딱 2개다.** `[C→S] game:input`(통합 입력 봉투) + `[S→C] game:state`(통합 상태 봉투). 근거: 전 게임이 같은 `GameCore` 인터페이스(`create`/`step`)와 같은 입력 타입 `GameInputEvent` 하나만 쓴다(`types.ts`). → **게임4를 붙여도 전송·서버 루프 코드는 0줄 수정.**
+- **서버가 유일 권위다.** `core.create(seed)`로 초기상태 확정 → `game:input`을 모아 `core.step`으로 전진 → `game:state`를 매 틱 브로드캐스트. 클라는 기본 **덤 렌더**(받은 상태를 그리기만).
+- **`game:state`로 나가는 것은 "권위 전체 상태"가 아니라 "렌더 투영(render-projection)"이다.** `seed`(LCG PRNG 내부상태)·숨은 능력치(`p1Rate`/`p2Speed`)·판정 내부 플래그(`resolved` 등)는 **절대 비전송**. 이유: `seed`를 넘기면 상대가 다음 전개(game2 탄 분포, game3 공격 시동 딜레이)를 선계산해 완벽 회피/카운터가 가능(치팅). render1/2/3은 이 필드들을 읽지 않으므로 **제거해도 렌더 무손실**임을 코드로 확인함.
+- **입력 스푸핑 방지.** `code`의 P1/P2 인코딩(Q/W=P1, U/I=P2)을 신뢰하지 않는다. 서버가 소켓 세션→`role`을 구해 **슬롯만 취하고 물리키를 role의 것으로 재기입**한 뒤 `step`에 넣는다.
+- **DB는 라이브를 모른다.** 진행 중 DB 접근 0회. **매치가 끝나야(`result≠null`) `game_match` 1행 INSERT.** 라운드/틱 상세는 저장 안 함(ERD note #2). `GameResult('P1'/'P2'/'DRAW')` → DB `MatchResult(P1_WIN/P2_WIN/DRAW)` 매핑 필수. **INSERT 커밋 성공 후에만 `match:end` 방송**(가짜 성공 금지).
 
 ---
 
 ## 목차
 
-- [핵심 요약 (TL;DR)](#핵심-요약-tldr)
-- [사용자 멘탈모델 ↔ 명세 구조 매핑](#사용자-멘탈모델--명세-구조-매핑)
-- [0. 공통 규약 (전 섹션 공유 — 한 번 정의하고 참조)](#0-공통-규약)
-- [1. 인증·세션·프로필 API (로그인/로그아웃 그룹)](#1-인증세션프로필-api)
-- [2. 로비·방·매칭 API (게임 접속 그룹)](#2-로비방매칭-api)
-- [3. 인게임 실시간 프로토콜 (게임 실행 그룹)](#3-인게임-실시간-프로토콜)
-- [4. 네트워킹 방법론 & 데이터 흐름 (개념 — Q1·Q2 정면 답변)](#4-네트워킹-방법론--데이터-흐름)
-- [5. 영속화·DB 쓰기 경로 & 스키마 갭 분석](#5-영속화db-쓰기-경로--스키마-갭-분석)
-- [열린 질문 / 결정 필요 (미확정 총괄)](#열린-질문--결정-필요)
-- [구현 로드맵 (TECH_STACK §6 우선순위)](#구현-로드맵)
+- [사용자 3그룹 멘탈모델 ↔ 섹션 매핑](#user-map)
+- [§0 공통 봉투 — 같은 API + JSON 상태 (사용자 통찰의 실체)](#s0)
+- [§1 인증·세션·프로필 (그룹①, REST)](#s1)
+- [§2 로비·방·매칭 (그룹②, Socket.IO)](#s2)
+- [§3 인게임 — 게임별 JSON 상태 스키마 (그룹③)](#s3)
+- [§4 DB 입출력 — 언제 무엇을 넣고 빼는가](#s4)
+- [열린 질문 (미확정 목록)](#open)
+- [구현 로드맵](#roadmap)
 
 ---
 
-## 핵심 요약 (TL;DR)
+<a id="user-map"></a>
+## 사용자 3그룹 멘탈모델 ↔ 섹션 매핑
 
-- **(Q2 네트워크 방법론)** 보편 모델은 5가지 — (A) 서버권위+상태브로드캐스트, (B) 서버권위+클라예측/보정, (C) 결정적 락스텝, (D) 롤백(GGPO), (E) 클라권위/릴레이. **MADPUMP는 (A)/(B)만 채택**한다: 게임1·게임3 = (A) 덤 클라, 게임2 = (B) 보간(예측은 v1 선택). (C)/(D)는 과설계·분산권위라 기각, (E)는 승패가 분반 랭킹에 반영되므로 치팅 노출로 명시적 기각.
-- **(Q1 데이터 흐름)** **서버 RAM = 권위 원본, Socket.IO = 실시간 전달 통로, DB = 영구 기록만.** "DB에 저장해두고 양쪽으로 보낸다"는 실시간 게임엔 부적합(지연·권위 흐림·휘발성 데이터 적재). DB는 매치 **시작 시 신원 read**와 **매치 종료 시 결과 1행 write**에만 개입한다. 진행 중엔 DB 무접촉.
-- **전송 전략**: 게임1·3 = **전체 스냅샷/이산 이벤트**(상태가 작아 델타 불필요), 게임2 = **20Hz 전체 스냅샷**(2인 규모라 델타 불필요). **입력-only(락스텝)는 안 씀.**
-- **직렬화 포맷**: **JSON 채택**(Socket.IO 기본, TS 플레인 객체와 변환비용 0). **YAML은 네트워크 payload로 절대 사용 안 함** — 설정/문서 전용. 대량화 시 MessagePack은 추후 고려(제안).
-- **불변식**: 모든 판정은 **서버 권위**. 클라는 **'입력'만 보내고 '결과'는 절대 못 보낸다**. 세 게임 코어가 순수·결정적 `tick(state, inputs, dt)` 함수라 "서버 권위"가 "같은 함수를 서버에서 한 번 더 호출"로 저렴하게 성립한다.
+사용자의 멘탈모델은 3그룹이다: **① 로그인/로그아웃(계정) · ② 게임 접속(방·매칭) · ③ 게임 실행(입력·상태·판정).** 각 그룹이 명세의 어느 표면에 대응하는지:
 
----
-
-## 사용자 멘탈모델 ↔ 명세 구조 매핑
-
-사용자가 그린 3그룹 멘탈모델이 이 명세의 어느 섹션으로 커버되는지:
-
-| 사용자 멘탈모델 그룹 | 커버 섹션 | 주요 표면 | 핵심 이벤트/엔드포인트 |
-|---|---|---|---|
-| **① 로그인 / 로그아웃** (계정·프로필) | §1 인증·세션·프로필 | REST `/auth/*`(302 왕복), `/api/*`(JSON) | `GET /auth/google/login`, `GET /auth/google/callback`, `GET /api/me`, `POST /api/onboarding`, `POST /api/auth/logout`, admin login/logout |
-| **② 게임 접속** (방·매칭·상대만남) | §2 로비·방·매칭 | Socket.IO `room:*` / `queue:*` / `lobby:*` + REST 코드 사전검증 1개 | `room:create`, `room:join`, `room:state`, `room:configure`, `room:ready`, `room:start`, `queue:join`, `queue:matched`, `GET /api/rooms/:code` |
-| **③ 게임 실행** (틱·입력·판정) | §3 인게임 실시간 프로토콜 | Socket.IO `match:*` / `round:*` / `game:*` | `match:start`, `round:start`, `game:input`/`game:move`, `game:state`/`game:tick`, `round:end`, `match:end` |
-| **(횡단) 왜 이렇게 오가나** | §4 네트워킹 방법론·데이터흐름 | 개념 + Q1/Q2 답변 | 방법론 taxonomy, full/delta/input-only, JSON/YAML |
-| **(횡단) 무엇이 남나** | §5 영속화·스키마갭 | REST 리더보드/전적 + DB 쓰기 경로 | `GET /api/leaderboard`, `GET /api/matches/:id`, `game_match` INSERT |
-
----
-
-## 0. 공통 규약
-
-전 섹션이 공유하는 규칙과 payload를 여기서 한 번 정의하고, 이후 섹션은 이를 참조한다.
-
-### 0.1 경로·전송 네임스페이스
-
-| 접두 | 용도 | 전송 |
-|---|---|---|
-| `/auth/*` | 브라우저가 **직접 내비게이션**(리다이렉트 왕복)하는 OAuth 진입/콜백만 | 302 응답, XHR 아님 |
-| `/api/*` | 그 외 모든 애플리케이션 REST API | XHR/fetch, JSON |
-| `/socket.io/*` | 실시간 방·게임 | WebSocket(Socket.IO) |
-
-**Socket.IO 이벤트 네임스페이스(콜론 규칙):** `lobby:*`(연결 직후 부트스트랩/에러), `room:*`(코드방 생명주기), `queue:*`(빠른시작 매칭), `match:*`(매치 개시/종료), `round:*`(라운드 경계), `game:*`(인게임 틱/입력). 방향 표기: `[C→S]` 클라→서버, `[S→C]` 서버→클라(보통 room 브로드캐스트).
-
-### 0.2 식별자 직렬화 & matchId 규약 (충돌 제거)
-
-- **BigInt → 문자열.** `AppUser.id`, `UserGroup.id`, `GameMatch.id` 등은 Prisma `BigInt`라 JSON 수 안전범위를 넘을 수 있어 **항상 문자열로 직렬화**한다(예: `"1024"`). `gameId`(1|2|3), `role`('P1'|'P2'), `result`는 코드 리터럴 그대로(`types.ts`).
-- **`matchId` vs `recordedMatchId` (인메모리 id를 DB 조회 키로 쓰지 않는다):**
-  - `matchId` = **서버 인메모리 매치 런타임 id**(문자열, 예: `"m_9f3a2c"`). 진행 중인 모든 소켓 이벤트(`match:start`/`round:*`/`game:*`/`match:end`)의 상관키. **DB에 저장되지 않으며 재시작 시 소실**된다(스키마에 이 문자열을 담을 컬럼이 없음 — `GameMatch.id`는 `BigInt @default(autoincrement())`뿐).
-  - `recordedMatchId` = **DB `game_match.id`(BigInt→문자열)**. 매치 종료 시 INSERT가 커밋되어야 비로소 존재한다(§5.5). **결과 재조회 REST의 유일한 조회 키**는 이 값이다(`GET /api/matches/:recordedMatchId`). 인메모리 `matchId`로 DB를 조회하지 않는다.
-
-### 0.3 인증·쿠키
-
-- **인증 = Google OAuth 인가 코드 플로우(서버 처리) + 서버측 세션 + 세션 쿠키.** access/refresh 토큰·`client_secret`은 **서버에만** 존재. **JWT 금지**(`TECH_STACK.md §2`). 쿠키엔 **불투명 세션 ID만** 담고 사용자 데이터는 서버에 둔다.
-- **admin은 완전 분리 인증**: `admin_account`(login_id/pw_hash, bcrypt), 별도 쿠키/세션 네임스페이스.
-
-| 쿠키 | 소유 | 속성 |
-|---|---|---|
-| `madpump_sid` | 유저 세션 | `HttpOnly; Secure(prod); SameSite=Lax; Path=/` |
-| `madpump_admin_sid` | admin 세션 | `HttpOnly; Secure(prod); SameSite=Lax; Path=/` |
-| `mp_oauth_state` | OAuth state/PKCE 임시 | `HttpOnly; Secure(prod); SameSite=Lax; Max-Age=600; Path=/auth` |
-
-`SameSite=Lax` 선택 이유: OAuth 콜백은 구글에서 **top-level GET 내비게이션**으로 돌아오므로 `Lax`면 쿠키가 실려 오고(`Strict`는 콜백에서 쿠키 유실), 크로스사이트 fetch POST엔 쿠키가 안 실려 CSRF 1차 방어가 된다. 유저/admin 쿠키 **이름이 다르므로 같은 브라우저에서 동시 로그인 가능**(서로 독립).
-
-### 0.4 CSRF / Origin 방어 (REST·소켓 대칭)
-
-상태 변경(`POST/PATCH/DELETE`)과 소켓 핸드셰이크에 동일한 태세를 적용한다:
-
-1. **`SameSite=Lax` 쿠키**(0.3).
-2. **Origin/Referer 허용목록 검증** — 모든 상태변경 REST와 **Socket.IO 핸드셰이크(`io.use`)**에서 `Origin` 헤더를 허용 도메인 화이트리스트와 대조해 불일치 시 거부. 소켓은 쿠키가 WS 업그레이드에 자동 동봉되고 SOP가 fetch와 달라 **CSWSH(Cross-Site WebSocket Hijacking)** 위험이 있으므로, `SameSite=Lax`만으로 방어하지 않고 **Origin 검증을 필수**로 둔다.
-3. **상태변경 REST 커스텀 헤더 요구** — `X-Requested-With: madpump` 헤더가 없으면 거부(단순 폼 위조 차단). `Content-Type: application/json` 강제. **아래 모든 변경계 REST 예시에는 이 헤더가 포함된다**(본문 없는 logout/delete 포함).
-4. **OAuth 콜백 CSRF** — 로그인 시작 시 난수 `state`(+PKCE `code_challenge`, 제안)를 `mp_oauth_state`에 저장하고 authorize URL에 심어, 콜백에서 불일치면 `OAUTH_STATE_MISMATCH`.
-5. (제안, 미확정) 강한 보증 필요 시 double-submit CSRF 토큰 추가.
-
-### 0.5 에러 규약 (전 섹션 통일)
-
-- **REST**: HTTP 상태코드 + 본문 `{ "error": { "code": "<UPPER_SNAKE>", "message": "..." } }`.
-- **Socket ack**: 성공 `{ "ok": true, ... }` / 실패 `{ "ok": false, "error": { "code": "<UPPER_SNAKE>", "message": "..." } }`.
-- **비동기 소켓 실패**(내가 트리거하지 않은 변화): push 이벤트 — 로비 `lobby:error`, 인게임 무효입력 `game:reject`, 매치 중단 `match:aborted`, 영속화 실패 `match:error`.
-
-**통일 에러 코드 사전** (섹션 간 중복/충돌 제거):
-
-| code | HTTP/맥락 | 의미 |
-|---|---|---|
-| `UNAUTHENTICATED` | 401 / `connect_error` | 세션 쿠키 없음/만료 |
-| `FORBIDDEN` | 403 / ack | 권한 없음(방장 아님·당사자 아님 등) |
-| `OAUTH_STATE_MISMATCH` | 400 | state 불일치/만료(CSRF 차단) |
-| `OAUTH_CODE_INVALID` | 400 | code↔token 교환 실패 |
-| `OAUTH_UPSTREAM_ERROR` | 502 | 구글 token/userinfo 호출 실패 |
-| `OAUTH_NOT_CONFIGURED` | 503 | 서버 OAuth 환경변수 누락 |
-| `ACCOUNT_SUSPENDED` | 403 | (미확정) 영구차단 정책 채택 시 `deleted_at` 존재 계정 |
-| `ALREADY_ONBOARDED` | 409 | 세션이 이미 `USER`인데 온보딩 호출 |
-| `NICKNAME_TAKEN` | 409 | `uq_user_nickname` 충돌 |
-| `NICKNAME_INVALID` | 422 | 길이/형식 위반(하드 한계 ≤50자) |
-| `GROUP_NOT_FOUND` | 422(온보딩)/404(리더보드) | `groupId` 미존재 |
-| `NO_UPLOADED_IMAGE` | 404 | 삭제할 업로드 이미지 없음 |
-| `FILE_TOO_LARGE` | 413 | 업로드 용량 초과 |
-| `UNSUPPORTED_MEDIA_TYPE` | 415 | 허용 안 된 MIME |
-| `INVALID_IMAGE` | 422 | 이미지 디코딩 실패 |
-| `STORAGE_UPLOAD_FAILED` | 502 | R2 업로드 오류 |
-| `INVALID_CREDENTIALS` | 401 | admin ID 없음/PW 불일치(구분 안 함) |
-| `TOO_MANY_ATTEMPTS` | 429 | (제안) 로그인 시도 제한 |
-| `ROOM_NOT_FOUND` | 404 / ack | 코드의 방 없음 |
-| `ROOM_FULL` | ack | 정원(2명) 초과 |
-| `ALREADY_IN_ROOM` | ack | 이미 다른 방/큐 참여 중 |
-| `ALREADY_IN_QUEUE` | ack | 이미 큐 대기 중 |
-| `INVALID_CONFIG` | ack | `gameId` 미지정/`RoundConfig` 범위 밖 |
-| `NOT_READY` | ack | 시작 조건(2명·양쪽 ready·설정 완료) 미충족 |
-| `MATCH_NOT_FOUND` | 404 | 없는 매치/soft-deleted |
-| `USER_NOT_FOUND` | 404 | 없는 유저 |
-| `INTERNAL` | 500 / ack | 서버 내부 오류 |
-
-### 0.6 공유 payload 객체 (한 번 정의)
-
-이후 섹션은 아래 객체를 이름으로 참조한다.
-
-- **`PublicProfile`** — 상대에게 공개 가능한 프로필. `avatarUrl` 대신 **`imageUrl`로 명칭 통일**(초안의 `avatarUrl`/`imageUrl` 이중 명칭 제거).
-  ```json
-  { "userId": "2048", "nickname": "상대", "imageUrl": "https://cdn.madpump.app/avatars/2048/def.webp" }
-  ```
-- **`SelfProfile`** — 본인. `PublicProfile` + `hasUploadedImage`(+ `/api/me`에선 `email`, `group`, `createdAt`).
-- **`RoundConfig`** — `{ "roundCount": 3, "timePerRoundSec": 30 }` (`types.ts`, 방장 설정).
-- **`RoundResult`** — `{ "roundIndex": 0, "winner": "P1" | "P2" | null }` (`types.ts`, `winner:null`=무승부 라운드).
-- **`MatchSummary`** — `{ "gameId", "config", "rounds": RoundResult[], "result": MatchResult }` (`types.ts`).
-- **`imageUrl` 해석 규칙 (프로필 직렬화 공통 — 좋은 fallback)**: `uploaded_image_key`(있으면 R2 서빙 URL) → `google_image_url` → 둘 다 없으면 **`imageUrl` 필드 생략/`null`**. 클라는 이니셜/플레이스홀더로 표시하되 **없는 사진을 지어내지 않는다.** 서버 내부 값 `uploaded_image_key`는 **API로 노출하지 않는다**(`ERD.md note #12` "DB엔 키만 저장").
-
-### 0.7 이벤트 카탈로그 (통일 — 중복 이름 제거)
-
-초안들이 같은 개념에 다른 이름을 쓰던 것을 통일한다: 초안의 `game:match_over`/`game:round_over` → **`match:end`/`round:end`**, 초안의 `game:event` → 게임별 **`game:state`(1·2)/`game:tick`(3)** 으로 흡수.
-
-| 이벤트 | 방향 | 맥락 | 정의 |
-|---|---|---|---|
-| `lobby:hello` | S→C | 연결 직후 | 본인 부트스트랩 |
-| `lobby:error` | S→C | 로비 비동기 실패 | §0.5 |
-| `room:create/join/configure/ready/start/leave` | C→S | 코드방 | §2.3 |
-| `room:state` | S→C | 코드방 | 단일 정본 스냅샷 |
-| `queue:join/leave` | C→S | 빠른시작 | §2.4 |
-| `queue:waiting/matched` | S→C | 빠른시작 | §2.4 |
-| `match:start` | S→C(개별) | 매치 개시 | §3.1 |
-| `match:loaded` / `match:go` | C→S / S→C | 게임2 틱 동기화 | §3.1 |
-| `round:start` / `round:countdown` / `round:end` | S→C | 라운드 경계 | §3.1 |
-| `game:input` | C→S | 게임1·2 입력 | §3.3/§3.4 |
-| `game:move` | C→S | 게임3 입력 | §3.5 |
-| `game:state` | S→C | 게임1·2 권위 스냅샷 | §3.3/§3.4 |
-| `game:tick` | S→C | 게임3 윈도우 판정 | §3.5 |
-| `game:reject` | S→C | 무효 입력 통지 | §3.7 |
-| `match:end` | S→C | 매치 종료(+`recordedMatchId`) | §3.1/§5.5 |
-| `match:aborted` | S→C | 중단(이탈/끊김) | §2.7 |
-| `match:error` | S→C | 영속화 실패 | §5.5 |
-
----
-
-## 1. 인증·세션·프로필 API
-
-> 근거: `TECH_STACK.md §2·§4.3·§6-1` · `schema.prisma`(`AppUser`/`UserGroup`/`AdminAccount`) · `ERD.md note #9·#12·#13`. 모든 판정은 서버 권위.
-
-### 1.1 세션 상태 (서버가 구분하는 4가지)
-
-| 상태 | 의미 | `app_user` 행 | 쿠키 |
-|---|---|---|---|
-| `ANON` | 미인증 | 없음 | 없음 |
-| `PENDING_ONBOARDING` | OAuth 성공, 닉네임 미작성 → **DB 유저 미생성** | **아직 없음** | `madpump_sid`(온보딩 대기) |
-| `USER` | 온보딩 완료, 정식 로그인 | 있음(`deleted_at IS NULL`) | `madpump_sid` |
-| `ADMIN` | admin 로그인 | (별개 네임스페이스) | `madpump_admin_sid` |
-
-> **`app_user` 생성 시점**: `nickname`은 **NOT NULL + UNIQUE**(`schema.prisma`)라 닉네임 없이 행을 만들 수 없다. 따라서 **OAuth 콜백 시점엔 행을 만들지 않고** 구글 프로필(sub/email/picture)을 `PENDING_ONBOARDING` 세션에 담아 두었다가, **온보딩 제출(`POST /api/onboarding`) 시점에 INSERT** 한다. `group_id`는 nullable이라 분반 선택은 **선택 사항**(무소속 허용).
-
-**세션 저장소 (미확정):** 스택이 **단일 프로세스**이고 세션 테이블이 없으므로 **인메모리 세션 스토어**를 기본안으로 제안. 서버 재시작 시 전원 로그아웃되지만 v1 허용(끊김 "그냥 두기" 정책과 동일 결의). 무중단 배포/수평 확장이 필요해지면 세션 테이블/외부 스토어로 승격 — **결정 필요**. 서버측 유휴 만료 제안: 유저 14일, admin 8시간(미확정).
-
-### 1.2 인증 필수 여부 (요청별)
-
-`허용 상태`는 **해당 인증 네임스페이스 기준**이다. 유저 세션 상태(ANON/PENDING/USER)와 admin 세션 상태(admin 없음/ADMIN)는 서로 독립이며, admin 행의 상태는 **admin 네임스페이스 기준**이다(유저 세션 유무와 무관 — §1.5 동시 로그인 허용과 일치).
-
-| 엔드포인트 | 인증 요구 | 허용 상태 |
-|---|---|---|
-| `GET /auth/google/login` | ❌ 공개 | `ANON` |
-| `GET /auth/google/callback` | ❌ 공개(state 검증) | `ANON`/`PENDING` |
-| `GET /api/me` | ⚠️ 선택(항상 200, 상태 반영) | 전부 |
-| `POST /api/auth/logout` | ✅ 세션 필요 | `PENDING`/`USER` |
-| `GET /api/groups` | ❌ 공개(온보딩 드롭다운) | 전부 |
-| `POST /api/onboarding` | ✅ 온보딩 대기 세션 | `PENDING_ONBOARDING`만 |
-| `PATCH /api/me` | ✅ 유저 | `USER` |
-| `POST /api/me/profile-image` | ✅ 유저 | `USER` |
-| `DELETE /api/me/profile-image` | ✅ 유저 | `USER` |
-| `DELETE /api/me` | ✅ 유저 | `USER` |
-| `POST /api/admin/login` | ❌ 공개(자격증명 검증) | **admin 세션 없음** (유저 세션과 독립) |
-| `POST /api/admin/logout` | ✅ admin | **`ADMIN`** (유저 세션과 독립) |
-| Socket.IO 핸드셰이크(§1.6) | ✅ 유저 세션 + Origin 검증 | `USER` |
-
-미인증으로 인증 필수 접근 시 → `401 UNAUTHENTICATED`. 상태 불일치(이미 온보딩 끝난 세션이 `/api/onboarding` 호출) → `409 ALREADY_ONBOARDED`.
-
-### 1.3 Google OAuth 로그인 왕복
-
-```
-[클라 브라우저]                     [MADPUMP 서버]                    [Google]
-  1. "구글로 로그인" 클릭
-     ── GET /auth/google/login ───────▶ state(+PKCE) 생성·저장(mp_oauth_state)
-                                         authorize URL 구성
-     ◀────── 302 Location: accounts.google.com ──
-  2. ── 사용자 구글 동의 ────────────────────────────────────────▶ 로그인/동의
-     ◀────── 302 /auth/google/callback?code=..&state=.. ──
-  3. ── GET /auth/google/callback ─▶ state 검증
-                                     code → token 교환(서버, client_secret) ─▶ Google
-                                     userinfo(sub,email,picture) 조회 ────────▶ Google
-                                     google_sub 조회:
-                                       · 있으면 → google_image_url UPDATE, USER 세션
-                                       · 없으면 → PENDING_ONBOARDING 세션(행 미생성)
-                                     Set-Cookie: madpump_sid + mp_oauth_state 소거
-     ◀── 302 / (기존유저) 또는 /onboarding (신규) ──
-  4. SPA가 GET /api/me 로 상태 확인 → 화면 분기
-```
-
-- **클라 역할**: 버튼→`/auth/google/login` 내비게이션, 콜백 후 `/api/me`로 상태 조회 후 라우팅. OAuth `code`·토큰을 **다루지 않음**.
-- **서버 역할**: `state`/PKCE 검증, code↔token 교환, userinfo 조회, `google_sub` 매칭, **`google_image_url`만 UPDATE**(업로드본 보호 — `ERD.md note #12`), 세션 발급.
-- **필요 scope**: `openid email profile` (`picture` 클레임 = `google_image_url`).
-- **재가입 경로 (미확정)**: soft-delete 계정은 `google_sub`이 `deleted:<id>:...`로 마스킹돼(`ERD.md note #9`) 신규 `google_sub`과 매칭 안 됨 → 콜백에서 신규로 판정되어 온보딩부터 다시. 영구 차단이 목표면 마스킹 대신 로그인 시 `deleted_at` 체크(`ACCOUNT_SUSPENDED`) — 결정 필요.
-
-### 1.4 엔드포인트 상세
-
-#### `GET /auth/google/login` — OAuth 시작
-요청: `GET /auth/google/login` (헤더/바디 없음, 브라우저 top-level 내비게이션)
-응답 302:
-```
-HTTP/1.1 302 Found
-Location: https://accounts.google.com/o/oauth2/v2/auth?client_id=...&redirect_uri=https%3A%2F%2Fmadpump.app%2Fauth%2Fgoogle%2Fcallback&response_type=code&scope=openid%20email%20profile&state=<random>&code_challenge=<pkce>&code_challenge_method=S256
-Set-Cookie: mp_oauth_state=<random>; HttpOnly; Secure; SameSite=Lax; Max-Age=600; Path=/auth
-```
-에러: `503 OAUTH_NOT_CONFIGURED`.
-
-#### `GET /auth/google/callback` — 콜백·세션 발급
-요청: `GET /auth/google/callback?code=<auth_code>&state=<random>` (`Cookie: mp_oauth_state=<random>`)
-응답 302 (기존 유저):
-```
-HTTP/1.1 302 Found
-Location: /
-Set-Cookie: madpump_sid=<opaque>; HttpOnly; Secure; SameSite=Lax; Path=/
-Set-Cookie: mp_oauth_state=; Max-Age=0; Path=/auth
-```
-응답 302 (신규 유저 → 온보딩):
-```
-HTTP/1.1 302 Found
-Location: /onboarding
-Set-Cookie: madpump_sid=<opaque>; HttpOnly; Secure; SameSite=Lax; Path=/
-Set-Cookie: mp_oauth_state=; Max-Age=0; Path=/auth
-```
-> **일관성 수정**: 신규 유저 콜백도 기존 유저와 동일하게 `mp_oauth_state` 소거 헤더를 포함한다(state는 `Max-Age=600` 자동만료되지만 두 경로 처리를 대칭으로 맞춤).
-
-에러: `400 OAUTH_STATE_MISMATCH`, `400 OAUTH_CODE_INVALID`, `502 OAUTH_UPSTREAM_ERROR`, `403 ACCOUNT_SUSPENDED`(미확정, 영구차단 정책 채택 시). 실패 시 302 `/login?error=<code>` 리다이렉트 UX 대안 가능(제안).
-
-#### `GET /api/me` — 현재 로그인 사용자 조회
-요청: `GET /api/me` (`Cookie: madpump_sid=<opaque>`)
-응답 200 (USER):
-```json
-{
-  "status": "USER",
-  "user": {
-    "id": "1024", "nickname": "매드펌프", "email": "player@gmail.com",
-    "group": { "id": "3", "name": "7분반" },
-    "imageUrl": "https://cdn.madpump.app/avatars/1024/ab12.webp",
-    "hasUploadedImage": true,
-    "createdAt": "2026-07-04T09:12:00.000Z"
-  }
-}
-```
-응답 200 (PENDING_ONBOARDING):
-```json
-{ "status": "PENDING_ONBOARDING",
-  "google": { "email": "player@gmail.com", "suggestedImageUrl": "https://lh3.googleusercontent.com/.../=s256-c" } }
-```
-응답 200 (ANON): `{ "status": "ANON" }`
-- `imageUrl`은 §0.6 해석 규칙. `group` 없으면 필드 생략(무소속 — 좋은 fallback). **에러 없음**(항상 200; 세션 만료도 `status:"ANON"`으로 표현).
-
-#### `POST /api/auth/logout` — 로그아웃(세션 파기)
-요청:
-```
-POST /api/auth/logout
-Cookie: madpump_sid=<opaque>
-X-Requested-With: madpump
-```
-응답 204: `Set-Cookie: madpump_sid=; Max-Age=0; HttpOnly; Secure; SameSite=Lax; Path=/`
-- 서버측 세션 레코드 삭제 + 쿠키 소거. `PENDING_ONBOARDING`도 동일 파기(온보딩 취소). 에러 `401 UNAUTHENTICATED`(멱등 원하면 204로 흡수 가능, 제안).
-
-#### `GET /api/groups` — 분반 목록(온보딩 드롭다운)
-요청: `GET /api/groups`
-응답 200:
-```json
-{ "groups": [ { "id": "1", "name": "1분반", "isPublic": true }, { "id": "3", "name": "7분반", "isPublic": true } ] }
-```
-- (제안, 미확정) 공개(`is_public=true`) 분반만 노출, 비공개는 코드/초대로 참여.
-
-#### `POST /api/onboarding` — 최초 온보딩(닉네임+분반)·`app_user` 생성
-요청:
-```
-POST /api/onboarding
-Cookie: madpump_sid=<opaque>            (PENDING_ONBOARDING 세션 필수)
-Content-Type: application/json
-X-Requested-With: madpump
-
-{ "nickname": "매드펌프", "groupId": "3" }    // groupId는 null/생략 가능(무소속)
-```
-응답 201: `{ "user": { ...SelfProfile 형태, imageUrl=구글 기본, hasUploadedImage:false } }`
-- 서버: 세션의 구글 프로필 + 입력값으로 INSERT(`google_sub`,`email`,`nickname`,`google_image_url`,`group_id`), 세션을 `USER`로 승격.
-- 에러: `409 NICKNAME_TAKEN`(주의: MySQL 기본 콜레이션 `utf8mb4_0900_ai_ci`면 대소문자/악센트 무시 비교라 "Mad"/"mad" 충돌 가능 — 검증도 동일 기준으로, 미확정), `422 NICKNAME_INVALID`(하드 한계 ≤50자 `VARCHAR(50)`; 세부 규칙 미확정), `422 GROUP_NOT_FOUND`, `409 ALREADY_ONBOARDED`, `401 UNAUTHENTICATED`.
-- (제안) 프리체크 `GET /api/onboarding/nickname-available?nickname=...` → `{ "available": true }` (경합은 최종 INSERT 409로 확정).
-
-#### `PATCH /api/me` — 닉네임/분반 변경 (제안, 미확정)
-요청:
-```
-PATCH /api/me
-Cookie: madpump_sid=<opaque>
-Content-Type: application/json
-X-Requested-With: madpump
-
-{ "nickname": "새닉네임", "groupId": "5" }   // 변경할 필드만
-```
-응답 200: `/api/me`의 `user`와 동일. 에러: `409 NICKNAME_TAKEN`, `422 NICKNAME_INVALID`, `422 GROUP_NOT_FOUND`, `401 UNAUTHENTICATED`.
-- **(미확정)** 닉네임 변경 허용/쿨다운(리더보드 정체성 영향) — 결정 필요.
-
-#### `POST /api/me/profile-image` — 프로필 이미지 업로드(R2)
-요청:
-```
-POST /api/me/profile-image
-Cookie: madpump_sid=<opaque>
-Content-Type: multipart/form-data; boundary=...
-X-Requested-With: madpump
-
-(part name="image", filename="me.jpg", Content-Type: image/jpeg, <바이너리>)
-```
-서버 파이프라인(`TECH_STACK.md §2`, `ERD.md note #12`):
-1. MIME/크기 검증(제안: `image/jpeg|png|webp`, 최대 8MB — 미확정).
-2. **sharp**: EXIF orientation 반영 회전 → **256×256 webp** → **모든 메타데이터/EXIF 제거**(`.rotate().resize(256,256).webp()`).
-3. R2(S3 호환) PUT. 키 예: `avatars/<userId>/<uuid>.webp`.
-4. `app_user.uploaded_image_key`만 UPDATE(**DB엔 키만**). `google_image_url`은 불변.
-
-응답 200: `{ "imageUrl": "https://cdn.madpump.app/avatars/1024/ab12.webp", "hasUploadedImage": true }`
-- 에러: `413 FILE_TOO_LARGE`, `415 UNSUPPORTED_MEDIA_TYPE`, `422 INVALID_IMAGE`, `502 STORAGE_UPLOAD_FAILED`, `401 UNAUTHENTICATED`.
-- **(미확정)** 서빙 전략(비공개 버킷 프록시 `GET /api/users/:id/avatar` vs 공개/서명 URL). 응답 `imageUrl`은 그 전략에 맞춘 값(§5.7).
-
-#### `DELETE /api/me/profile-image` — 업로드 이미지 제거(구글 기본 복귀) (제안)
-요청: `DELETE /api/me/profile-image` (`Cookie: madpump_sid`, `X-Requested-With: madpump`)
-응답 200: `{ "imageUrl": "https://lh3.googleusercontent.com/.../=s256-c", "hasUploadedImage": false }`
-- `uploaded_image_key` NULL로, (선택) R2 객체 삭제. 에러: `401 UNAUTHENTICATED`, `404 NO_UPLOADED_IMAGE`(멱등 원하면 200 흡수).
-
-#### `DELETE /api/me` — 자기 탈퇴(soft delete) (제안)
-요청: `DELETE /api/me` (`Cookie: madpump_sid`, `X-Requested-With: madpump`)
-응답 204: 세션 파기 + 쿠키 소거.
-- 서버: `deleted_at = now()` + `nickname`/`google_sub`/`email` 마스킹으로 유니크 해방(`ERD.md note #9`). **주의**: 마스킹 접두 `deleted:<id>` 만으로 유니크 보장되며 원값 결합 시 `VARCHAR(50)` 초과로 STRICT 모드 UPDATE 실패 가능 → 원값을 붙이지 말거나 절단(`DATABASE.md` 구현 노트). 매치 이력 FK는 `id` 기준이라 안전. 에러: `401 UNAUTHENTICATED`.
-
-### 1.5 admin 로그인 (별도 ID/PW, bcrypt)
-
-admin은 `app_user`/구글과 무관한 `admin_account`(login_id/pw_hash) 자격증명이며 세션 쿠키도 분리(`madpump_admin_sid`).
-
-#### `POST /api/admin/login`
-요청:
-```
-POST /api/admin/login
-Content-Type: application/json
-X-Requested-With: madpump
-
-{ "loginId": "root", "password": "••••••••" }
-```
-응답 204: `Set-Cookie: madpump_admin_sid=<opaque>; HttpOnly; Secure; SameSite=Lax; Path=/`
-- 서버: `admin_account`에서 `login_id` 조회 → **bcrypt.compare** (`pw_hash VARCHAR(255)`). 존재/불일치를 **동일 응답**(계정 열거 방지). 에러: `401 INVALID_CREDENTIALS`, `429 TOO_MANY_ATTEMPTS`(제안, 미확정).
-
-#### `POST /api/admin/logout`
-요청: `POST /api/admin/logout` (`Cookie: madpump_admin_sid`, `X-Requested-With: madpump`)
-응답 204: admin 세션 파기 + 쿠키 소거. 에러 `401 UNAUTHENTICATED`.
-
-> admin 세션은 유저 세션과 별개(쿠키 이름 다름)이므로 같은 브라우저에서 유저/admin **동시 로그인 가능**. admin 전용 콘솔 API(그룹/매치/점수 수정)는 이후 "admin API" 섹션에서 `madpump_admin_sid` 요구로 정의.
-
-### 1.6 Socket.IO 핸드셰이크 인증 (게임/방 소켓 진입 게이트)
-
-REST 로그인 세션 쿠키를 **핸드셰이크에서 재사용**(별도 토큰 없음). 서버 `io.use` 미들웨어가:
-1. `handshake.headers.cookie`의 `madpump_sid`를 파싱해 세션 조회 → `app_user`(`deleted_at IS NULL`) 확정, `socket.data.user = { userId, nickname, imageUrl, groupId }` 바인딩.
-2. **`handshake.headers.origin`을 허용목록과 대조**(CSWSH 방어, §0.4). 실패 시 거절.
-- **[C→S]** 연결: `io(url, { withCredentials: true })`로 쿠키 자동 동봉. 추가 payload 없음.
-- **[S→C] `connect_error`** (인증/Origin 실패):
-  ```json
-  { "message": "UNAUTHENTICATED", "data": { "code": "UNAUTHENTICATED" } }
-  ```
-  세션이 `USER`가 아니면(온보딩 미완료 포함) 거절 → 클라는 `/login`/`/onboarding`으로. 정상 시 이후 방/게임 이벤트는 서버가 바인딩한 `userId`를 신뢰해 **서버 권위 판정 주체**로 사용.
-
-### 1.7 이 섹션 미확정 요약
-세션 저장소 · soft-delete 후 정책(재가입/영구차단) · 닉네임 규칙·콜레이션 · 프로필 이미지 서빙/허용 MIME·용량 · 비공개 분반 노출. (제안) OAuth PKCE, admin rate-limit, double-submit CSRF. → [열린 질문](#열린-질문--결정-필요) 참조.
-
----
-
-## 2. 로비·방·매칭 API
-
-"게임에 들어가기까지"의 접속·방·매칭 계층. 실제 틱/입력/상태 브로드캐스트는 §3, 결과 영속화는 §5.
-
-### 2.0 설계 원칙
-
-- **소켓 우선(socket-first).** 방/큐/매치 상태는 전부 서버 인메모리(스키마에 room/queue/session 모델 없음)이고 Socket.IO room 멤버십과 원자적으로 변해야 하므로, 방 생성/입장/설정/시작/매칭은 **모두 소켓 이벤트**로 처리한다. REST는 소켓을 열기 전 "코드 사전검증" read 하나만 둔다(§2.3).
-- ack 규약·에러 코드·프로필 직렬화(`imageUrl`)·Origin 검증은 **§0 공통 규약**을 따른다.
-
-### 2.1 소켓 연결 + 인증
-
-§1.6과 동일 게이트(`madpump_sid` 세션 검증 + Origin 허용목록). 핸드셰이크(개념):
-```
-GET /socket.io/?EIO=4&transport=websocket
-Cookie: madpump_sid=<opaque>
-Origin: https://madpump.app        ← io.use에서 허용목록 대조(CSWSH 방어)
-```
-- **[S→C] `lobby:hello`** — 인증 성공 직후 본인 요약 push(§0.6 `imageUrl` 규칙 적용):
-  ```json
-  { "userId": "1024", "nickname": "종혁", "imageUrl": "https://cdn.madpump.app/avatars/1024/abc.webp", "groupId": "7" }
-  ```
-  v1은 재접속 복구가 없으므로 진행 중이던 방/매치 상태는 싣지 않는다(`TECH_STACK.md §4.3`).
-- **[S→C] `disconnect`** (내장) — 서버는 이 소켓이 속한 방/큐를 정리한다(§2.7). *(초안에서 여기 붙어 있던 `imageUrl` 해석 규칙은 §0.6 프로필 직렬화 공통 규약으로 이동 — disconnect와 무관.)*
-
-### 2.2 인메모리 방 객체 모델 (제안)
-
-DB 테이블이 없으므로 방은 `Map<code, Room>` + `Map<socketId, roomId>`로 관리.
-
-```ts
-interface Room {
-  roomId: string;              // 내부 고유 id (예: "room_7f3a2b")
-  code: string | null;         // 코드방=6자리 숫자 문자열, 빠른시작 자동방=null
-  origin: 'CODE' | 'QUICK';
-  hostUserId: string;          // 방장(코드방에서만 의미) — BigInt→string
-  players: RoomPlayer[];       // 최대 2
-  gameId: GameId | null;       // 설정 전 null (1|2|3)
-  config: RoundConfig | null;
-  rngSeed: number | null;      // match:start 시 발급 (용도 한정 — §3.1·§4.3)
-  phase: RoomPhase;
-  createdAt: number;
-}
-interface RoomPlayer {
-  userId: string; socketId: string /*내부용, 외부 미노출*/;
-  role: PlayerRole; nickname: string; imageUrl?: string;
-  ready: boolean; connected: boolean; // v1: 끊기면 false로만, 복구 안 함
-}
-type RoomPhase = 'WAITING' | 'CONFIGURING' | 'READY' | 'IN_MATCH' | 'FINISHED' | 'ABORTED';
-```
-
-**P1/P2 역할 배정 (게임2 비대칭이라 중요):**
-- **코드방:** 방장 = **P1**, 입장자 = **P2**(방장이 게임/설정 결정권을 가지므로 고정 앵커).
-- **빠른시작:** 큐에 **먼저 진입 = P1**, 나중 = **P2**.
-- **(미확정 — v1 구현 전 확정 대상으로 승격)** 게임2는 P1=공격자/P2=회피자로 **고정 비대칭**이라, 매치 전체 역할이 로비 진입 순서로 고정되면 랭킹에 반영되는 비대칭 게임에서 **체계적 역할 유불리**가 생긴다. 최소한 `match:start` 전에 각 클라에 **자기 역할(공격/회피)을 노출·인지**시켜야 하며, 공정성 확보 방안(라운드별 role swap 후 합산, 또는 매치당 2세트로 양쪽이 공수 1회씩)을 확정해야 한다. → [열린 질문](#열린-질문--결정-필요).
-
-### 2.3 코드방 (Code Room)
-
-#### `GET /api/rooms/:code` — 입장 전 코드 사전검증 (유일한 REST)
-UX용 사전 확인. **권위 판정 아님**(실제 입장은 `room:join`).
-요청: `GET /api/rooms/482913` (`Cookie: madpump_sid`)
-응답 200:
-```json
-{ "exists": true, "joinable": true, "phase": "WAITING", "hostNickname": "종혁", "playerCount": 1, "gameId": null }
-```
-에러: `404 ROOM_NOT_FOUND`, `401 UNAUTHENTICATED`, 또는 `200 + "joinable": false`(정원 초과/진행 중).
-
-#### `[C→S] room:create`
-payload `{}`. 방장이 방 생성 → 서버가 **6자리 숫자 코드** 충돌 없이 발급 → 소켓을 `room=code`에 join → role=P1(`WAITING`).
-ack: `{ "ok": true, "roomId": "room_7f3a2b", "code": "482913", "role": "P1", "phase": "WAITING" }`
-에러: `ALREADY_IN_ROOM`.
-
-#### `[C→S] room:join`
-payload `{ "code": "482913" }`. 서버 검증(존재·정원<2·진행 전) → `socket.join(code)` → role=P2 → `room:state` 브로드캐스트.
-ack: `{ "ok": true, "roomId": "room_7f3a2b", "role": "P2" }`
-에러: `ROOM_NOT_FOUND`, `ROOM_FULL`, `ALREADY_IN_ROOM`.
-
-#### `[S→C] room:state`
-상태 변화 시 `room=code` 전체에 브로드캐스트하는 **단일 정본 스냅샷**.
-```json
-{
-  "roomId": "room_7f3a2b", "code": "482913", "origin": "CODE",
-  "hostUserId": "1024", "phase": "CONFIGURING",
-  "gameId": 3, "config": { "roundCount": 3, "timePerRoundSec": 30 },
-  "players": [
-    { "userId": "1024", "nickname": "종혁", "imageUrl": "https://cdn.madpump.app/avatars/1024/abc.webp", "role": "P1", "ready": false, "connected": true },
-    { "userId": "2048", "nickname": "상대", "imageUrl": "https://cdn.madpump.app/avatars/2048/def.webp", "role": "P2", "ready": false, "connected": true }
-  ]
-}
-```
-트리거: create/join/leave/configure/ready/disconnect 등 모든 변화. `gameId`/`config`는 설정 전 `null`.
-
-#### `[C→S] room:configure` (방장 전용)
-payload `{ "gameId": 2, "config": { "roundCount": 3, "timePerRoundSec": 20 } }`
-서버: `socket.data.user.userId === room.hostUserId` 확인, `gameId∈{1,2,3}`·`roundCount≥1`·`timePerRoundSec` 범위(제안 5~120, 미확정) 검증 → 갱신 → `room:state`. 게임 변경 시 양쪽 `ready`는 false 리셋.
-에러: `FORBIDDEN`, `INVALID_CONFIG`.
-
-#### `[C→S] room:ready`
-payload `{ "ready": true }`. 자신의 준비 토글 → `room:state`.
-
-#### `[C→S] room:start` (방장 전용)
-payload `{}`. 서버 조건 검사(2명·양쪽 ready·`gameId`·`config` 확정). 통과 시 `rngSeed` 발급 → `phase='IN_MATCH'` → 각 소켓에 **개별** `match:start`(role 다름) 송출(§3.1).
-에러: `FORBIDDEN`, `NOT_READY`, `INVALID_CONFIG`.
-
-#### `[C→S] room:leave`
-payload `{}`. 자발 퇴장 → 남은 참가자에 `room:state`(대기), 진행 중이면 `match:aborted`(§2.7).
-
-### 2.4 빠른시작 (Quick Start)
-
-서버 인메모리 대기 큐 → 2명 차면 방 자동 생성. 서로 다른 게임을 붙이면 안 되므로 **게임별 큐**(제안). `RoundConfig`는 빠른시작 기본값(제안: `roundCount:3`, `timePerRoundSec`=게임별 기본 — 미확정).
-
-- **[C→S] `queue:join`** payload `{ "gameId": 1 }` → ack `{ "ok": true, "status": "QUEUED", "gameId": 1 }`. 에러: `ALREADY_IN_QUEUE`, `ALREADY_IN_ROOM`, `INVALID_CONFIG`.
-- **[S→C] `queue:waiting`** (선택) `{ "gameId": 1, "sinceMs": 3200 }` — 대기 UI 하트비트.
-- **[C→S] `queue:leave`** payload `{}` → ack `{ "ok": true }`.
-- **[S→C] `queue:matched`** — 2명 매칭 시 **양쪽에** 송출(상대 공개). 서버는 자동 방(`origin:'QUICK'`, `code:null`) 생성 + 두 소켓 room join:
-  ```json
-  { "roomId": "room_9c1e04", "role": "P1", "gameId": 1, "opponent": { "userId": "2048", "nickname": "상대", "imageUrl": "https://cdn.madpump.app/avatars/2048/def.webp" } }
-  ```
-  빠른시작은 ready 게이트를 생략하고 곧바로 `match:start`가 이어진다. **단, 게임2 비대칭 역할 인지 단계는 §2.2 미확정 대상**(공수 노출 없이 바로 시작하면 안 됨).
-
-### 2.5 이탈·취소·한쪽 드롭 (v1: 재접속 없음)
-
-`TECH_STACK.md §4.3` "끊김은 그냥 두기".
-
-| 상황 | phase | 서버 처리 | 통지 |
-|---|---|---|---|
-| 대기 중 방장 leave/disconnect | WAITING/CONFIGURING | 방 파기(방장 승계 미구현) | 남은 소켓에 `room:state`(빈 방)/방 종료 |
-| 대기 중 게스트 이탈 | WAITING/CONFIGURING | player 제거, P1 유지 | `room:state` |
-| 큐 대기 중 disconnect | — | 큐에서 제거 | 없음 |
-| 매치 중 한쪽 이탈/끊김 | IN_MATCH→ABORTED | 매치 중단, 방 정리, **DB 미기록**(§5.5) | 남은 소켓에 `match:aborted` |
-| 취소(합의/방장 취소) | 임의 | 방/매치 정리 | `match:aborted{reason:CANCELLED}` 또는 `room:state` |
-
-**[S→C] `match:aborted`**:
-```json
-{ "matchId": "m_9f3a2c", "reason": "OPPONENT_DISCONNECTED", "byUserId": "2048" }
-```
-`reason ∈ { OPPONENT_LEFT, OPPONENT_DISCONNECTED, CANCELLED }`. **v1은 중단 매치를 `game_match`에 기록하지 않는다** — 깨끗한 `result`가 없는데 `P1_WIN` 등으로 채우면 없는 결과를 지어내는 나쁜 fallback. "몰수승" 정책은 **(미확정)**.
-
-### 2.6 오프라인 모드 (무엇이 필요 없는가)
-
-오프라인 = 한 컴퓨터 2인, 키보드 2벌(`playerL={q,w}→P1`, `playerR={u,i}→P2`, `keyboard.ts`). 같은 shared 코어를 로컬 실행.
-**필요 없는 것:** 소켓 연결/핸드셰이크, `room:*`/`queue:*`/`match:*`, `match:start` 패킷(클라가 직접 `createGameNState(config, Math.random)`로 로컬 초기화), `rngSeed` 동기화(한 프로세스라 rng 공유), 서버 권위 판정, **`game_match` DB 기록**(온라인만 기록).
-**공유하는 것:** shared 게임 코어 로직뿐. `RoundConfig`는 로컬 UI에서 주입.
-
-### 2.7 이 섹션 미확정 요약
-게임2 라운드별 역할 교대/공정성 · 중단 시 몰수승 · `timePerRoundSec` 범위 · 빠른시작 기본 `roundCount`/게임별 기본 라운드시간 · 게임2 밸런스 수치. → [열린 질문](#열린-질문--결정-필요).
-
----
-
-## 3. 인게임 실시간 프로토콜
-
-방이 구성되고 매치가 시작된 뒤부터 결과 확정까지의 실시간 규약. 필드명은 `types.ts` 및 각 `games/gameN.ts` 실제 타입에 맞춘다.
-
-### 3.0 서버 권위 루프
-
-모든 게임은 **서버 권위**로 판정(승패가 분반 랭킹 반영, 외부 확산 목표 → 클라 판정 불신). 공통 루프:
-```
-[C→S] 입력 전송 (game:input / game:move) — '입력'만, '결과'는 절대 아님
-  → 서버가 shared 코어 tick(state, inputs, dt) 실행 (client와 동일 함수, 두 번 구현 금지)
-  → [S→C] 서버가 권위 상태/이벤트 브로드캐스트 (game:state / game:tick)
-  → 클라는 받은 상태로 Canvas 렌더 (게임2만 보간, 1·3은 그대로 표시)
-```
-코어 시그니처: 게임1 `tick(state, InputFrame<Game1Action>, dtMs)`, 게임2 `tickGame2(state, Game2Inputs, dtMs)`, 게임3 `tickGame3(state, Game3Action[], dtMs)`.
-
-**핵심 구조 — 코어는 한 라운드만 시뮬한다 (라운드 오케스트레이터 필수).** 세 코어 state(`Game1State`/`Game2State`/`Game3State`)는 전부 **한 라운드**만 시뮬하며 `roundCount`를 소비하지 않는다. 따라서 서버에 **코어 위의 라운드 오케스트레이터**를 둔다:
-- `RoundConfig.roundCount`만큼 라운드를 반복하며 각 라운드 코어의 `state.result`(=`RoundResult`)를 인메모리 `rounds[]`에 누적.
-- 모든 라운드 종료 후 **(제안) `shared`에 추가할 순수 함수 `aggregateMatch(rounds: RoundResult[]): MatchResult`** 로 최종 `MatchResult`를 확정(라운드 다득제/best-of-N — **집계 공식 미확정**).
-- `match:end` 방송과 `game_match` INSERT는 **최종 `MatchResult` 확정 시점에만** 일어난다. **코어 1라운드 `state.result`를 매치 결과로 오해하면 안 된다.**
-
-**역할 배정**: §2.2 규칙(코드방 방장=P1, 빠른시작 선착=P1). 게임2 비대칭 공정성은 (미확정). 배정 결과는 `match:start`의 `role`로 각 소켓 개별 통지.
-
-**끊김**: v1 재접속 복구 없음. `disconnect` 시 남은 쪽 몰수승 vs 매치 무효(DRAW)는 **(미확정)** — v1 기본은 §2.5대로 **DB 미기록**.
-
-### 3.1 매치 생명주기 이벤트 시퀀스 (세 게임 공통)
-
-#### `[S→C] match:start` — 매치 개시 (각 소켓 개별 송출, `role`이 다름)
-```json
-{
-  "matchId": "m_9f3a2c",
-  "gameId": 2,
-  "role": "P1",
-  "config": { "roundCount": 3, "timePerRoundSec": 20 },
-  "rngSeed": 2894771233,
-  "self":     { "userId": "1024", "nickname": "종혁", "imageUrl": "https://cdn.madpump.app/avatars/1024/abc.webp" },
-  "opponent": { "userId": "2048", "nickname": "상대", "imageUrl": "https://cdn.madpump.app/avatars/2048/def.webp" },
-  "gameConfig": {
-    "fieldWidth": 100, "fieldHeight": 100, "attackerY": 10, "dodgerY": 90,
-    "attackerSpeed": 40, "dodgerSpeed": 50, "attackerHalfWidth": 4, "dodgerHalfWidth": 4,
-    "bulletRadius": 1.5, "bulletSpeedMin": 60, "bulletSpeedMax": 140,
-    "fireCooldownMs": 400, "roundDurationMs": 20000
-  },
-  "serverTickMs": 50,
-  "startAtEpochMs": 1751600000000
-}
-```
-
-| 필드 | 타입/값 | 의미·근거 |
-|---|---|---|
-| `matchId` | string | 서버 인메모리 매치 런타임 id(§0.2). **DB `game_match.id`가 아님**. |
-| `gameId` | 1\|2\|3 | `types.ts`. |
-| `role` | 'P1'\|'P2' | 수신 소켓 본인 역할. **게임2 비대칭이라 필수**. |
-| `config` | `RoundConfig` | 방장 지정(코드방) 또는 기본값(빠른시작). |
-| `rngSeed` | number(32bit uint) | **용도 한정** — 아래 "rngSeed 규약" 참조. **v1 기본 경로에선 서버만 소비**하며 클라 필수가 아님. |
-| `self`/`opponent` | `PublicProfile` | §0.6. |
-| `gameConfig` | 게임별 config | 게임1=상수(`GAME1_HOLD_TO_WIN_MS` 등), 게임2=`Game2Config`(수치 전부 임시값 — `DEFAULT_GAME2_CONFIG`, 미확정), 게임3=`Game3Config`. **`roundDurationMs` 매핑은 아래 참조.** |
-| `serverTickMs` | number\|null | 게임2=50(`GAME2_TICK_MS`), 게임3=1000(`tickIntervalMs`), 게임1=이벤트 기반이라 `null`. |
-| `startAtEpochMs` | number | 카운트다운 동기화용 시작 시각(제안). |
-
-**`roundDurationMs` 매핑 (초안 nit 확정):** `RoundConfig.timePerRoundSec`는 매치 단위 방장 설정 하나뿐인데, 코어별 소비가 다르다 — 게임1은 `timeLimitMs = timePerRoundSec*1000`(`createGame1State`), 게임2/게임3은 자기 `Config.roundDurationMs`(RoundConfig에서 파생하지 않음)를 쓴다. **확정: 서버가 `gameConfig` 구성 시 `roundDurationMs = config.timePerRoundSec * 1000`을 게임2·3 Config에 주입한다**(방장 설정이 세 게임에 균일 반영, `TECH_STACK.md §4.3` "방장만 라운드 설정"과 일치). 게임2/3의 코어 기본값(20s/30s)은 서버가 주입하지 않을 때의 fallback일 뿐이다.
-
-**`rngSeed` 규약 (초안 major 확정 — 게임별로 의미가 다르다):**
-- **게임1 (init-only rng, 안전):** `createGame1State(config, rng)`가 **초기화에서만 rng 3회** 호출(타겟→P1시작값→P2시작값, `game1.ts`). 이후 진행엔 랜덤 없음. 같은 시드면 클라 표시 초기값이 서버와 안전하게 일치한다. (또는 서버가 초기 3값을 직접 스냅샷으로 내려도 동치 — §4.3에서 하나로 통일 서술.)
-- **게임2 (init은 rng 미사용, "결정적 초기화" 성립 안 함):** `createGame2State`는 **rng를 한 번도 호출하지 않는다**(rng를 state에 보관만 함). rng는 **`tickGame2`의 FIRE 시점에만** 소비돼 총알 `vy ∈ [min,max)`를 뽑는다(`game2.ts`). 게임2 넷코드 모델은 "서버 20Hz 권위 시뮬 브로드캐스트 + 클라 보간"이므로 **클라는 seed로 game2 권위 시뮬을 돌리지 않는다.** 시드만 공유해도 클라 FIRE 입력 타이밍(네트워크 지연)이 서버 권위 틱과 어긋나 rng 호출 순서·횟수가 갈라져 총알 속도/개수가 desync 난다. 따라서 **`rngSeed`는 서버 권위 시뮬에서만 소비**하고, 클라에는 (선택적) 예측/연출용으로만 쓰되 **서버 브로드캐스트가 항상 정본**이다.
-- **게임3 (rng 미사용):** `game3.ts` "랜덤 요소 없음", `_rng` 무시. 시그니처 통일상 전달만.
-
-#### `[C→S] match:loaded` → `[S→C] match:go` (게임2 틱 동기화)
-- **[C→S] `match:loaded`** `{ "matchId": "m_9f3a2c" }` — 클라 렌더러/코어 초기화 완료.
-- **[S→C] `match:go`** `{ "matchId": "m_9f3a2c", "startAtEpochMs": 1751600000500 }` — 양쪽 loaded 후 서버가 실제 틱 시작 시각 확정. (게임1·3 생략 가능.)
-
-#### `[S→C] round:start` — 라운드 초기 상태 시드
-```json
-{ "roundIndex": 0, "startsAtServerMs": 1751600000000, "initialState": { "…": "게임별 초기 스냅샷 (§3.3~3.5)" } }
-```
-- `initialState`: 게임1=`target`+양쪽 시작 `value`(rng 3회 결과), 게임2=시작 좌표(공격자/회피자 x, 총알 없음), 게임3=`startDistanceFromEdge`. **게임1·2의 rng는 서버가 소유**하며 결과 상태를 내려보낸다.
-- 카운트다운은 `round:start` 직전 `round:countdown` 또는 `startsAtServerMs`로 클라 계산(둘 중 택1은 **미확정**).
-
-#### `[S→C] round:countdown` (선택)
-`{ "roundIndex": 0, "count": 3 }` — 3→2→1→0(시작) 매초. 없으면 `startsAtServerMs`로 대체.
-
-#### `[S→C] round:end` — 라운드 종료 (코어 `state.result !== null` 시)
-```json
-{ "roundIndex": 0, "winner": "P1", "reason": "RING_OUT", "score": { "P1": 1, "P2": 0 } }
-```
-- `winner: PlayerRole | null`(null=무승부 라운드, `RoundResult.winner`).
-- `reason`: 게임3=`state.resultReason`(`'RING_OUT'|'TIMEOUT'`, `game3.ts` 실존 필드), 게임1=`'HOLD_COMPLETE'|'TIMEOUT'`(코어엔 사유 필드 없음 — 서버 파생), 게임2=`'HIT'|'SURVIVE_TIMEOUT'`(코어엔 사유 필드 없음 — 서버 파생. `Game2State`는 `result`만 가짐).
-- `score`: 누적 라운드 승수(표시용).
-
-#### `[S→C] match:end` — 매치 종료 & 최종 결과
-`roundCount`만큼 라운드가 끝나 오케스트레이터가 `aggregateMatch`로 최종 `MatchResult`를 확정하고, **`game_match` INSERT 커밋이 성공한 뒤**(§5.5) 방송한다.
-```json
-{
-  "matchId": "m_9f3a2c",
-  "result": "P1_WIN",
-  "recordedMatchId": "5567",
-  "summary": {
-    "gameId": 2,
-    "config": { "roundCount": 3, "timePerRoundSec": 20 },
-    "rounds": [ { "roundIndex": 0, "winner": "P1" }, { "roundIndex": 1, "winner": "P2" }, { "roundIndex": 2, "winner": "P1" } ],
-    "result": "P1_WIN"
-  }
-}
-```
-- `result`: `MatchResult`(`types.ts` = `schema.prisma` enum).
-- `recordedMatchId`: 방금 insert된 `game_match.id`(BigInt→string). **INSERT 성공 분기에서만 존재**(§5.5). DB엔 라운드별 상세가 없으므로 `summary.rounds`는 응답 전용(미영속).
-- INSERT 실패 시엔 이 이벤트 대신 `match:error`(§5.5) — DB에 없는 결과를 확정 결과로 방송하지 않는다.
-
-### 3.2 틱/입력 동기화 모델
-
-| | 게임1 숫자 | 게임2 총알 | 게임3 펜싱 |
-|---|---|---|---|
-| 서버 tick 주체 | 이벤트 반영 + 판정 | 20Hz 고정 시뮬 | 1초 틱 윈도우 판정 |
-| 클라 입력 이벤트 | `game:input` (엣지) | `game:input` (엣지/홀드) | `game:move` (윈도우당) |
-| 서버 브로드캐스트 | `game:state` (변경 시/저빈도) | `game:state` (20Hz 스냅샷) | `game:tick` (윈도우 경계) |
-| 클라 예측/보정 | 불필요 | 필요(보간; 예측 제한적) | 불필요 |
-| rng 소유 | 서버(초기화 3회) | 서버(발사마다) | 없음 |
-
-- **입력 시퀀스 번호 `seq`**: **모든 `[C→S]` 입력**(`game:input` 및 `game:move`)에 단조 증가 `seq`를 붙인다. 서버는 다음 스냅샷에 `lastAckSeq`를 포함하고 `game:reject`도 `seq`를 에코해 유실/중복을 참조한다. (게임3 `game:move`는 `seq` + `windowIndex` 둘 다 가짐 — §3.5.)
-- **진행 지표**: 게임3은 `tickIndex`(`Game3TickEvent.tickIndex` 실존 필드). **게임2는 `elapsedMs`를 진행 지표로 그대로 사용한다** — `Game2State`에는 tick 카운터 필드가 없다(초안의 `tick`은 코어 필드가 아니라 서버가 `elapsedMs / GAME2_TICK_MS`로 합성하는 파생값이므로 스냅샷 진행 지표로는 실존 필드 `elapsedMs`를 쓴다). 게임1은 `elapsedMs`/서버 `stateSeq`.
-- **게임2 예측(제한적):** 클라가 자기 입력을 즉시 로컬 반영해 렌더하되, **예측 대상은 P2 회피자 위치(및 P1 자동이동/TURN 위치)로 한정**한다. **FIRE는 예측하지 않는다** — `tickGame2`는 FIRE 입력을 받은 틱에 `state.rng()`로 vy를 뽑아 총알을 생성하므로(단일 함수라 위치 예측만 분리 불가), 클라가 공유 코어로 자기 FIRE를 예측하면 서버와 다른 vy·id의 로컬 총알이 필연 생성돼 "총알 예측 안 함/서버 id 보간 매칭" 원칙과 어긋난다. 총알은 항상 서버 스냅샷을 권위로 삼아 위치만 보간한다. (공유 코어를 "위치-only 예측"에 그대로 재사용할 수 없다 — FIRE→rng 총알 결합 때문.)
-- **게임1·3 예측 불필요:** 게임1은 ±1 이벤트 왕복 지연이 체감 무해, 게임3은 1초 틱이라 지연 여유 큼 → 서버 확정 상태 그대로 표시.
-
-### 3.3 게임1 "숫자 맞추기" — 이벤트 기반
-
-넷코드 하. `game1ActionFromKey` 매핑상 **key1=DECREMENT, key2=INCREMENT**(`GAME1_KEY_ACTION`).
-
-**[C→S] `game:input`** — 증감 엣지(키 누름마다 1건):
-```json
-{ "seq": 42, "action": { "gameId": 1, "type": "INCREMENT" } }
-```
-- `type: 'INCREMENT'|'DECREMENT'`(`Game1ActionType`). `player`는 서버가 소켓→role로 채운다(위조 방지, §3.7).
-- 서버는 `InputFrame<Game1Action>`으로 감싸 권위 `tick`: `value = clamp(value ± 1, 1, 100)`(`GAME1_MIN_VALUE`~`GAME1_MAX_VALUE`).
-- 내 role의 액션만 반영. 과도 연타는 값이 [1,100] 클램프라 왜곡 불가(rate limit은 제안).
-
-**[S→C] `game:state`** — 전체 상태 스냅샷(값 변경 시/저빈도 제안 100ms). 상태가 작아 **전체 스냅샷 고정**(델타 불필요):
-```json
-{
-  "stateSeq": 128, "lastAckSeq": 42, "target": 57,
-  "players": {
-    "P1": { "value": 57, "holdProgress": 0.62, "matched": true },
-    "P2": { "value": 51, "holdProgress": 0, "matched": false }
-  },
-  "timeRemainingMs": 21400
-}
-```
-- `target`=`Game1State.target`, `value`=`Game1PlayerState.value`, `holdProgress`=`holdMs/3000`(`GAME1_HOLD_TO_WIN_MS`), `matched`=`Game1PlayerDerived.matched`, `timeRemainingMs`=`Game1Derived.timeRemainingMs`.
-- **승패 규칙(초안 minor 확정)**: **승리는 `holdMs >= 3000`(→ `round:end reason:HOLD_COMPLETE`)**, 그 외 **라운드 시간 종료(`elapsedMs >= timeLimitMs`) 시 `DRAW`(→ `round:end reason:TIMEOUT`)**. `game1.ts tick`이 두 경우 모두 `state.result`를 세팅한다. 클라는 `holdProgress` 게이지만 표시하고 승패는 미판정.
-
-### 3.4 게임2 "총알 피하기" — 20Hz 실시간 시뮬
-
-넷코드 상. 서버 `GAME2_TICK_MS=50`(20Hz) 고정 틱으로 위치·투사체·충돌 권위 시뮬 후 스냅샷 브로드캐스트. 클라 보간 렌더.
-
-**[C→S] `game:input`** — 비대칭 입력(`Game2Action.type` 6종). P1 엣지 `TURN`/`FIRE`, P2 홀드 down/up `LEFT_DOWN`/`LEFT_UP`/`RIGHT_DOWN`/`RIGHT_UP`:
-```json
-{ "seq": 300, "action": { "gameId": 2, "type": "FIRE" } }
-{ "seq": 71,  "action": { "gameId": 2, "type": "LEFT_DOWN" } }
-```
-- 서버는 매 20Hz 틱마다 도착 액션을 `reduceGame2Inputs(prev, actions)`로 접어 `Game2Inputs{p1Turn,p1Fire,p2Left,p2Right}` 생성 후 `tickGame2`. P1 엣지는 매 틱 리셋, P2 홀드는 down/up 유지.
-- **역할 강제는 서버가 한다(§3.7):** `reduceGame2Inputs`가 `(a.player, a.type)`을 보긴 하지만 **클라가 보낸 `a.player`를 그대로 신뢰**하므로, 서버가 **소켓 인증→role로 `action.player`를 무조건 덮어쓴 뒤** 코어에 넣어야 크로스-role 조작이 차단된다.
-- **발사 쿨다운**: `FIRE`는 `attacker.cooldownMs <= 0`일 때만 총알 생성(`fireCooldownMs=400`). 쿨다운 중 발사는 서버가 무시(큐잉 없음).
-
-**[S→C] `game:state`** — 20Hz 권위 스냅샷(공격자 x·dir, 회피자 x, 총알 배열):
-```json
-{
-  "elapsedMs": 12000, "lastAckSeq": 300,
-  "attacker": { "x": 63.2, "dir": 1 },
-  "dodger": { "x": 48.7 },
-  "bullets": [ { "id": 12, "x": 63.2, "y": 41.5 }, { "id": 13, "x": 30.0, "y": 78.9 } ],
-  "remainingMs": 8000
-}
-```
-- 진행 지표는 **`elapsedMs`**(코어 실존 필드; §3.2). `attacker.x`/`attacker.dir`(1|-1)/`dodger.x`: 논리 좌표(`fieldWidth×fieldHeight` 기본 100×100). 클라는 `gameConfig`로 정규화.
-- `bullets[]`: `{ id, x, y }`. **`vy`는 전송 안 함** — 서버 rng 소유라 클라는 두 스냅샷 사이 위치를 선형 보간만. `id`(`nextBulletId` 단조 증가)로 프레임 간 총알 추적·보간 매칭.
-- (대안) `Game2View`의 정규화값(`attackerXRatio`/`dodgerXRatio`/`bullets[{id,xRatio,yRatio}]`/`remainingMs`/`fireReadyRatio`)을 그대로 실어보내도 됨(제안). 보간 정밀도를 위해 논리 좌표 우선 권장.
-
-**충돌·승패**: 서버 코어(`tickGame2`)만 판정 — 총알이 회피자 히트박스(`dodgerHalfWidth + bulletRadius`)를 스치면 `P1_WIN`, `roundDurationMs` 생존 시 `P2_WIN`(충돌 우선). 클라는 피격을 연출만 예측, 확정은 `round:end`(`reason:'HIT'|'SURVIVE_TIMEOUT'` — 서버 파생 사유).
-
-### 3.5 게임3 "펜싱" — 1초 틱
-
-넷코드 최하. 서버 `tickIntervalMs=1000` 윈도우로 양쪽 입력 모아 상성 동시판정. **랜덤 없음**. **key1=ATTACK, key2=DODGE**, 무입력=`NONE`(클라가 NONE 보낼 필요 없음).
-
-**[C→S] `game:move`** — 윈도우당 행동:
-```json
-{ "seq": 88, "windowIndex": 5, "action": { "gameId": 3, "type": "ATTACK" } }
-```
-- `seq`(§3.2 통일 규약) + `windowIndex`(귀속될 `tickIndex`, 경계 정합성 검사용).
-- **윈도우 내 다중 입력**: 마지막 채택(`game3.ts pending[player]=a.type`).
-- **입력 마감/지각**: 서버가 윈도우 경계(매 1000ms)에서 그때까지의 마지막 행동으로 판정. 경계 넘겨 도착한 지각 `game:move`는 **다음 윈도우**로 귀속(이미 지난 윈도우 재판정 안 함). 아무 입력 없으면 `NONE`.
-- **역할 강제는 서버가 한다(§3.7):** `game3.ts`는 `pending[a.player]=a.type`로 payload의 player를 그대로 신뢰하므로 코어 자체 role 게이팅이 없다. 서버가 소켓→role로 덮어써야 안전.
-
-**[S→C] `game:tick`** — 윈도우 판정 결과(`Game3TickEvent` + 거리):
-```json
-{
-  "tickIndex": 5,
-  "moves": { "P1": "ATTACK", "P2": "DODGE" },
-  "pushed": "P1", "clash": false, "fell": null,
-  "distance": { "P1": 1, "P2": 3 }
-}
-```
-- `moves: Record<PlayerRole, Game3Move>`(`'ATTACK'|'DODGE'|'NONE'`). `pushed: PlayerRole|null`(상성 `LOSES_TO`: ATTACK<DODGE, DODGE<NONE, NONE<ATTACK; 같으면 null). `clash = pushed===null`. `fell: PlayerRole|null`(이 틱 낙사 — `distanceFromEdge < 0`, 시작 `startDistanceFromEdge=3`이라 4번째 밀림). `distance`=각 `Game3PlayerState.distanceFromEdge`(0=벼랑 끝, 생존).
-- `fell !== null`이면 곧 `round:end reason:'RING_OUT'`. 라운드 시간(`roundDurationMs`) 종료 시 `pushedCount` 큰 쪽 패배, 동률 DRAW(`reason:'TIMEOUT'`, `judgeTimeout`).
-
-### 3.6 매치 종료 → 영속화 & 결과 화면 재조회
-
-- 서버가 마지막 `round:end` 후 오케스트레이터가 `aggregateMatch`로 `MatchResult` 확정 → **`game_match` INSERT 커밋 성공** → `match:end`(§3.1, `recordedMatchId` 포함) 방송. 상세 쓰기 경로·실패 처리는 §5.5.
-- **결과 화면 재조회(REST)** — 새로고침/재진입 대비. **조회 키는 `recordedMatchId`(DB PK)** 이며 인메모리 `matchId`가 아니다(§0.2).
-
-**`GET /api/matches/:recordedMatchId`** — 매치 결과 조회
-요청: `GET /api/matches/5567` (`Cookie: madpump_sid`)
-응답 200:
-```json
-{
-  "recordedMatchId": "5567",
-  "gameId": 3,
-  "result": "P1_WIN",
-  "players": {
-    "P1": { "userId": "101", "nickname": "june" },
-    "P2": { "userId": "205", "nickname": "sora" }
-  },
-  "playedAt": "2026-07-04T08:12:33.000Z"
-}
-```
-- 서버는 `game_match`를 `id = :recordedMatchId AND deleted_at IS NULL`로 조회(존재하지 않는 문자열 컬럼에 의존하지 않음). `player1_id/player2_id`가 곧 P1/P2.
-- 에러: `401 UNAUTHENTICATED`, `403 FORBIDDEN`(당사자 아님 — 제안), `404 MATCH_NOT_FOUND`(없음/soft-deleted).
-- `rounds[]` 라운드 상세는 DB에 없으므로 REST로 반환하지 않는다(§5.8 갭1). 재진입 시엔 최종 `result`만 노출(좋은 fallback: "라운드 상세 없음").
-
-### 3.7 부정행위 방지 (서버 권위의 구체 규칙)
-
-세 게임 공통 불변식 — **클라는 '입력'만 보내고 '결과'는 절대 못 보낸다.**
-1. **결과 미신뢰**: 클라가 승패/점수/충돌을 담은 어떤 메시지를 보내도 서버는 무시. 승패는 오직 서버 코어의 `state.result`에서만 나온다.
-2. **role 위조 차단 — 유일한 방어선은 서버의 덮어쓰기다(초안 major 확정).** `[C→S]` 액션의 `player`를 클라가 지정해도 서버가 **소켓 인증→role 매핑으로 `action.player`를 무조건 덮어쓴 뒤** 코어에 전달한다. **코어의 role 게이팅은 위조 방지가 아니다** — `game3.ts`는 `pending[a.player]=a.type`로, `reduceGame2Inputs`는 `(a.player,a.type)` 조합으로 **클라가 보낸 `a.player`를 그대로 신뢰**한다. 즉 P1 클라가 `{player:'P2', type:'LEFT_DOWN'}`을 위조하면 코어는 그대로 `p2Left=true`로 회피자를 조종한다. 서버 덮어쓰기를 생략하면 상대 조작 익스플로잇이 성립하므로, 구현자는 반드시 서버에서 role을 강제해야 한다.
-3. **액션 유효성**: 내 role 허용 액션만 수용 — 게임1 `INCREMENT`/`DECREMENT`, 게임2 P1은 `TURN`/`FIRE`·P2는 `LEFT/RIGHT_DOWN/UP`, 게임3 `ATTACK`/`DODGE`. 그 외 `type`은 `game:reject`.
-4. **쿨다운·클램프**: 게임2 `fireCooldownMs=400`은 서버 상태 기준이라 연타 우회 불가. 게임1 값은 서버가 `[1,100]` 클램프(`clampValue`).
-5. **틱 윈도우 강제**: 게임3 지난 윈도우 재판정 불가(지각→다음 윈도우). 게임2는 20Hz 서버 틱에서만 상태 진행 — 입력 스팸으로 시뮬 앞당김 불가.
-6. **[S→C] `game:reject`** — 무효 입력 통지(디버그·안티치트):
-   ```json
-   { "seq": 305, "reason": "COOLDOWN_ACTIVE" }
-   ```
-   `reason`: `WRONG_ROLE | INVALID_ACTION | COOLDOWN_ACTIVE | RATE_LIMITED | STALE_WINDOW`. 무효 입력은 상태 미반영·조용히 폐기하되 UI 보정용으로 통지(플레이 필수 아님 — 미구현 시 서버는 그냥 무시). `seq`로 참조(게임3은 `windowIndex`도 병행 참조 가능).
-
-### 3.8 이 섹션 미확정 요약
-온라인 P1/P2 배정 규칙 · 게임2 라운드별 교대 · 매치 result 집계 공식(`aggregateMatch`, best-of-N) · 끊김 시 몰수/무효 · 카운트다운 이벤트 vs `startsAtServerMs`. → [열린 질문](#열린-질문--결정-필요).
-
----
-
-## 4. 네트워킹 방법론 & 데이터 흐름
-
-> 두 질문에 정면으로 답한다. **Q2** — 온라인 실시간 게임은 보통 어떻게 네트워킹하나, 우리는 뭘 골라야 하나. **Q1** — 게임 데이터가 서버/DB/양 클라 사이를 실제로 어떻게 오가나.
-> 결론: 이 프로젝트는 **서버 권위**가 이미 확정(`TECH_STACK.md §3·§4.1`)이고 세 게임이 전부 순수·결정적 `tick(state,inputs,dt)=>newState`라 그 결정이 저렴하게 성립한다. 실시간 게임 상태는 **DB에 저장하지 않는다** — 서버 RAM이 권위 원본, DB는 신원·게임사전·매치 최종결과 1행만.
-
-### 4.1 (Q2) 네트워크 방법론 taxonomy — 5가지 보편 모델
-
-#### (A) 서버 권위 + 상태 브로드캐스트 ("덤 클라")
-- **정의**: 서버가 유일하게 시뮬. 클라는 입력만 올리고 서버 상태 스냅샷을 **그대로 그린다**(판정 로직 안 돌림).
-- **장/단**: 가장 단순·치팅 강함·동기화 문제 없음 / 내 입력이 RTT만큼 늦게 반영(고빈도 이동 게임 손맛↓).
-- **적합도**: 게임1·게임3 **최적**(4.1.7).
-
-#### (B) 서버 권위 + 클라 예측/보정
-- **정의**: 서버 권위 유지하되 클라가 자기 입력을 로컬에서 미리 시뮬(예측)해 즉시 그리고, 서버 스냅샷이 오면 어긋난 부분을 되감아 재적용(reconcile). 원격 개체는 과거 스냅샷 사이를 보간.
-- **장/단**: 서버 권위(치팅 방지) 유지 + 즉각 반응 / 예측·정정 로직 복잡, 클라·서버 동일 시뮬 함수 필요.
-- **적합도**: 게임2에만 이득. 우리 코어가 shared 함수라 "동일 시뮬" 전제가 공짜. 단 2인 규모라 **v1은 보간까지만, 예측은 선택(제안)**.
-
-#### (C) 결정적 락스텝
-- **정의**: 아무도 상태를 안 보냄. 전원 입력만 교환하고 각자 동일 결정적 시뮬. RTS 고전.
-- **장/단**: 대역폭 극소 / 완전 결정성 필수(1비트만 갈라져도 데스싱크), 매 틱 전원 입력 대기(최저속 대기), 분산 권위.
-- **적합도**: **기각**(최저속 대기·분산 권위가 랭킹 신뢰성과 상충).
-
-#### (D) 롤백 넷코드(GGPO식)
-- **정의**: 상대 입력을 예측해 즉시 진행, 다르면 롤백 후 재시뮬.
-- **장/단**: 프레임 단위 반응 최고 / 매우 복잡·결정성 요구.
-- **적합도**: **기각(과설계)**. 가장 빠른 게임2도 20Hz 고정 틱이라 롤백 불필요.
-
-#### (E) 클라 권위 / 순수 릴레이
-- **정의**: 클라가 판정, 서버는 중계만.
-- **장/단**: 구현 최쉬움 / **클라가 결과 조작 가능(치팅 무방비)**.
-- **적합도**: **명시적 기각**. 승패가 분반 랭킹 반영 + 외부 확산 목표라 클라 판정 불신(`TECH_STACK.md §3`). 이 프로젝트가 (A)/(B)를 택한 근본 이유.
-
-#### 4.1.5 비교 요약
-
-| 모델 | 권위 | 전송 | 체감지연 | 치팅내성 | 복잡도 | 이 프로젝트 |
-|---|---|---|---|---|---|---|
-| (A) 서버권위+브로드캐스트 | 서버 | 상태 | 중(RTT) | 강 | 낮음 | **게임1·3 채택** |
-| (B) 서버권위+예측/보정 | 서버 | 상태+입력 | 낮음 | 강 | 중 | **게임2 채택(보간 필수, 예측 제안)** |
-| (C) 락스텝 | 분산 | 입력 | 높음(최저속 대기) | 약 | 중 | 기각 |
-| (D) 롤백 | 분산 | 입력 | 매우낮음 | 약 | 매우높음 | 기각(과설계) |
-| (E) 클라권위/릴레이 | 클라 | 자유 | 낮음 | **없음** | 최저 | **기각(치팅)** |
-
-#### 4.1.6 왜 "순수·결정적 tick"이 서버 권위를 저렴하게 만드나
-세 코어가 전부 부작용 없는 순수 함수이고 `shared/`에 산다. 이 한 설계가:
-1. **서버·클라가 같은 코드**를 돌린다(두 번 구현 금지). 서버=권위 판정용, 클라=렌더/예측용 import → 재구현 데스싱크 원천 차단.
-2. **결정적** — 같은 초기 state+입력열+`dt`면 항상 같은 결과. 유일 비결정 요소는 주입식 `rng`뿐: 게임1=init 3회(값을 서버가 확정), 게임2=발사마다(서버 권위 rng가 vy 확정 → 클라는 스냅샷 vy를 그림), 게임3=랜덤 없음.
-3. **오프라인/온라인 같은 코어** — 코어는 자기가 어디서 도는지 모른다.
-→ **서버 권위 = "같은 함수를 서버에서 한 번 더 호출".** 그래서 (A)/(B)가 저비용.
-
-#### 4.1.7 게임별 모델 배정 (`TECH_STACK.md §4.2`)
-
-| 게임 | 넷코드난이도 | 권위 판정 | 클라 모델 |
-|---|---|---|---|
-| 게임1 숫자 | 하(이벤트) | 클라 ±1 이벤트만 전송, 서버가 현재값+3초 유지 타이머 판정 | 덤 클라 (A). 저빈도·이산이라 RTT 무의미 |
-| 게임3 펜싱 | 최하(1초 틱) | 서버 1초 윈도우 입력 수집→상성 판정→브로드캐스트 | 덤 클라 (A). 판정주기 1000ms≫RTT라 지연 흡수 |
-| 게임2 총알 | 상(실시간) | 서버 20Hz 고정 틱(`GAME2_TICK_MS=50`) 위치·투사체·충돌 시뮬 후 브로드캐스트 | (B): 보간 필수, 자기 개체 예측은 제안(미확정) |
-
-### 4.2 전송 형식 & 전략
-
-#### 4.2.1 무엇을 보내나 — full snapshot vs delta vs input-only
-
-| 전략 | 정의 | 장점 | 단점 | 언제 |
+| 그룹 | 사용자 언어 | 담당 섹션 | 주 표면 | 핵심 산출물 |
 |---|---|---|---|---|
-| **전체 스냅샷** | 매 전송마다 상태 전체 | 단순·무상태(패킷 하나로 완전 복원), 유실/재접속 강함 | 상태 크면 대역폭 낭비 | 상태가 작거나 저빈도 |
-| **델타** | 직전 대비 바뀐 필드만 | 대역폭 절약 | 기준 스냅샷 놓치면 복원 불가·복잡 | 상태 크고 고빈도 |
-| **입력만** | 상태 대신 입력만, 각자 재시뮬 | 최소 대역폭 | 완전 결정성/데스싱크 관리(=락스텝/롤백) | 참가자 많고 상태 거대 |
+| **①** | "로그인/로그아웃, 내 프로필" | **§1** | REST `/auth/*`·`/api/*` | 세션쿠키, `app_user` INSERT/UPDATE |
+| **②** | "방 만들기/입장, 빠른 시작" | **§2** | Socket `lobby:*`/`room:*`/`queue:*` | 인메모리 방·큐, 역할(P1/P2) 배정 |
+| **③** | "키 누르면 상태 바뀌고 승패" | **§0 + §3** | Socket `match:*`/`round:*`/`game:*` | 통합 봉투, 게임별 상태 JSON, 서버 판정 |
+| (횡단) | (사용자에겐 안 보임) | **§4** | Prisma ↔ MySQL | ③의 결과 영속화 + ①의 신원 조회 + 리더보드 |
 
-**이 프로젝트 권장**:
-- **게임1·3**: 상태가 아주 작다(게임1=타겟+양쪽 `{value, holdMs}`; 게임3=양쪽 `{distanceFromEdge, pushedCount}`+마지막 틱 이벤트) → **전체 스냅샷**(게임1 `game:state`) 또는 **이산 이벤트**(게임3 `game:tick`)로 충분. 델타 불필요.
-- **게임2**: 20Hz 전체 스냅샷(`game:state`). 총알 배열이 커질 수 있으나 2인 규모라 충분. 과다 시 델타 도입(제안).
-- **입력만(락스텝)은 안 씀**(4.1(C) 기각).
-
-#### 4.2.2 신뢰성·순서 — Socket.IO(TCP) 위에서 공짜로 얻는 것
-Socket.IO 단일 프로세스(내부 TCP/WebSocket)라 **순서 보장 + 신뢰 전달**이 전송 계층에서 이미 성립 → UDP 넷코드처럼 시퀀스·ack·재전송·재정렬을 직접 구현할 필요 없음. 필요 시 이벤트 ack 콜백으로 수신 확인 가능(실시간 입력엔 보통 불필요 — 다음 스냅샷이 곧 사실을 알려줌). 트레이드오프: TCP head-of-line 블로킹으로 순간 지연이 튈 수 있으나 20Hz·2인 규모에선 수용 가능. UDP로 갈 이유 없음.
-
-#### 4.2.3 직렬화 포맷 — JSON vs YAML vs 바이너리
-- **JSON (채택)**: Socket.IO 기본, 디버깅/문서화 유리, 상태·액션이 이미 TS 플레인 객체라 변환비용 0. 2인 규모엔 충분. **모든 payload 예시가 JSON인 이유.**
-- **바이너리(MessagePack 등)**: 고빈도·대량 필드일 때 크기·파싱 이득. 게임2 총알 폭증으로 20Hz JSON이 부담되면 그때 전환 고려(제안). 현재 불필요.
-- **YAML (실시간 전송엔 안 씀)**: YAML은 **사람이 손으로 쓰는 설정 파일**용(주석·앵커·들여쓰기 가독성). 실시간 와이어에 안 쓰는 이유 — (1) 파싱이 JSON보다 느리고 무거움, (2) 들여쓰기 민감 문법이라 기계 대 기계 스트리밍에 취약, (3) Socket.IO 미지원. → **YAML은 이 프로젝트에서 설정/문서 전용**(예: 밸런스 튜닝 파일), **네트워크 payload로는 절대 사용 안 함.**
-
-#### 4.2.4 핵심 개념 3가지
-- **틱레이트**: 서버가 시뮬을 초당 몇 번 돌리나. 게임2=20Hz, 게임3=1Hz(판정 윈도우), 게임1=이벤트 기반. 높을수록 부드럽지만 대역폭·CPU↑.
-- **보간**: 스냅샷 사이 빈 시간을 직전 두 스냅샷을 잇는 위치로 채워 부드럽게. 게임2에서 50ms 스냅샷을 60fps로. 대가로 화면은 서버보다 살짝 과거(렌더 지연).
-- **지연 보상(lag compensation)**: 서버가 플레이어가 봤던 과거 시점을 되짚어 억울한 판정을 줄임. 우리 게임엔 정밀 히트스캔이 없어 **v1 미도입(미확정)**. 게임2 충돌은 서버가 자기 시뮬 시점 기준 판정(터널링 방지 포함)하고 그 결과를 권위로 삼는다.
-
-### 4.3 (Q1) 데이터 흐름 — 서버 / DB / 양 클라 사이를 무엇이 오가나
-
-#### 4.3.1 먼저 오해부터: "DB에 저장해두고 양쪽으로 보낸다"는 실시간 게임에 안 맞는다
-사용자가 그린 그림("게임 상태를 DB에 넣고 → DB가 양쪽으로 보낸다")은 부적합. 세 이유:
-1. **지연**: DB write/read는 디스크·트랜잭션 거쳐 수~수십 ms. 20Hz로 왕복하면 틱 예산을 다 먹음. 상태는 **RAM에서 오가야** 함.
-2. **권위**: DB는 규칙을 모르는 저장소, 승패를 **판정** 못 함. 판정은 서버 프로세스(코어 `tick`). DB 중계로 쓰면 권위가 흐려짐.
-3. **용량·수명**: 라이브 상태는 매 틱 바뀌고 매치 끝나면 버려도 되는 휘발성. DB에 쌓으면 초당 수십 row 무의미 적재. **스키마에 방/세션/라이브상태/라운드별 상세 테이블이 없다**(테이블 7개, `game_match`는 최종 결과 1행만).
-
-**올바른 그림**: **서버 RAM = 권위 원본, Socket.IO = 실시간 전달 통로(양쪽 브로드캐스트), DB = 영구 기록만(신원·게임사전·매치 최종결과).** 방·매칭 큐도 서버 인메모리.
-
-DB가 담는 것(`schema.prisma`): (a) 신원 `app_user`/`user_group`(매치 시작 시 read), (b) 게임 사전 `game`(id 1/2/3, 시드 3행, 정적 참조), (c) 매치 종료 결과 1행 `game_match(game_id, player1_id, player2_id, result, played_at)`(온라인만, 최종 `MatchResult` 하나, 라운드 상세 없음). 부수: `match_edit_history`(admin 감사), `score_config`(점수 가중치 단일행 id=1).
-
-#### 4.3.2 한 매치의 데이터 흐름 (라운드 오케스트레이터 반영)
-
-```
-[매치 시작]
-  DB(app_user, user_group) --읽기--> 서버가 양쪽 신원 로드
-  서버: 라운드 오케스트레이터 생성 + 인메모리 매치 런타임(matchId) 준비   ← DB 쓰기 없음
-  서버 --match:start(S→C, 개별)--> 양쪽 클라 (config·역할·gameConfig·상대정보)
-
-[라운드 반복] r = 0 .. roundCount-1   (DB 접근 전혀 없음 — 전부 RAM + 소켓)
-  서버 --round:start--> createGameNState(config, seededRng) 로 라운드 초기 상태
-  클라 --game:input / game:move (C→S)--> 서버
-  서버: 권위 tick() 실행 (게임2=20Hz 고정틱 / 게임3=1초 윈도우 / 게임1=이벤트+타이머)
-  서버 --game:state / game:tick (S→C)--> 양쪽 클라 (권위 스냅샷/이벤트)
-  코어 state.result 확정(=RoundResult) → 서버 --round:end--> 양쪽, rounds[]에 누적
-
-[매치 종료 — 최종 결과 확정]
-  서버: aggregateMatch(rounds[])로 MatchResult 확정            (코어 1라운드 결과 ≠ 매치 결과)
-  서버 --INSERT 1행 (await 커밋 성공까지)--> DB(game_match)    ← 게임플레이 유일한 DB 쓰기
-  서버 --match:end(S→C, recordedMatchId 포함)--> 양쪽 클라     (INSERT 성공 후에만 방송; §5.5)
-
-[사후 조회]
-  클라 --GET /api/leaderboard / GET /api/matches/:recordedMatchId--> 서버가 DB read/집계 --> 응답
-```
-
-> **초안 major 확정**: 코어 `state.result`(=라운드 결과)와 매치 최종 `MatchResult`를 분리한다. `roundCount:3`이어도 첫 라운드가 끝나는 순간 INSERT되지 않는다 — 오케스트레이터가 `roundCount`만큼 라운드를 돌려 `RoundResult[]`를 모으고 `aggregateMatch`로 최종 결과를 확정한 **그 시점**에만 `match:end`/INSERT가 일어난다.
-
-##### 진행 중 이벤트 상세 (정의는 §3, 여기선 흐름 관점)
-
-- **[C→S] `game:input` / `game:move`**: 클라 입력. payload는 §3.3~3.5. `player`/`gameId`는 서버가 소켓 인증→role로 **덮어써 재검증**(스푸핑 방지, §3.7) — payload의 role은 신뢰하지 않는다.
-- **[S→C] `game:state`**: 서버 권위 스냅샷(게임2 20Hz, 게임1 저빈도). `rng`·`config`·`view`는 전송 제외(`rng`는 직렬화 비대상; `config`는 `match:start`에서 1회; `view`는 클라가 재계산). 게임2 총알 `vy`는 미전송(서버 rng 확정, 클라 보간).
-- **[S→C] `game:tick`**: 게임3 1초 윈도우 판정(`Game3TickEvent` + 양쪽 `distanceFromEdge`).
-- **[S→C] `match:end`**: 종료 통보(§3.1). 예시는 §3.1 참조 — **게임2엔 사유 필드가 없다**(초안 minor 확정: `Game2State`는 `result`만; `'HIT'` 같은 값은 코드에 없음). 게임별 `round:end.reason`은 게임3만 코어 실존 필드(`resultReason:'RING_OUT'|'TIMEOUT'`)이고 게임1·2 사유는 **코어 밖 서버 파생 필드**임을 명시한다.
-
-#### 4.3.3 `rngSeed`의 용도 (초안 nit 확정)
-`match:start`의 `rngSeed`는 **v1 기본 경로에서 클라 필수가 아니다.** v1은 게임1=덤 클라(서버가 확정한 초기 3값/스냅샷을 그대로 받음), 게임2=보간-only(서버 스냅샷의 총알을 그대로 그림)라 **클라가 코어 rng를 로컬로 돌리지 않으므로 seed가 실제로 쓰이지 않는다.** seed는 **(선택적) 클라 예측(모델 B, 게임2 미확정) 및 리플레이 재현용**에서만 의미가 있다. 게임1 초기값은 "서버가 결과 값을 직접 스냅샷으로 내려준다"로 서술을 통일한다(seed 재현과 값 직송 중 값 직송 채택 — 덤 클라 원칙과 일치).
+> 사용자 통찰 — "입력키가 고정이니 **같은 API로 통일**하고 **JSON으로 상태를 보내자**" — 는 §0에서 그대로 실현된다. game-lab이 이미 `GameCore` + `GameInputEvent` 구조로 그 통일을 구현해 두었다.
 
 ---
 
-## 5. 영속화·DB 쓰기 경로 & 스키마 갭 분석
+<a id="s0"></a>
+## §0 공통 봉투 — 같은 API + JSON 상태 (사용자 통찰의 실체)
 
-> 근거: `schema.prisma`(정본 `docs/ERD.md`), `types.ts`, `games/{game1,game2,game3}.ts`, `TECH_STACK.md §4.2~4.4`. 원칙: 모든 승패 판정·DB 쓰기는 서버에서만. 클라는 DB에 직접 쓰지 않는다.
+### 0.1 설계 원칙: "봉투 통일, 내용은 게임별"
 
-### 5.1 매치 생명주기 × DB 상호작용 (개관)
+전 게임이 **완전히 동일한 코어 인터페이스**를 공유한다(`shared/src/games/types.ts:18-21`):
 
-| 단계 | 시점 | DB 연산 | 대상 | 트랜잭션 | 실패 시 |
+```ts
+export interface GameCore<S extends { elapsed: number; result: GameResult }> {
+  create(rand: () => number): S               // rng로 권위 초기상태 1회 생성(seed 확정)
+  step(state: S, events: GameInputEvent[], dt: number): S   // 순수·결정적. 입력배열+dt → 다음 상태
+}
+```
+
+그리고 입력은 **게임과 무관한 단일 이벤트** 하나뿐이다(`types.ts:1-8`):
+
+```ts
+export type KeyCode = 'KeyQ' | 'KeyW' | 'KeyU' | 'KeyI'   // 물리키 4개 고정(P1=Q/W, P2=U/I)
+export interface GameInputEvent {
+  code: KeyCode              // 눌린 물리키(e.code 기준 → 한글 IME 무관)
+  type: 'down' | 'up'        // 눌림/뗌
+  t: number                  // 게임 시작 기준 경과초(서브프레임 타이밍 판정용)
+}
+export type GameResult = 'P1' | 'P2' | 'DRAW' | null   // 승패(진행중=null)
+export const GAME_DURATION = 10                        // 전 게임 10초 고정
+```
+
+→ 그러므로 **전송 표면은 게임 수와 무관하게 2개면 충분하다:**
+
+| 이벤트 | 방향 | 봉투 | 내용 |
+|---|---|---|---|
+| **`game:input`** | **[C→S]** | `GameInputMsg`(공용) | `GameInputEvent` + 상관키 `matchId` |
+| **`game:state`** | **[S→C]** | `GameStateMsg`(공용) | `matchId`/`round`/`seq` + **게임별 상태의 렌더 투영** |
+
+이 통일이 "새 게임 추가 시 전송 코드 0줄 수정"을 만든다(§0.6).
+
+### 0.2 통합 입력 봉투 `game:input`
+
+```ts
+// [C→S] game:input — 전 게임 공용. shared GameInputEvent + 상관키만 덧댐
+interface GameInputMsg {
+  matchId: string       // 현재 매치 런타임 상관키. sender의 매치와 불일치면 game:reject
+  code: KeyCode         // 'KeyQ'|'KeyW'|'KeyU'|'KeyI'. ※서버가 role로 재기입(아래) — 신뢰 안 함
+  type: 'down' | 'up'   // 키 눌림/뗌 (game-lab keyboard.ts와 동일 의미: e.repeat 무시, blur 시 held 전부 up)
+  t: number             // 클라 보고 경과초(match:go의 t=0 기준). 서버가 틱창으로 clamp
+}
+```
+
+**안티치트 = 서버가 `code`의 side를 재기입한다.** 코드에서 `code`는 곧 플레이어 정체다(`step`이 `KeyQ/KeyW→P1`, `KeyU/KeyI→P2`로 분기; game1 `logic.ts:121-138`, game2 `logic.ts:105-110`, game3 `core.ts:209-212`). 그대로 믿으면 P2 클라가 `KeyQ`를 보내 **상대(P1)를 조종**할 수 있다. 따라서 서버는 소켓 세션→`role`을 구해 **슬롯만 취하고 물리키를 role의 것으로 덮어쓴다:**
+
+| 클라가 보낸 `code` | 슬롯(의미) | sender=P1이면 → | sender=P2이면 → |
+|---|---|---|---|
+| `KeyQ` 또는 `KeyU` | 액션 A | `KeyQ` | `KeyU` |
+| `KeyW` 또는 `KeyI` | 액션 B | `KeyW` | `KeyI` |
+
+슬롯의 게임별 의미(참고):
+
+| 슬롯 | 게임1 (`game1/logic.ts`) | 게임2 (`game2/logic.ts`) | 게임3 (`game3/core.ts`) |
+|---|---|---|---|
+| **A** (P1=Q / P2=U) | 숫자 − 방향(`p1Down`) | 발사대 방향반전 / P2 왼쪽이동 | 공격(`tryAttack`) |
+| **B** (P1=W / P2=I) | 숫자 + 방향(`p1Up`) | 3방향 발사 / P2 오른쪽이동 | 회피(`tryDodge`) |
+
+> 클라는 자기 로컬 두 키를 슬롯 A/B로 보낸다(권장: canonical하게 Q/W로 전송). **불변식: 클라가 보낸 `code`로 P1/P2를 정하지 않는다.** 클라 로컬 키 바인딩/리매핑 UI는 **(미확정)** — 서버 재기입 규칙만 고정이면 안전하다.
+
+**`t` 신뢰 범위 — 서버가 클램프한다.** 서버는 `t`를 맹신하지 않고 현재 틱창 `[t0, now]`로 clamp한다. 근거(코드 실측): `game3/core.ts:208` `const t = Math.min(Math.max(e.t, t0), now)`. 거짓 `t`는 기껏 현재 틱 안 어디쯤으로만 놓인다(서브프레임 순서 왜곡 한도). game1/game2는 `t`를 소비하지 않아 영향 없음. → "클라 `t`를 clamp"(코드 동작)를 v1 기본으로 채택. 서버 도착시각으로 `t`를 완전 재계산할지는 **(미확정)**.
+
+무효 입력 통지:
+```jsonc
+// [S→C] game:reject
+{ "matchId":"m_9f3a2c",
+  "reason": "NOT_YOUR_MATCH" | "STALE_MATCH" | "NOT_PLAYING" | "BAD_KEY" | "AFTER_END" }
+```
+> 입력은 손실 허용(dropped=한 틱 누락 → 다음 `game:state`가 자가 치유). 신뢰 재전송/입력 `seq`는 v1 미강제 — 필요 시 `game:input`에 `seq:number` 추가 **(미확정)**.
+
+### 0.3 통합 상태 봉투 `game:state` (★ 렌더 투영, 전체 상태 아님)
+
+```ts
+// [S→C] game:state — 전 게임 공용. state 내용만 게임별
+interface GameStateMsg {
+  matchId: string      // 런타임 상관키
+  round: number        // 현재 라운드(1-based)
+  seq: number          // 브로드캐스트 순번(순서보장·중복무시용, 서버 단조증가)
+  state: G1View | G2View | G3View   // ★ 권위 전체 상태가 아니라 "렌더가 읽는 필드만" 추린 투영
+}
+```
+> 클라는 `match:start`에서 이미 `gameId`를 받았으므로 매 틱 봉투에 게임 종류를 다시 싣지 않는다(`state`의 실제 타입은 그 매치의 `gameId`로 결정).
+
+**상태 2계층 모델 (이 문서의 대전제).** 서버 안엔 **권위 전체 상태**(`Game1State`/`Game2State`/`Game3State`)가 그대로 있고, 클라로 나가는 것은 그중 **렌더러가 실제로 소비하는 필드만 추린 투영(`G*View`)**이다. 둘은 다른 물건이다.
+
+| 계층 | 정의 | 소유 | 노출 |
+|---|---|---|---|
+| **권위 전체 상태** | `core.create/step`가 다루는 TS 객체 원본. `seed`·`rate`·`resolved` 전부 포함 | 서버 전용(인메모리) | **절대 비전송** |
+| **렌더 투영 `G*View`** | 위에서 렌더 소비 필드만 `Pick`한 부분집합 | 서버가 매 틱 생성 | `game:state.state`로 브로드캐스트 |
+
+판단 한 줄(글로벌 fallback 원칙): **"클라가 그리는 데 안 쓰는 필드는 안 보낸다."** 이것이 대역폭 절약이자 치팅 방지다. `render{1,2,3}.ts`가 `seed`/`rate`/`resolved`를 **읽지 않음을 코드로 확인**했으므로(§3 각 게임), 투영은 **렌더 무손실**이며 덤렌더·서버권위 모델이 그대로 유지된다.
+
+> **타입 안전.** `G*View = Pick<Game*State, ...>`로 정의하고 렌더러를 `G*View`에 대해 타입핑하면(현재 렌더러가 읽는 필드가 곧 View), 전체 상태(superset)를 넘겨도 View 파라미터에 할당 가능해 오프라인/온라인 양쪽이 같은 렌더러를 공유한다.
+
+**전체 스냅샷 전송(델타 아님).** 2인 규모라 델타 불필요. 게임별 세부 전략은 §3.5.
+
+### 0.4 그룹③ 매치·라운드 생명주기
+
+```jsonc
+// [S→C] match:start  (각 플레이어에게 개별 — role이 다르므로)
+{ "matchId":"m_9f3a2c", "gameId":3, "role":"P1",
+  "totalRounds":1,                                   // 방 설정. 기본 1 (멀티라운드는 (미확정))
+  "opponent": { "nickname":"상대", "imageUrl":"…" } }
+
+// [C→S] match:loaded  { matchId }                   // 캔버스·에셋 준비 완료(양쪽 대기)
+// [S→C] match:go      { matchId, startAt }          // startAt=서버 클럭 t=0. 이후 game:input.t는 이 기준
+
+// [S→C] round:start  { matchId, round }             // 서버가 core.create(serverRng)로 권위 초기상태 확정(seed 고정)
+// [S→C] game:state   { … }  ← 매 틱 브로드캐스트(§0.5 빈도)
+// [S→C] round:end    { matchId, round, result, wins }
+//        result: 'P1'|'P2'|'DRAW' (GameResult 원문) · wins:{P1,P2} 누적 라운드 승수
+
+// [S→C] match:end   (INSERT 커밋 성공 후에만 — §4.4)
+{ "matchId":"m_9f3a2c",
+  "gameId":3,
+  "result":"P1",                    // 최종 GameResult('P1'|'P2'|'DRAW', null 불가)
+  "wins": { "P1":1, "P2":0 },
+  "players": { "p1": { "userId":"88", "nickname":"yong" },
+               "p2": { "userId":"91", "nickname":"lee"  } },
+  "recordedMatchId":"88123",        // game_match.id (INSERT 커밋 후에만 존재). 결과 재조회 유일 키
+  "playedAt":"2026-07-04T05:12:33.000Z" }
+
+// [S→C] match:aborted { matchId, reason:"OPPONENT_LEFT"|"OPPONENT_DISCONNECT" }
+// [S→C] match:error   { matchId, code:"RESULT_PERSIST_FAILED" }   // INSERT 실패(가짜 성공 금지)
+```
+
+> **상관키 규약(문서 전체 일관).** `matchId` = 서버 인메모리 매치 런타임 id(문자열, 예 `"m_9f3a2c"`, **DB 미저장**) · `recordedMatchId` = `game_match.id`(BigInt→문자열, **매치 종료 INSERT 커밋 후에만** 존재).
+> **라운드 주의.** `totalRounds>1`(best-of-N)은 서버 오케스트레이션 개념이며 game-lab 코어엔 없다(코어는 10초 1판→`GameResult` 하나). v1 기본 `totalRounds=1`. 멀티라운드 집계·게임2 역할 스왑 정책은 **(미확정, §2.4)**. **어느 경우든 DB엔 최종 매치결과 1행만 남는다**(ERD note #2).
+
+### 0.5 틱/동기화 모델
+
+**서버 권위 step 루프** = game-lab 오프라인 루프(`client/src/ui/GameScreen.tsx:48-60`)를 서버로 옮긴 것:
+```
+round:start → state = core.create(serverRng)          // seed 확정(권위)
+매 틱: dt = min((now - last)/1000, 0.05)               // dt 상한 0.05 — GameScreen.tsx:50 리터럴
+       state = core.step(state, drainedInputs, dt)      // 이 틱에 모인 game:input(재기입 완료) 소비
+       broadcast game:state { project(state) }          // ★ 투영본 전송(seed 등 제외)
+       if (state.result) → round:end                    // GAME_DURATION=10 종료 or 즉시승 조건
+```
+
+| 게임 | create 랜덤 | step 랜덤 | 서버 틱/브로드캐스트 | 클라 렌더 | 근거 |
 |---|---|---|---|---|---|
-| (a) 매치 시작 전 | 소켓 연결/방 입장, 세션→유저 확정 | **SELECT** | `app_user`(+`user_group`) | 불필요(읽기) | 유저 없음/`deleted_at != NULL` → 입장 거부, 매치 미생성 |
-| (b) 진행 중 | 라운드 틱 루프 전체 | **없음(DB 무접촉)** | 방·매치·큐 전부 인메모리 | — | 서버 재시작 = 진행중 매치 소실(§5.8) |
-| (c) 매치 종료 | 최종 `MatchResult` 확정 순간 | **INSERT 1행** | `game_match(game_id, player1_id, player2_id, result, played_at)` | v1 단일 INSERT라 명시 트랜잭션 불요(§5.5) | INSERT 실패 → 미기록+`match:error`(§5.5) |
-| (d) 리더보드 조회 | 등수 화면 요청 시 | **집계 SELECT** | `game_match`+`score_config`+`app_user` | 불필요(읽기) | — |
+| 게임1 | target·시작값·rate | 없음(완전 결정적) | 낮게 OK(≈20Hz) | 덤 렌더 | `game1/logic.ts`(step에 rng 없음) |
+| 게임2 | dir·p2Speed·seed | seed로 발사 속도/지터 | **높게 필요(20~30Hz)** | 덤 렌더 + 선택적 보간 | `game2/logic.ts:111-117`(발사 분기 nextRand) |
+| 게임3 | seed | seed로 시동딜레이·회피스타일 | **높게 필요(≥30Hz)** — `ATTACK_DURATION` 0.06s / `DODGE_DURATION` 0.1s 창 판정 | 덤 렌더 | `game3/core.ts:190,200-202`(draw) |
 
-핵심: **온라인 매치의 "최종 결과 한 줄"만 DB에 남는다.** 오프라인은 서버·DB 무경유 → `game_match` 미기록(`ERD.md note #2`).
+- 모든 게임이 **같은 봉투·같은 루프 코드**, 빈도만 다르다.
+- `GAME_DURATION=10`(`types.ts:12`) 상수 → v1 전 게임 10초 고정. 방장 "라운드 시간 설정"은 코어 상수와 충돌 → **(미확정)**.
+- **`docs/TECH_STACK.md`의 게임3 "1초 틱 가위바위보" 서술은 채택 코드와 불일치.** 채택된 game-lab 코드는 **연속 step + 서브프레임 `t`**(공격창 0.06s)라 1초 틱과 양립 불가. 코드가 근거이므로 **연속 고빈도 틱**을 채택하고, 1초 틱 서술은 폐기 대상 → **(미확정, 기획 정합)**.
 
-### 5.2 서버 인메모리 상태 (형태·수명, 제안)
+### 0.6 통합 봉투가 "새 게임 추가"를 재사용시키는 방식
+
+새 게임 `game4`를 붙일 때:
+
+| 계층 | 새 게임에 필요? | 이유 |
+|---|---|---|
+| `game:input` 봉투 | ✅ 재사용 | 입력이 `GameInputEvent` 하나뿐 — 게임 무관 |
+| 서버 입력 재기입(§0.2) | ✅ 재사용 | 슬롯 A/B → role 매핑은 게임 독립 |
+| 서버 step 루프(§0.5) | ✅ 재사용 | `core.step(state, events, dt)` 시그니처 고정(`GameCore`) |
+| `game:state` 봉투 | ✅ 재사용 | 투영본 투명 전달, `G4View` 타입만 추가 |
+| match/round 생명주기 | ✅ 재사용 | 결과는 `GameResult` 공통 |
+| **새로 구현** | ⛳ `shared/`에 `GameCore` 1개 | `create`/`step` 순수 로직 |
+| **새로 구현** | ⛳ 클라 렌더러 1개 | `render4(ctx, state, w, h)` — **4인자**(`registry.ts:15` `GameDef.render` 계약, `w=CANVAS_W=800`, `h=CANVAS_H=450`) |
+| **새로 구현** | ⛳ 레지스트리 1줄 + 투영 함수 1개 | `GAMES['4']={…}`, `projectG4(state)→G4View` |
+
+→ **전송 코드는 0줄 수정.** 이것이 사용자 통찰의 실제 이득이며, game-lab이 이미 그 구조로 구현돼 있음이 근거다.
+
+---
+
+<a id="s1"></a>
+## §1 인증·세션·프로필 (그룹①, REST)
+
+### 1.1 네임스페이스·쿠키 규약
+
+| 구분 | 규약 |
+|---|---|
+| REST 경로 | `/auth/*` = 브라우저 top-level 내비게이션(OAuth 302 왕복)만 · `/api/*` = 그 외 전부(XHR/fetch, JSON) |
+| 인증 | 서버 세션 스토어 키를 담는 **opaque 쿠키**(JWT 금지, `TECH_STACK.md`). 유저/admin 쿠키 이름이 달라 동시 로그인 가능 |
+
+| 쿠키 | 값 | 속성 |
+|---|---|---|
+| `mp_session` | 유저 세션 id(opaque) | `HttpOnly; Secure(prod); SameSite=Lax; Path=/; Max-Age=<세션수명>` |
+| `mp_admin` | admin 세션 id(유저와 독립) | `HttpOnly; Secure(prod); SameSite=Lax; Path=/` |
+| `mp_oauth_state` | OAuth state+PKCE 임시 | `HttpOnly; Secure(prod); SameSite=Lax; Max-Age=600; Path=/auth` |
+
+`SameSite=Lax` 이유: 구글 콜백은 top-level GET이라 `Lax`면 쿠키가 실려 오고(`Strict`면 유실), 크로스사이트 fetch POST엔 안 실려 CSRF 1차 방어. 상태변경 REST(`POST/PATCH/DELETE`)+소켓 핸드셰이크는 추가로 `Origin`/`Host` 화이트리스트 검증.
+
+**에러 규약(REST 동기 실패)** — HTTP 상태 + 바디 `{ "error": { "code":"STRING_CODE", "message":"사람용" } }`:
+
+| 상태 | code 예 | 상황 |
+|---|---|---|
+| 400 | `VALIDATION` | 필드 누락/형식오류 |
+| 401 | `UNAUTHENTICATED` | 세션 없음/만료 |
+| 403 | `CSRF`/`FORBIDDEN` | Origin 불일치/권한없음 |
+| 404 | `NOT_FOUND` | 리소스/방코드 없음 |
+| 409 | `ALREADY_ONBOARDED`/`NICKNAME_TAKEN` | 상태·유니크 충돌(`nickname` UNIQUE, `schema.prisma:45`) |
+| 413/415 | `IMAGE_TOO_LARGE`/`UNSUPPORTED_MEDIA` | 업로드 용량/MIME |
+| 429 | `RATE_LIMITED` | 남용 방지 |
+| 502 | `OAUTH_UPSTREAM` | 구글 토큰 교환 실패 |
+
+### 1.2 엔드포인트
+
+**`GET /auth/google/login`** — OAuth 시작
+```
+(브라우저 top-level, 바디 없음)
+→ 302 Location: https://accounts.google.com/o/oauth2/v2/auth?client_id=..&redirect_uri=..
+        &response_type=code&scope=openid%20email%20profile&state=<rand>&code_challenge=<pkce>&code_challenge_method=S256
+   Set-Cookie: mp_oauth_state=<rand>; HttpOnly; Secure; SameSite=Lax; Max-Age=600; Path=/auth
+```
+
+**`GET /auth/google/callback`** — code 교환·세션 발급
+```
+[GET /auth/google/callback?code=<auth_code>&state=<rand>]  Cookie: mp_oauth_state=<rand>
+→ (state 검증 → code→토큰 교환 → 구글 프로필 획득)
+   신규(app_user 없음): 세션에 구글프로필 보관(PENDING_ONBOARDING), 302 → /onboarding
+   기존 유저: mp_session 발급, 302 → /
+   Set-Cookie: mp_oauth_state=; Max-Age=0; Path=/auth
+에러: state 불일치 → 403 CSRF · 토큰 교환 실패 → 502 OAUTH_UPSTREAM
+```
+> **`app_user` 생성 시점.** `nickname`이 NOT NULL+UNIQUE(`schema.prisma:45`)라 콜백 시점엔 확정 닉네임이 없어 곧바로 INSERT하기 애매하다. 구현 선택은 §4.6에 둘: (a) 구글 프로필을 `PENDING_ONBOARDING` 세션에 담아 **온보딩 제출 시 INSERT**, 또는 (b) 콜백 때 임시 닉네임으로 INSERT 후 온보딩에서 UPDATE. **정확한 채택은 (미확정)** — 어느 쪽이든 "가입=INSERT / 닉네임확정=쓰기"의 2단계.
+
+**`GET /api/me`** — 현재 세션 상태(항상 200)
+```jsonc
+{ "status": "ANON" | "PENDING_ONBOARDING" | "USER",  // 서버가 세션으로 판별
+  "user": {                                          // status=USER 일 때만
+    "id": "1024",                                    // app_user.id (BigInt→string)
+    "nickname": "종혁",                              // app_user.nickname (UNIQUE)
+    "email": "forgotmypasswrd044@gmail.com",         // app_user.email
+    "imageUrl": "https://cdn../pfp/abc.webp",        // uploaded_image_key→R2 URL, 없으면 google_image_url
+    "hasUploadedImage": true,                        // uploaded_image_key != null
+    "group": { "id": "3", "name": "1분반" } | null   // group_id 조인(nullable)
+  } | null }
+```
+
+**`GET /api/groups`** — 분반 목록(공개): `{ "groups": [ { "id":"3", "name":"1분반", "isPublic":true } ] }`
+
+**`POST /api/onboarding`** — 닉네임+분반 제출
+```jsonc
+// 요청
+{ "nickname": "종혁",   // 필수, 1~50자 (VarChar(50) UNIQUE)
+  "groupId": "3" }      // 선택(nullable). 무소속 허용
+// 200 → GET /api/me 와 동일한 { status:"USER", user }
+// 에러: 409 NICKNAME_TAKEN · 409 ALREADY_ONBOARDED · 400 VALIDATION · 404 NOT_FOUND(groupId)
+```
+
+**`PATCH /api/me`** — 닉네임 변경 `{ "nickname":"새닉" }` → 200 me. 충돌 409 `NICKNAME_TAKEN`.
+
+**`POST /api/me/profile-image`** (multipart, field `image`)
+```
+서버: sharp로 256² webp 리사이즈+EXIF 제거 → R2 PUT → app_user.uploaded_image_key 갱신
+→ 200 { "imageKey":"pfp/1024_abc.webp",  // R2 오브젝트 키(DB 저장값)
+        "imageUrl":"https://cdn../pfp/1024_abc.webp" }
+에러: 413 IMAGE_TOO_LARGE · 415 UNSUPPORTED_MEDIA · 401 UNAUTHENTICATED
+```
+> 원본 바이트는 **R2에만**, DB엔 **키만**(`uploaded_image_key`, `schema.prisma:47`). 클라는 URL만 받는다.
+
+**`DELETE /api/me/profile-image`** → `uploaded_image_key=null` → 이후 `google_image_url` 사용 → 200 me.
+
+**`POST /api/auth/logout`** → 200 `{}` + `Set-Cookie: mp_session=; Max-Age=0; Path=/`
+
+**`POST /api/admin/login` / `POST /api/admin/logout`** (유저와 독립)
+```jsonc
+// [POST /api/admin/login]  { "loginId":"root", "password":"…" }  → admin_account.login_id / bcrypt(pw_hash)
+// 200 {} + Set-Cookie: mp_admin=<sid>; HttpOnly; Secure; SameSite=Lax; Path=/
+// 에러: 401 BAD_CREDENTIALS
+```
+
+**재접속(v1).** 복구 없음. 소켓이 끊기면 진행 중 매치는 상대에게 `match:aborted` 통지 후 종료(`TECH_STACK.md` §4.3). 인메모리 방/매치 소실.
+
+---
+
+<a id="s2"></a>
+## §2 로비·방·매칭 (그룹②, Socket.IO)
+
+### 2.1 핸드셰이크 인증 & 소켓 에러 규약
+
+소켓은 REST와 **같은 쿠키**로 인증한다. `io` 미들웨어가 핸드셰이크의 `mp_session`을 검증:
+- `USER` 세션 → 연결 허용, `socket.data.userId`/`nickname` 주입.
+- `ANON`/`PENDING` → `connect_error` (payload `{ code:'UNAUTHENTICATED' }`).
+- `io` 서버 `cors.origin`을 허용 도메인으로 고정, `credentials:true`. 클라 `io(url,{withCredentials:true})`.
+
+**소켓 동기 실패** = Socket.IO **ack 콜백**으로 반환(요청형 `room:*`/`queue:*`):
+```ts
+type Ack<T> = { ok: true; data: T } | { ok: false; code: string; message: string }
+// 예) socket.emit('room:join', { code }, (ack: Ack<RoomSnapshot>) => { ... })
+```
+**소켓 비동기 실패**(내가 트리거 안 한 변화) = push: 로비 `lobby:error`, 인게임 무효입력 `game:reject`, 매치 중단 `match:aborted`, 저장실패 `match:error`.
+
+연결 성공 즉시:
+```jsonc
+// [S→C] lobby:hello
+{ "me": { "id":"1024", "nickname":"종혁", "imageUrl":"…" }, "reconnect": false }  // v1 항상 false
+```
+
+### 2.2 방 인메모리 객체 (서버 소유, DB 미저장)
 
 ```ts
+type Role = 'P1' | 'P2'
+type RoomStatus = 'waiting' | 'in_match'
+
+interface RoomMember {
+  userId: string        // app_user.id
+  nickname: string      // 표시용 캐시
+  socketId: string      // 현재 소켓 (RoomSnapshot에는 미포함)
+  role: Role            // 역할 배정(§2.4)
+  ready: boolean        // room:ready 토글
+}
+interface RoomConfig {
+  gameId: 1 | 2 | 3     // Game.id (schema: TinyInt 고정)
+  rounds: number        // 방장 설정. v1 기본 1 (멀티라운드는 (미확정))
+  // roundSeconds는 v1 무시 — 코어가 GAME_DURATION=10 상수 사용 → (미확정)
+}
 interface Room {
-  code: string | null;          // 코드방=숫자 문자열, 빠른시작=null(내부 roomId 사용)
-  gameId: GameId;
-  hostUserId: bigint;
-  config: RoundConfig;
-  players: { P1?: bigint; P2?: bigint };  // 역할 배정(§2.2/§3.0)
-  match?: MatchRuntime;
+  code: string          // 서버 발급 숫자 문자열 = Socket.IO room 키
+  hostUserId: string    // 방장(설정·시작 권한)
+  status: RoomStatus
+  config: RoomConfig
+  members: RoomMember[]  // 최대 2
+  matchId?: string       // status=in_match 일 때 현재 매치 런타임 상관키
 }
-interface MatchRuntime {
-  matchId: string;              // 인메모리 런타임 id(§0.2) — DB로 안 감
-  rounds: RoundResult[];        // 라운드별 승자 누적(메모리에만)
-  currentRoundIndex: number;
-  gameState: Game1State | Game2State | Game3State;  // 현재 라운드 코어 state
-  seed?: number;                // (선택) 게임2 예측/리플레이용
-}
-const rooms = new Map<string, Room>();
-const quickMatchQueue: Map<GameId, bigint[]> = new Map();  // 게임별 큐
 ```
-- **생성**: 코드방=`room:create` / 빠른시작=큐 2명. **파기**: 매치 종료 INSERT 완료 후, 또는 양쪽 disconnect. **수명 = 프로세스 수명**(§5.8).
 
-### 5.3 (a) 매치 시작 전 — 신원/그룹 로드 (SELECT)
-```ts
-const u = await prisma.appUser.findFirst({
-  where: { id: userId, deletedAt: null },   // soft-delete 유저 입장 불가
-  select: { id: true, nickname: true, googleImageUrl: true, uploadedImageKey: true, groupId: true },
-});
-if (!u) throw RoomError('USER_NOT_FOUND');
-```
-- `deleted_at IS NULL` 필터 필수. `group_id`는 리더보드 귀속 판단용이나 매치 **기록에는 저장 안 됨**(리더보드는 조회 시점 유저 소속으로 집계, §5.8 갭).
-
-### 5.4 (b) 진행 중 — DB 무접촉
-라운드 틱 루프(게임3=1초 윈도우 / 게임1=±이벤트 / 게임2=20Hz)는 **DB를 전혀 안 건드린다**. 판정은 순수 코어 `tick`이 인메모리 state 위에서 수행하고 결과를 `game:state`/`game:tick`으로 브로드캐스트만. DB I/O가 틱 루프에 없어 지연·락 걱정 없음.
-
-### 5.5 (c) 매치 종료 — `game_match` INSERT (권위 쓰기 경로)
-
-**쓰기 순서 확정 (초안 major 수정 — INSERT 커밋 후에만 결과 방송):**
-```
-(1) 오케스트레이터가 aggregateMatch(rounds[])로 최종 MatchResult 확정
-(2) game_match INSERT를 await로 커밋 성공까지 확인   ← recordedMatchId(BigInt PK) 여기서 확보
-(3) 그 후에야 recordedMatchId를 담아 match:end(S→C) 방송
-```
-INSERT가 실패하면 **정상 결과(match:end)를 방송하지 않는다** — 클라가 DB에 없는 결과를 확정 결과로 받지 않도록. 대신 `match:error`(unrecorded/재시도 실패)를 보낸다. `match:end.recordedMatchId`는 **INSERT 성공 분기에서만 존재**(optional).
+### 2.3 코드방 이벤트 (요청형은 ack 반환)
 
 ```ts
-// 온라인 매치 최종 결과 확정 시점, 서버(방 핸들러) 단독 실행
-const match = await prisma.gameMatch.create({
-  data: {
-    gameId,          // Int @db.TinyInt (1|2|3) — Game 사전 FK
-    player1Id,       // BigInt — AppUser FK (인메모리 Room.players.P1)
-    player2Id,       // BigInt — AppUser FK (인메모리 Room.players.P2)
-    result,          // MatchResult enum
-    // playedAt 생략 → @default(now())
-  },
-  select: { id: true },
-});
-// 커밋 성공 확인 후에만:
-io.to(room).emit('match:end', { matchId, result, recordedMatchId: String(match.id), summary });
+// [C→S] room:create   { gameId, rounds? }  → ack Ack<RoomSnapshot>   생성자=host=P1(기본)
+// [C→S] room:join     { code }             → ack Ack<RoomSnapshot> | {ok:false, code:'ROOM_FULL'|'NOT_FOUND'}
+// [C→S] room:configure{ gameId?, rounds? } → 방장만. 변경 후 room:state 브로드캐스트
+// [C→S] room:ready    { ready:boolean }     → 내 ready 토글
+// [C→S] room:start                          → 방장만. 2명·양쪽 ready 시 매치 개시(§0.4)
+// [C→S] room:leave                          → 퇴장. 남은 1인에게 room:state / 진행중이면 match:aborted
 ```
-- **넣는 컬럼**: `game_id, player1_id, player2_id, result` (+ `played_at` 자동). `deleted_at`=NULL.
-- **P1/P2 매핑**: 인메모리 `players.P1/P2` → `player1_id/player2_id`. `result`는 이 역할 기준(`P1_WIN`=player1 승). 온라인 역할 배정 규칙(방장=P1?/랜덤?) **미확정** — 확정 후 이 매핑 고정.
-- **트랜잭션**: v1은 단일 INSERT라 명시 `$transaction` 불요(단일 문 원자적). *단 §5.8 라운드 테이블 확장을 채택하면* `game_match`+`game_round[]`를 한 트랜잭션으로 묶어 부분 기록 방지.
-
-**[S→C] `match:error`** (INSERT 실패 시):
-```json
-{ "matchId": "m_9f3a2c", "reason": "PERSIST_FAILED", "retryable": true }
+```jsonc
+// [S→C] room:state  (방 변경 시마다 브로드캐스트 = 단일 정본. RoomSnapshot과 동일 구조, socketId 제외)
+{ "code": "48213", "status": "waiting", "hostUserId": "1024",
+  "config": { "gameId": 3, "rounds": 1 },
+  "members": [
+    { "userId":"1024", "nickname":"종혁", "role":"P1", "ready":true },
+    { "userId":"2048", "nickname":"상대", "role":"P2", "ready":false }
+  ] }
 ```
-- 서버는 로그 + 1회 재시도(제안), 그래도 실패면 미기록으로 두되 **확정 결과 방송은 하지 않는다**(loud 실패, 가짜 매치 없음). 클라는 "결과 기록 실패" UX로 표시.
 
-**중단/끊김 (v1 "그냥 두기", §2.5)**: 매치 도중 한쪽 소켓 끊김 → 재접속 복구 없음 → 방 파기, **INSERT 안 함**(미완결=미기록, 랭킹에 존재하지 않는 것으로 정직 처리). 몰수승 도입 여부 **미확정**(도입 시 §5.8 종료사유 컬럼과 함께 결정).
+**`GET /api/rooms/:code`** (선택) — 입장 전 코드 사전검증. 404 `NOT_FOUND` / 200 `{ code, status, config, memberCount }`.
 
-### 5.6 (d) 리더보드/등수 조회 — 집계 SELECT + `score_config`
-`game_match`가 player1/player2 분리라 "유저 관점"으로 접으려면 UNION 필요 → `$queryRaw` 권장(MySQL 8 윈도우 함수 가능).
+### 2.4 P1/P2 역할 배정 규칙 (게임2 비대칭 때문에 중요)
 
-**`GET /api/leaderboard`** — 분반 리더보드
-요청: `GET /api/leaderboard?groupId=7&gameId=3` (gameId 생략 시 전체 합산; `Cookie: madpump_sid`)
-응답 200:
-```json
-{
-  "groupId": "7", "gameId": 3,
-  "scoreConfig": { "winPoints": 3, "drawPoints": 1, "lossPoints": 0 },
-  "rows": [
-    { "rank": 1, "userId": "42", "nickname": "네오", "wins": 12, "draws": 3, "losses": 4, "plays": 19, "winRate": 0.63, "points": 39 },
-    { "rank": 2, "userId": "51", "nickname": "핌프", "wins": 9, "draws": 1, "losses": 8, "plays": 18, "winRate": 0.50, "points": 28 }
-  ]
+게임2는 **P1=발사자(공격), P2=회피자(HP 3)** 로 완전 비대칭(`game2/logic.ts`). 게임1/3은 대칭.
+- **기본:** 방장=P1, 입장자=P2 (코드 표기 P1=Q/W, P2=U/I와 일치).
+- **게임2 공정성(제안):** 매치가 여러 라운드면 라운드마다 역할 스왑, 최종은 "역할 무관 승수"로 집계. **정확한 스왑 정책은 (미확정).**
+- 배정된 `role`은 서버 인메모리에만 존재하며 인게임 입력에서 클라가 위조 불가(§0.2 재기입).
+- **불변식:** 매칭 시 배정된 역할 = DB 컬럼. **P1=`player1_id`, P2=`player2_id`.** 종료 INSERT까지 이 대응은 뒤바뀌지 않는다(§4.3).
+
+### 2.5 빠른시작 큐
+
+```ts
+// [C→S] queue:join   { gameId }   → 서버 인메모리 대기열 push
+// [C→S] queue:leave
+// [S→C] queue:waiting { position }                    // 대기중(선택적 순번)
+// [S→C] queue:matched { roomCode, role, opponent }    // 같은 gameId 2명 매칭 → 방 자동생성 → 곧 match:start
+```
+> 큐도 **게임별**(같은 `gameId` 2명이 차면 방 생성). 이후 흐름은 코드방과 동일하게 `match:start`로 합류.
+
+---
+
+<a id="s3"></a>
+## §3 인게임 — 게임별 JSON 상태 스키마 (그룹③)
+
+> 이벤트는 §0의 `game:state`(투영 `state`)를 그대로 쓴다. 아래는 각 게임 **권위 전체 상태(코드 원본)**와 그중 **전송되는 투영(`G*View`)**·**비전송 필드·이유**를 정확히 규정한다.
+> `render{1,2,3}.ts`가 실제로 읽는 필드를 코드로 확인해 "S→C 전송?" 열을 채웠다(비전송=렌더 미소비 + 치팅/정보우위 방지).
+
+### 3.1 게임1 — `Game1State` (숫자 맞추기 · 누적 속도 게이지)
+
+`game1/logic.ts`. **`seed` 없음 — `create`에서만 rand 사용 → step 완전 결정적.** 숨은 랜덤은 `p1Rate/p2Rate`(42~88) 둘뿐.
+
+```ts
+// game1/logic.ts:36-53 (원본)
+export interface Game1State {
+  target: number            // 맞출 목표 1~1000
+  p1: number; p2: number    // 현재 숫자(실수)
+  p1Rate: number; p2Rate: number     // 기본 속도(42~88, create 랜덤) — 숨김
+  p1Down: boolean; p1Up: boolean; p2Down: boolean; p2Up: boolean  // 키 홀드
+  p1Gauge: number; p2Gauge: number   // 속도 게이지 0~100 누적형(keydown +30%p, 항상 sqrt 감쇠)
+  p1Hold: number; p2Hold: number     // 손 떼고 타겟 정지-유지 누적(초), ≥1=승
+  elapsed: number; result: GameResult
 }
 ```
-에러: `400 BAD_REQUEST`(groupId 누락/형식, gameId≠1|2|3), `401 UNAUTHENTICATED`, `404 GROUP_NOT_FOUND`, `403 GROUP_FORBIDDEN`(비공개 그룹 비소속 접근 — 제안).
 
-**집계 SQL (제안)** — 유저 관점 정규화 후 가중치:
+| 필드 | 타입 | 의미 | 렌더/판정 | S→C 전송? |
+|---|---|---|---|---|
+| `target` | number(1~1000) | 맞출 목표 | 렌더+판정 | ✅ |
+| `p1`/`p2` | number(1~1000) | 현재 숫자(렌더는 `Math.round`) | 렌더+판정 | ✅ |
+| `p1Rate`/`p2Rate` | number(42~88) | 게이지 30%p일 때 속도(`speed=rate×gauge/30`). `create` 랜덤 | **판정만** (render1 미소비) | ❌ 숨김 |
+| `p1Down`/`p1Up`/`p2Down`/`p2Up` | boolean | 방향 홀드(Q−/W+, U−/I+) | **판정만** (render1 미소비) | ❌ |
+| `p1Gauge`/`p2Gauge` | number(0~100) | 속도 게이지 누적 | 렌더(바)+판정 | ✅ |
+| `p1Hold`/`p2Hold` | number(초) | 정지-유지 누적. `≥1` 즉시 승 | 렌더(HOLD 바)+판정 | ✅ |
+| `elapsed` | number(초) | 경과. `≥10` 종료 시 근접 판정 | 렌더+판정 | ✅ |
+| `result` | GameResult | 최종 승패 | 판정 | ✅ |
+
+**투영 `G1View`** = `Pick<Game1State, 'target'|'p1'|'p2'|'p1Gauge'|'p2Gauge'|'p1Hold'|'p2Hold'|'elapsed'|'result'>` (9필드). `render1.ts`가 `rate/down/up`을 읽지 않음을 코드로 확인 → 제거 무손실.
+
+```jsonc
+// [S→C] game:state (게임1)
+{ "matchId":"m_9f3a2c", "round":1, "seq":148,
+  "state": { "target":617, "p1":403, "p2":588,   // p1/p2 정수 반올림(렌더가 어차피 round)
+             "p1Gauge":84, "p2Gauge":13, "p1Hold":0, "p2Hold":0.34,
+             "elapsed":6.20, "result":null } }
+```
+크기 ≈ 150~200 B/스냅샷. 20~30Hz면 4~6 KB/s. **전체 스냅샷으로 충분**(델타 오히려 오버헤드).
+
+### 3.2 게임2 — `Game2State` + `Bullet[]` (로켓 피하기 · 비대칭 HP)
+
+`game2/logic.ts`. `create`가 `seed`(uint32)를 뽑고(`:92`), `step`의 W 발사 분기에서 내장 LCG `nextRand(seed)`로 탄 속도/지터를 뽑으며 `seed` 갱신(`:111-117`). 논리 캔버스 **800×450**.
+
+```ts
+// game2/logic.ts:37-59 (원본)
+export interface Bullet { x:number; y:number; vx:number; vy:number; bounces:number }
+export interface Game2State {
+  elapsed:number; result:GameResult
+  launcherX:number; launcherDir:1|-1      // P1 발사대(좌우 스캔, Q=방향반전)
+  p2Speed:number                          // P2 이동속도(create 랜덤 1380~1760) — 숨김
+  p2X:number; leftHeld:boolean; rightHeld:boolean   // U/I 홀드 이동
+  rockets:Bullet[]; cooldown:number       // W 3방향 부채꼴(쿨 0.25s), 측벽 1회 반사
+  seed:number                             // LCG PRNG 내부상태 — ★비전송
+  hp:number; iframes:number               // P2 체력 3 / 피격 시 무적 0.45s
+}
+```
+
+| 필드 | 타입 | 의미 | 렌더/판정 | S→C 전송? |
+|---|---|---|---|---|
+| `elapsed` | number(초) | 경과. `≥10` → P2 생존승 | 렌더+판정 | ✅ |
+| `result` | GameResult | HP 0→`'P1'`, 10초 생존→`'P2'` | 판정 | ✅ |
+| `launcherX` | number(px) | 발사대 x(스캔) | 렌더+판정 | ✅ |
+| `launcherDir` | `1\|-1` | 스캔 방향(Q 반전) | 렌더+판정 | ✅ |
+| `p2Speed` | number(1380~1760) | P2 이동속도. `create` 랜덤 | **판정만** (render2 미소비) | ❌ 숨김 |
+| `p2X` | number(px) | P2 위치 | 렌더+판정 | ✅ |
+| `leftHeld`/`rightHeld` | boolean | U/I 홀드 | **판정만** (render2 미소비) | ❌ |
+| `rockets` | `Bullet[]` | 발사된 로켓 | 렌더+판정 | ✅(부분) |
+| `cooldown` | number(초) | 발사 쿨 잔량(0=발사가능) | 렌더(쿨바)+판정 | ✅ |
+| `seed` | number(uint32) | **LCG PRNG 내부상태** | **판정만** | ❌ **★비전송** |
+| `hp` | number(0~3) | P2 체력 | 렌더(하트)+판정 | ✅ |
+| `iframes` | number(초) | 무적 잔여(피격 0.45s) | 렌더(깜빡임)+판정 | ✅ |
+
+**`Bullet` 필드별:**
+
+| 필드 | 타입 | 의미 | 렌더/판정 | 전송? |
+|---|---|---|---|---|
+| `x`/`y` | number(px) | 탄 위치 | 렌더+판정 | ✅ |
+| `vx`/`vy` | number(px/s) | 속도. 렌더가 `atan2(vy,vx)`로 로켓 회전각 계산(`render2.ts:63`) | 렌더(각)+판정(이동) | ✅ |
+| `bounces` | number(≤`MAX_BOUNCE`=1) | 측벽 반사 횟수 | **판정만** (render2 미소비) | ❌ 비전송 |
+
+**`seed` 절대 비전송(치팅).** seed를 알면 상대 클라가 `nextRand`를 그대로 돌려 **아직 발사되지 않은 탄의 속도·부채꼴 분포를 미리 계산**해 완벽 회피할 수 있다. 판정은 오직 서버가 seed를 들고 수행.
+
+**투영 `G2View`** — `seed/p2Speed/leftHeld/rightHeld` 제거, `rockets`는 `{x,y,vx,vy}`만(`bounces` 제거):
+
+```jsonc
+// [S→C] game:state (게임2)
+{ "matchId":"m_9f3a2c", "round":1, "seq":84,
+  "state": { "elapsed":4.10, "result":null,
+             "launcherX":512, "launcherDir":-1, "p2X":301,
+             "rockets":[ {"x":211,"y":180,"vx":-120,"vy":690},
+                         {"x":540,"y":96,"vx":260,"vy":641} ],
+             "cooldown":0.12, "hp":2, "iframes":0.31 } }
+```
+크기(게임2가 최대): 발사 쿨 0.25s → 초당 최대 12발, 체류 ~0.6~0.75s → 통상 **동시 9~18발** → 정수 반올림 시 **약 0.8~1.1 KB/스냅샷**, 20~30Hz면 16~33 KB/s.
+
+### 3.3 게임3 — `Game3State` + `FencerState` + `feed[]` (펜싱 · 서지넉백)
+
+`game3/core.ts`(팩토리 `makeGame3`) + `game3/logic.ts`(config). `create`가 `seed` 확보(`:149`), 이후 시동 딜레이·회피 스타일을 LCG로 뽑음. 시각 좌표 없음 — 위치는 정규화 `c`(`EDGE`·`HALF_GAP`). `+c`=P1 우세.
+
+```ts
+// game3/core.ts:61-111 (원본)
+type DodgeStyle = 'lean'|'waist'|'split'
+interface AttackWindow { press:number; start:number; end:number; resolved:boolean; riposte?:boolean }
+interface DodgeWindow  { start:number; end:number; resolved:boolean; style:DodgeStyle }
+interface G3FeedEvent  { kind:'hit'|'parry'|'whiff'; victim:'P1'|'P2'; t:number; mult?:number }
+interface FencerState {
+  attacks:AttackWindow[]; dodges:DodgeWindow[]
+  attackCdUntil:number; dodgeCdUntil:number
+  riposteUntil:number; combo:number
+}
+export interface Game3State {
+  elapsed:number; result:GameResult
+  c:number                 // 위치 균형(-EDGE~+EDGE 근사)
+  p1:FencerState; p2:FencerState
+  feed:G3FeedEvent[]       // 연출 이벤트(hit/parry/whiff, 1.2s 후 소멸)
+  seed:number              // LCG PRNG — ★비전송 (core.ts:108)
+  waterLevel:number        // 밀물 높이 flood(렌더용)
+}
+```
+
+**`Game3State` 필드별:**
+
+| 필드 | 타입 | 의미 | 렌더/판정 | 전송? |
+|---|---|---|---|---|
+| `elapsed` | number(초) | 경과(렌더의 "now" 기준) | 렌더+판정 | ✅ |
+| `result` | GameResult | 낙사/10초 종료 시 `c` 부호로 판정 | 판정 | ✅ |
+| `c` | number | 위치 균형. **선수 실제 위치 = `c ± HALF_GAP`(P1=`c−0.06`, P2=`c+0.06`)이며, 이 위치가 `effEdge`를 넘으면 해당 선수 낙사.** P1 낙사(→P2승): `c−HALF_GAP < −effEdge`, P2 낙사(→P1승): `c+HALF_GAP > effEdge`(`core.ts:281-288`). 두 임계값이 다르다. `effEdge`는 밀물로 시간 따라 축소. 범위는 `±EDGE` 근사(낙사 직전 스텝에서 `\|c\|`가 EDGE를 살짝 넘을 수 있음) | 렌더(선수 x)+판정 | ✅ |
+| `p1`/`p2` | `FencerState` | 선수 상태 | 렌더+판정 | ✅(부분) |
+| `feed` | `G3FeedEvent[]` | 최근 판정 연출(1.2s 후 소멸) | **렌더 전용** | ✅ |
+| `seed` | number(uint32) | **LCG PRNG 내부상태** | 판정만 | ❌ **★비전송** |
+| `waterLevel` | number | 밀물 높이 `flood`(=`EDGE−effEdge`). 렌더가 바다·낙사경고선 | **렌더 전용** | ✅ |
+
+**`FencerState` 필드별:**
+
+| 필드 | 타입 | 의미 | 렌더/판정 | 전송? |
+|---|---|---|---|---|
+| `attacks` | `AttackWindow[]` | 진행/최근 공격창 | 렌더+판정 | ✅(부분) |
+| `dodges` | `DodgeWindow[]` | 진행/최근 회피창 | 렌더+판정 | ✅(부분) |
+| `attackCdUntil` | number(초) | 공격 쿨 해제 **절대 게임시각**(`now≥값`이면 준비) | 렌더(쿨칩)+판정 | ✅ |
+| `dodgeCdUntil` | number(초) | 회피 쿨 해제 절대시각 | 렌더(쿨칩)+판정 | ✅ |
+| `riposteUntil` | number(초) | 리포스트(즉발 반격)창 마감 절대시각(`>now`면 열림) | 렌더(금색 링, `render3.ts:152`)+판정 | ✅ |
+| `combo` | number(0~`COMBO_MAX`) | 연속 패링 콤보 단계 | 렌더+판정 | ✅ |
+
+**`AttackWindow`/`DodgeWindow`/`G3FeedEvent`:**
+
+| 필드 | 타입 | 의미 | 렌더/판정 | 전송? |
+|---|---|---|---|---|
+| `AttackWindow.press` | number(초) | 버튼 누른 시각 → windup 진행도 | 렌더+판정 | ✅ |
+| `AttackWindow.start` | number(초) | 판정 시작(=press+시동딜레이 `STARTUP` 0.04~0.18) | 렌더+판정 | ✅ |
+| `AttackWindow.end` | number(초) | 판정 끝(start+`ATTACK_DURATION` 0.06) | 렌더+판정 | ✅ |
+| `AttackWindow.resolved` | boolean | 판정 처리 완료 플래그 | **판정만** | ❌ |
+| `AttackWindow.riposte?` | boolean | 리포스트 발동 여부(넉백 배율용) | **판정만** | ❌ |
+| `DodgeWindow.start` | number(초) | 회피 시작 → dodgePose | 렌더+판정 | ✅ |
+| `DodgeWindow.end` | number(초) | 회피 끝(무적창 끝, +`DODGE_DURATION` 0.1) | 렌더+판정 | ✅ |
+| `DodgeWindow.resolved` | boolean | 판정 처리 플래그 | **판정만** | ❌ |
+| `DodgeWindow.style` | `'lean'\|'waist'\|'split'` | 회피 모션. **판정 무관, 순수 시각** | **렌더 전용** | ✅ |
+| `G3FeedEvent.kind` | `'hit'\|'parry'\|'whiff'` | 연출 라벨 | 렌더 전용 | ✅ |
+| `G3FeedEvent.victim` | `'P1'\|'P2'` | 대상(위치·색) | 렌더 전용 | ✅ |
+| `G3FeedEvent.t` | number(초) | 발생 시각(=now). 페이드 `age=elapsed−t` | 렌더 전용 | ✅ |
+| `G3FeedEvent.mult?` | number | 넉백 배율. **`hit` 이벤트에서 `mult>1.01`이면 주황(`#ff8a3d`)·확대 강조(`render3.ts:97-100`). `parry`/`whiff`는 `mult`를 담아 보내지만(코어가 항상 `surge` 포함, `core.ts:220`) 색/크기 강조엔 미반영** | 렌더 전용 | ✅ |
+
+**`seed` 절대 비전송(치팅).** seed 유출 시 상대의 다음 공격 시동 딜레이(0.04~0.18 중 어느 값)를 미리 계산해 패링 타이밍을 완벽화할 수 있다. `resolved`/`riposte`는 렌더 미소비 + 전개 정보 유출 최소화로 비전송.
+
+**`feed`는 `game:state`에 포함(별도 이벤트 아님).** 1.2s 뒤 자동 소멸하는 짧은 연출이고 렌더가 매 프레임 `s.feed`를 통째로 읽는다. 스냅샷에 넣으면 **자기완결적**이라 패킷 하나 유실돼도 다음 스냅샷이 자가 치유. 이벤트가 보통 0~4개라 중복 비용 무시 가능.
+
+**투영 `G3View`** — `seed`, 공격창 `resolved/riposte`, 회피창 `resolved` 제거:
+
+```jsonc
+// [S→C] game:state (게임3)
+{ "matchId":"m_9f3a2c", "round":1, "seq":210,
+  "state": {
+    "elapsed":7.35, "result":null, "c":0.184, "waterLevel":0.221,
+    "p1": { "attacks":[ {"press":7.10,"start":7.19,"end":7.25} ],
+            "dodges":[ {"start":7.30,"end":7.40,"style":"waist"} ],
+            "attackCdUntil":7.28, "dodgeCdUntil":7.44, "riposteUntil":0, "combo":1 },
+    "p2": { "attacks":[], "dodges":[],
+            "attackCdUntil":7.05, "dodgeCdUntil":6.90, "riposteUntil":0, "combo":0 },
+    "feed":[ {"kind":"parry","victim":"P2","t":7.25,"mult":1.3} ] } }
+```
+크기: 배열들이 `end>now−0.5`로 prune(`core.ts:273-276`), feed는 `<1.2s`만(`:279`) → **약 500~900 B/스냅샷**.
+> `attackCdUntil` 등은 **절대 게임시각**이라 클라는 자기 스냅샷의 `elapsed`를 "now"로 삼아 그대로 비교(offset 재계산 불필요). `c`는 소수 3~4자리만 유효.
+
+### 3.4 비전송 필드 규칙 (불변식) & 게임별 종합표
+
+1. **`seed`·모든 rng 내부상태** → 절대 비전송(예측 치팅). game2/game3 `seed`.
+2. **숨은 랜덤 능력치** → 비전송(정보 우위 차단). game1 `p1Rate/p2Rate`, game2 `p2Speed`.
+3. **렌더 미소비 판정 내부 플래그·입력상태** → 비전송(대역폭·유출 최소화). game1 `p*Down/p*Up`, game2 `leftHeld/rightHeld/Bullet.bounces`, game3 `resolved/riposte`.
+4. **와이어 반올림 허용** → 위치/게이지 등 렌더 전용 수치는 정수/소수 몇 자리로 반올림(덤 렌더라 의미 왜곡 없음 = 좋은 fallback). **단 서버 권위 상태는 풀 정밀도 유지.**
+
+| 게임 | ✅ 보냄(렌더 소비) | ❌ 안 보냄(권위/치팅 방지) |
+|---|---|---|
+| **1** | `target, p1, p2, p1Gauge, p2Gauge, p1Hold, p2Hold, elapsed, result` | `p1Rate, p2Rate`, `p1Down/p1Up/p2Down/p2Up` |
+| **2** | `launcherX, launcherDir, p2X, rockets[{x,y,vx,vy}], cooldown, hp, iframes, elapsed, result` | **`seed`**, `p2Speed`, `leftHeld/rightHeld`, `Bullet.bounces` |
+| **3** | `c, waterLevel, p1/p2{attacks[{press,start,end}], dodges[{start,end,style}], attackCdUntil, dodgeCdUntil, riposteUntil, combo}, feed[], elapsed, result` | **`seed`**, `AttackWindow.resolved/riposte`, `DodgeWindow.resolved` |
+
+원칙 한 줄: **"그리는 데 쓰는 것만 내려보내고, 판정에 쓰는 씨앗/능력치/내부 플래그는 서버에 가둔다."**
+
+### 3.5 전체/델타 전송 전략 (게임별 종합)
+
+| 게임 | 상태 크기 | 가변 배열 | 권장 전송 | 근거 |
+|---|---|---|---|---|
+| 게임1 | 극소(9 스칼라, ~180 B) | 없음 | **전체 스냅샷** | 델타가 오히려 오버헤드 |
+| 게임2 | 중(~0.8~1.1 KB) | `rockets[]`(동시 9~18, 최악 40+) | **전체로 시작 → 부하 시 델타** | 배열이 커질 유일 케이스. 델타 도입 시 탄에 서버발급 `Bullet.id` 필요(현재 코드 없음) — **(미확정)** |
+| 게임3 | 소(~0.5~0.9 KB) | `attacks/dodges/feed`(짧게 prune) | **전체 스냅샷** | 코어가 이미 `end>now−0.5`/`t<1.2`로 prune |
+
+**JSON 채택 이유:** 상태가 이미 순수 TS 객체(`Game*State`)라 `JSON.stringify(project(state))` 한 줄로 직렬화되고, 클라는 `JSON.parse` 후 그대로 렌더러에 넘긴다(스키마 코드젠 불필요). Socket.IO 기본 인코딩과도 맞고, 최악(게임2) ~33 KB/s로 바이너리 최적화 불필요한 규모.
+
+---
+
+<a id="s4"></a>
+## §4 DB 입출력 — 언제 무엇을 넣고 빼는가
+
+> 근거: `schema.prisma`(정본 `docs/ERD.md`), game-lab 코어. `server/src`는 미구현이므로 아래 Prisma 코드는 **스키마에 근거한 제안 예시**(필드명·타입은 실제 스키마와 1:1).
+
+### 4.1 대원칙 — DB는 "라이브"를 모른다
+
+| 데이터 | 예시 | 저장 위치 | 이유 |
+|---|---|---|---|
+| 라이브 게임 상태 | `Game*State` 전체(`p1Gauge`,`rockets`,`hp`,`c`,`feed`,`seed`…) | **서버 RAM(권위)** | 초당 수십 step으로 변함. DB 쓰면 I/O 폭주·무의미 |
+| 입력 이벤트 | `GameInputEvent{code,type,t}` | **서버 RAM(스텝 큐)** | 소켓으로만 흐름. 영속 대상 아님 |
+| 신원/사전 | `AppUser`,`UserGroup`,`AdminAccount`,`Game` | **DB(읽기 위주)** | 매치 시작 시 로드 |
+| 매치 최종결과 | `GameMatch` 1행 | **DB(종료 시 쓰기 1회)** | 유일하게 영속되는 "결과". 라운드/틱 상세 없음 |
+| 감사·설정 | `MatchEditHistory`,`ScoreConfig` | **DB** | admin 편집/점수 가중치 |
+
+> 한 줄: **"게임이 끝나야 비로소 DB에 한 줄이 생긴다."** 진행 중엔 DB를 건드리지 않는다.
+
+### 4.2 매치 생명주기 × DB (a→d)
+
+```
+(a) 시작 전   ── SELECT ── app_user / user_group  (신원 로드, 읽기만)
+(b) 진행 중   ── 무접촉 ── 서버 RAM에서 core.step 반복, DB 0회
+(c) 종료 순간 ── INSERT ── game_match 1행         (결과 확정, 쓰기 1회)
+(d) 조회      ── SELECT ── game_match 집계 + score_config  (리더보드/전적)
+```
+
+**(a) 시작 전 — 신원 로드:**
+```ts
+const [p1, p2] = await Promise.all([
+  prisma.appUser.findUnique({
+    where: { id: player1Id },                 // P1 역할 배정 유저
+    select: { id:true, nickname:true, googleImageUrl:true, uploadedImageKey:true, groupId:true },
+  }),
+  prisma.appUser.findUnique({ where: { id: player2Id }, select: { /* 동일 */ } }),
+])
+// deletedAt(soft-delete) 유저는 매칭 큐 진입 단계에서 이미 where deletedAt:null 로 배제
+```
+
+**(b) 진행 중 — DB 무접촉:** `GAME_DURATION=10`초 동안 서버는 오직 RAM에서만 `create`→`step` 반복. game1은 step 완전 결정적, game2/game3은 `create`가 `seed`(uint32) 확정 후 내장 `nextRand`로만 뽑아 **초기 state(seed 포함)만 있으면 재현 가능**하지만, 그럼에도 DB엔 아무것도 안 쓴다.
+
+### 4.3 결과 매핑 — `GameResult` → DB `MatchResult`
+
+두 표기는 **다르다.** 반드시 매핑한다(`types.ts:10` vs `schema.prisma:22-26`).
+
+| 코어 `state.result` | DB `MatchResult` | 처리 |
+|---|---|---|
+| `'P1'` | `P1_WIN` | INSERT |
+| `'P2'` | `P2_WIN` | INSERT |
+| `'DRAW'` | `DRAW` | INSERT |
+| `null` | — | **INSERT 안 함**(미종료 = 결과 없음) |
+
+```ts
+import { MatchResult } from '@prisma/client'
+import type { GameResult } from '@madpump/shared'   // types.ts
+
+function toDbResult(r: GameResult): MatchResult {   // 유일한 매핑 지점
+  switch (r) {
+    case 'P1':   return MatchResult.P1_WIN
+    case 'P2':   return MatchResult.P2_WIN
+    case 'DRAW': return MatchResult.DRAW
+    default:     throw new Error('cannot persist unfinished match (result=null)')
+  }
+}
+```
+
+**역할 매핑 불변식:** **P1 역할(Q/W) = `player1_id`, P2 역할(U/I) = `player2_id`.** 매칭 시 1회 고정(RAM room 객체)되어 종료 INSERT까지 뒤바뀌지 않는다. 따라서 `state.result==='P1'`이면 승자는 항상 `player1_id`.
+
+### 4.4 INSERT + 방송 순서 (엄격)
+
+**불변식: "커밋 성공 후에만 `match:end` 방송."** 클라가 보는 최종 결과와 DB가 100% 일치.
+
+```ts
+try {
+  const match = await prisma.gameMatch.create({           // ← 커밋
+    data: {
+      gameId: room.config.gameId,     // Int @db.TinyInt (1|2|3)
+      player1Id: room.player1Id,      // BigInt — P1(Q/W)
+      player2Id: room.player2Id,      // BigInt — P2(U/I)
+      result: toDbResult(state.result),
+      // playedAt 생략 → @default(now()) (schema.prisma:91)
+      // deletedAt 생략 → null (soft-delete 전용)
+    },
+    select: { id: true, playedAt: true, result: true },
+  })
+  io.to(room.code).emit('match:end', {                    // ← 커밋 이후에만
+    matchId: room.matchId,                    // 런타임 상관키
+    gameId: room.config.gameId,
+    result: state.result,                     // 클라엔 코드표기('P1'/'P2'/'DRAW') 그대로
+    wins: room.wins,
+    players: { p1: {...}, p2: {...} },
+    recordedMatchId: match.id.toString(),     // BigInt → string (JSON 안전)
+    playedAt: match.playedAt.toISOString(),
+  })
+} catch (err) {
+  io.to(room.code).emit('match:error', { matchId: room.matchId, code: 'RESULT_PERSIST_FAILED' })
+  // 결과는 RAM에 남으므로 재시도 큐로 넘겨 at-least-once 저장 보장
+}
+```
+- 단일 쓰기라 `$transaction` 불필요(통계 캐시 등 부수쓰기 생기면 그때 묶는다 — 도입 여부 (미확정)).
+- **나쁜 fallback 금지:** INSERT 실패 시 "성공한 척" 방송하지 않는다. 정본(DB)이 비면 loud하게 `match:error`.
+
+### 4.5 리더보드 / 등수 쿼리 (제안)
+
+점수 = `ScoreConfig`(단일 행 id=1: `winPoints=3`,`drawPoints=1`,`lossPoints=0`, `schema.prisma:123-134`) × 전적. 한 유저가 `player1_id`/`player2_id` 어느 쪽에든 나오므로 **두 역할을 펼쳐(normalize)** 집계한다.
+
 ```sql
-SELECT
-  u.id AS user_id, u.nickname AS nickname,
-  COALESCE(SUM(o.outcome = 'WIN'), 0)  AS wins,
-  COALESCE(SUM(o.outcome = 'DRAW'), 0) AS draws,
-  COALESCE(SUM(o.outcome = 'LOSS'), 0) AS losses,
-  COALESCE(SUM(CASE o.outcome
-      WHEN 'WIN'  THEN c.win_points
-      WHEN 'DRAW' THEN c.draw_points
-      ELSE c.loss_points END), 0)      AS points
-FROM app_user u
-CROSS JOIN score_config c              -- 단일 행 id=1 (win=3/draw=1/loss=0)
-LEFT JOIN (
+-- [분반별 리더보드] played CTE = 역할 펼침(3.1·3.2 공용). Prisma는 $queryRaw 권장.
+WITH played AS (
   SELECT player1_id AS user_id, game_id,
          CASE result WHEN 'P1_WIN' THEN 'WIN' WHEN 'P2_WIN' THEN 'LOSS' ELSE 'DRAW' END AS outcome
-  FROM game_match WHERE deleted_at IS NULL
+  FROM game_match WHERE deleted_at IS NULL           -- soft-delete 제외
   UNION ALL
   SELECT player2_id AS user_id, game_id,
          CASE result WHEN 'P2_WIN' THEN 'WIN' WHEN 'P1_WIN' THEN 'LOSS' ELSE 'DRAW' END AS outcome
   FROM game_match WHERE deleted_at IS NULL
-) o ON o.user_id = u.id
-       /* AND o.game_id = :gameId  (gameId 필터 시에만) */
-WHERE u.group_id = :groupId AND u.deleted_at IS NULL
-GROUP BY u.id, u.nickname
-ORDER BY points DESC, wins DESC, nickname ASC;
+)
+SELECT u.id, u.nickname, u.group_id,
+       SUM(p.outcome='WIN')  AS wins,
+       SUM(p.outcome='DRAW') AS draws,
+       SUM(p.outcome='LOSS') AS losses,
+       SUM(CASE p.outcome WHEN 'WIN' THEN cfg.win_points
+                          WHEN 'DRAW' THEN cfg.draw_points
+                          ELSE cfg.loss_points END) AS points
+FROM played p
+JOIN app_user u ON u.id = p.user_id AND u.deleted_at IS NULL
+CROSS JOIN score_config cfg                          -- 단일 행(id=1)
+WHERE u.group_id = :groupId
+GROUP BY u.id, u.nickname, u.group_id
+ORDER BY points DESC, wins DESC, losses ASC;         -- 동점 tie-break
 ```
-- **필수 필터 2개**: `game_match.deleted_at IS NULL`(admin 소프트삭제 매치 배제), `app_user.deleted_at IS NULL`(탈퇴 유저 배제).
-- **게임별**: `game_id` 필터로 `plays = wins+draws+losses`, `winRate = wins / NULLIF(plays,0)`(`TECH_STACK §4.4` "게임 타입별" 충족 — `game_id`가 그 역할).
-- **등수**: `RANK() OVER (ORDER BY points DESC, wins DESC)`(MySQL 8) 또는 앱에서 부여. 타이브레이크 (제안, 미확정) points→wins→nickname.
-- **DRAW**: 양쪽 `draws+1`, 각자 `draw_points`. 매치 0인 유저는 LEFT JOIN+COALESCE로 0/0/0/0점 정직 노출(가짜 실적 없음).
-- **BigInt**: `user_id`/`group_id` 문자열 직렬화.
 
-**`GET /api/users/:userId/matches`** — 개인 전적(드릴다운, 선택)
-요청: `GET /api/users/51/matches?limit=20&cursor=10420`
-응답 200:
-```json
-{
-  "userId": "51",
-  "items": [
-    { "recordedMatchId": "10482", "gameId": 3, "opponentId": "42", "opponentNickname": "네오",
-      "outcome": "LOSS", "result": "P1_WIN", "playedAt": "2026-07-04T05:12:33.000Z" }
-  ],
-  "nextCursor": "10399"
+```sql
+-- [게임별 승률] ★ played CTE를 반드시 다시 포함(단독 실행 가능하게)
+WITH played AS ( /* ↑ 위와 동일한 두 SELECT UNION ALL */ )
+SELECT p.game_id, u.id, u.nickname,
+       SUM(p.outcome='WIN') AS wins, COUNT(*) AS total,
+       ROUND(SUM(p.outcome='WIN')/COUNT(*), 3) AS win_rate
+FROM played p
+JOIN app_user u ON u.id = p.user_id AND u.deleted_at IS NULL
+GROUP BY p.game_id, u.id, u.nickname
+ORDER BY p.game_id, win_rate DESC;
+```
+- 인덱스: `ix_match_p1(player1_id, played_at)`·`ix_match_p2(player2_id, played_at)`·`ix_match_played(played_at)`(`schema.prisma:100-102`)로 유저별/기간별 스캔 뒷받침. **`game_id` 단독 인덱스는 없음** → 게임별 대량 집계가 잦아지면 인덱스 추가 검토(제안).
+
+### 4.6 인증/온보딩 쓰기 & admin
+
+**최초 구글 로그인:** `google_sub`(unique)로 존재 판별, 없으면 INSERT.
+```ts
+const user = await prisma.appUser.upsert({
+  where: { googleSub: profile.sub },     // uq_user_google
+  update: { email: profile.email, googleImageUrl: profile.picture },
+  create: {
+    googleSub: profile.sub, email: profile.email,
+    nickname: provisionalNickname(),     // ⚠ nickname NOT NULL+UNIQUE(:45) → 임시값 필요 (미확정 전략)
+    googleImageUrl: profile.picture,
+    // groupId 없음(nullable) — 온보딩에서 채움
+  },
+})
+```
+> `nickname` UNIQUE 제약 때문에 "가입=INSERT / 닉네임확정=UPDATE"가 2단계. 임시 닉네임 전략(예 `user_{id}`) vs PENDING 세션 보관 후 온보딩 INSERT — **(미확정, §1.2)**.
+
+**온보딩:** `prisma.appUser.update({ where:{id}, data:{ nickname, groupId } })`. `nickname` 충돌 `P2002` → 400/409 `NICKNAME_TAKEN`. `groupId`는 `user_group.id` FK(`onDelete:Restrict`).
+
+**admin 결과 수정 = UPDATE + 감사로그 INSERT(원자적):**
+```ts
+await prisma.$transaction([
+  prisma.gameMatch.update({ where: { id: matchId }, data: { result: after } }),
+  prisma.matchEditHistory.create({
+    data: { matchId, adminId, beforeResult: before, afterResult: after },  // editedAt @default(now())
+  }),
+])
+```
+
+### 4.7 프로필 이미지 — 키만 DB, 바이너리는 R2
+
+| 항목 | 위치 | 필드 |
+|---|---|---|
+| 업로드 이미지 **키** | DB | `AppUser.uploadedImageKey`(`VarChar(300)`, nullable, `:47`) |
+| 업로드 이미지 **바이너리** | Cloudflare R2 | (DB에 없음) |
+| 구글 기본 프로필 URL | DB | `AppUser.googleImageUrl`(`VarChar(500)`, nullable, `:46`) |
+
+```ts
+function resolveAvatar(u: { uploadedImageKey: string|null; googleImageUrl: string|null }) {
+  if (u.uploadedImageKey) return r2PublicUrl(u.uploadedImageKey)  // R2 키 → URL(또는 presigned)
+  if (u.googleImageUrl)   return u.googleImageUrl
+  return null                                                     // 클라가 이니셜 아바타(좋은 fallback = "이미지 없음"을 정직히)
 }
 ```
-- 쿼리: `WHERE (player1_id = :id OR player2_id = :id) AND deleted_at IS NULL ORDER BY played_at DESC` → 인덱스 `ix_match_p1(player1_id, played_at)`/`ix_match_p2(player2_id, played_at)` 활용. `outcome`은 `:id`의 역할로 `result`를 접어 계산. 에러: `401 UNAUTHENTICATED`, `404 USER_NOT_FOUND`.
+> R2 서빙 방식(퍼블릭 버킷 직접 URL vs presigned vs 서버 프록시)은 **(미확정)** — 인프라 결정 후 `r2PublicUrl` 구현.
 
-### 5.7 프로필 이미지 — R2 키 ↔ 바이너리 분리
-- **저장 정본**: `app_user.uploaded_image_key`(R2 오브젝트 키, `VARCHAR(300)`)에 **키 문자열만**. webp 바이너리는 R2에(서버 sharp 256² webp+EXIF 제거 후 업로드). 업로드 없으면 `NULL`이고 `google_image_url`이 대체.
-- **조회(2안, 미확정)**: (1) **서명 URL(권장)** — 응답에 R2 presigned GET(TTL 예 1h)을 `imageUrl`로, DB 키 미노출. (2) **프록시** `GET /api/users/:userId/avatar` — R2 스트리밍/302 redirect(비공개 버킷 유지 시).
-- **우선순위(§0.6)**: `uploaded_image_key` → `google_image_url` → `imageUrl: null`(가짜 기본 이미지를 실제 사진인 척 넣지 않음).
+### 4.8 경계 포맷 & 스키마 갭
 
-**`GET /api/users/:userId/avatar`** (프록시 방식, 제안):
-- `302 Found → Location: <R2 presigned URL>`(업로드 존재) / `<google_image_url>`(업로드 없음) / `404 NO_AVATAR`(둘 다 NULL, 클라 플레이스홀더) / `401 UNAUTHENTICATED`.
+| 경계 | 포맷 | 근거 |
+|---|---|---|
+| DB ↔ 서버 | **Prisma(SQL)** | 타입세이프 ORM, 위 예시 전부 |
+| 서버 ↔ 클라 | **JSON**(Socket.IO payload / REST body) | `state.result` 등 직렬화, `BigInt`는 문자열화 |
+| 앱 설정 포맷 | **(미확정)** — 스택 문서(`TECH_STACK.md`)에 미지정 | ~~YAML 전용~~ 근거 없음 → 검증된 두 경계만 단정 |
 
-### 5.8 스키마 갭 분석 (`docs/ERD.md`가 정본 — 전부 변경 제안)
+**스키마 갭 판단 — 최종결과만 남는다.** `GameMatch`는 `(gameId, player1Id, player2Id, result, playedAt)` 뿐.
 
-**갭 1 — 라운드별 상세(`MatchSummary.rounds[]`)가 버려진다 (핵심).** `game_match`는 최종 `result` 하나만. `types.ts`의 `rounds[]`·`config`는 영속화 안 됨.
-- **v1 충분성**: 리더보드·등수·전적(승/무/패·게임별 승률)은 **최종 result + game_id만으로 완전 산출**(§5.6) → **v1 충분**. 라운드 상세는 재시청/리플레이/밸런싱 통계(v1 범위 밖)에만 필요.
-- **(제안, v2)**:
-  ```sql
-  CREATE TABLE game_round (
-    id          BIGINT PRIMARY KEY AUTO_INCREMENT,
-    match_id    BIGINT NOT NULL,               -- FK game_match(id)
-    round_index INT    NOT NULL,               -- RoundResult.roundIndex
-    winner      ENUM('P1','P2') NULL,          -- NULL = 무승부 라운드
-    UNIQUE (match_id, round_index),
-    FOREIGN KEY (match_id) REFERENCES game_match(id)
-  );
-  ```
-  채택 시 §5.5 INSERT를 `game_match`+`game_round[]` 한 트랜잭션으로 묶는다.
+| 게임 | 코어가 아는 것(RAM) | DB에 남는 것 | 버려지는 것 |
+|---|---|---|---|
+| game1 | `p1,p2,target,p1Gauge,p1Hold,elapsed` | `result`만 | 최종 근접차, 게이지, 정지유지시간 |
+| game2 | `hp,iframes,rockets[],elapsed` | `result`만 | 최종 HP 잔량, 생존시간, 명중수 |
+| game3 | `c,feed[],p1.combo,waterLevel,seed,elapsed` | `result`만 | 최종 `c`, `feed`, 콤보수, 밀물 |
 
-**갭 2 — 매치 `config` 미저장.** 방장의 `roundCount`/`timePerRoundSec`(+게임2 임시 밸런스)이 안 남아 "어떤 설정의 결과인지" 재현 불가. **(제안)** `round_count TINYINT`, `time_per_round_sec SMALLINT`(또는 `config_json JSON`) 추가. v1 리더보드엔 불필요 → 보류 가능.
+**v1 판정: 충분하다.** 요구는 "온라인 매치 최종결과 1행"(ERD note #2)이고, 리더보드/승률(§4.5)은 `result`만으로 완전 계산된다. 상세 상태는 렌더 연출용(game3 `feed`는 1.2s 후 소멸)이라 영속 가치 낮음.
 
-**갭 3 — 종료 사유·비대칭 역할 미기록.** 게임3 `resultReason`, 게임2 피격/타임아웃, 몰수승 여부가 미저장. 게임2는 비대칭이라 "누가 어떤 역할"이 결과 해석에 중요한데 `player1_id/player2_id`가 곧 역할인지 스키마 명세 없음. **(제안)** `result_reason ENUM(...)`, `role_swapped BOOLEAN`. 온라인 P1/P2 배정 규칙 확정과 함께 결정.
+**확장은 '제안'만 (정본=ERD.md 먼저 갱신, 임의 변경 금지, `schema.prisma:1-4`):**
+- 하이라이트/리플레이 필요 시 → `game_match_detail(match_id, payload JSON)` 별도 테이블 신설 제안.
+- 리플레이는 game2/game3가 **`seed`(uint32)+`GameInputEvent[]`만으로 결정적 재현** 가능 → 저용량 리플레이(제안).
 
-**갭 4 — 인메모리 방/매치 → 재시작 시 진행중 매치 소실.** 방·큐·매치 런타임이 전부 프로세스 메모리라 배포·크래시·재시작 시 진행 중 매치는 사라짐(미기록).
-- **허용 범위(초안 minor 수정)**: v1 정책이 "끊김=그냥 두기" + 단일 프로세스 + 매치가 초 단위로 짧음 → **v1 허용**(진행중 소실 ≈ 끊김과 동급, 미기록으로 정직). **단 "완결 매치 무손실"은 §5.5의 쓰기 순서(INSERT 커밋 성공 후 방송)를 전제로만 성립한다** — 결과 확정~INSERT 커밋 사이 크래시 창에서는 아직 커밋 안 된 매치만 잃으며, 그건 §5.5 순서상 **아직 클라에도 확정 통지(match:end)되지 않은 상태**가 되도록 정렬돼 있어 "본 결과가 사라지는" 모순이 없다.
-- **주의**: 다중 인스턴스 수평 확장 시 인메모리 방이 인스턴스에 갇혀 이 가정이 깨짐 → 방/세션을 외부 스토어(Redis 등)로 빼는 아키텍처 변경(v1 범위 밖).
+### 4.9 한눈 요약 (DB 트리거)
 
-**갭 5 — 오프라인 매치 원천 미기록.** `game_match`는 온라인만. v1 스펙상 오프라인은 랭킹 비대상 → **갭 아님(의도된 설계)**. 문서로 못박음.
-
-**요약 판단**: v1 런칭엔 **현 `game_match`(최종 결과 + game_id + soft-delete)만으로 충분** — 리더보드/등수/게임별 승률/감사수정이력이 전부 커버(§5.6, `match_edit_history`, `score_config`). 갭 1~4는 v2 후보이며, 채택 시에도 정본은 `docs/ERD.md`이므로 **ERD 먼저 갱신 후 `schema.prisma` 반영**.
-
----
-
-## 열린 질문 / 결정 필요
-
-`(미확정)`으로 표시된 항목을 결정권자 판단이 필요한 순으로 모았다.
-
-### A. 인증·세션·프로필 (§1)
-1. **세션 저장소**: 인메모리(기본안) vs 세션 테이블 — 무중단 배포/수평확장 필요 시 승격.
-2. **soft-delete 후 정책**: 재가입 허용(마스킹) vs 영구 차단(`deleted_at` 체크 → `ACCOUNT_SUSPENDED`). `ERD.md note #9`.
-3. **닉네임 규칙**: 길이 하한/허용문자/변경 허용·쿨다운, 콜레이션 유니크 대소문자 무시 여부(리더보드 정체성 영향).
-4. **프로필 이미지**: 서빙 경로(서버 프록시 vs 공개/서명 URL), 허용 MIME·최대 용량.
-5. **비공개 분반**(`is_public=false`)의 온보딩 노출/참여 방식.
-6. (제안) OAuth PKCE 병행, admin 로그인 rate-limit, double-submit CSRF 토큰.
-
-### B. 로비·방·매칭 (§2)
-7. **게임2 비대칭 역할 공정성 (v1 구현 전 확정 대상으로 승격)**: 라운드별 role swap 후 합산 / 매치당 2세트 공수 교대 등. 최소한 `match:start` 전 각 클라에 자기 공수 역할 노출(빠른시작은 ready 게이트도 생략하므로 특히 중요).
-8. **온라인 P1/P2 배정 규칙**: 코드방 방장=P1 / 빠른시작 선착=P1(제안) 확정 — DB `player1_id/player2_id` 매핑 고정에 필요(§5.5).
-9. **중단/끊김 시 몰수승 정책**: v1 기본 미부여(DB 미기록). 도입 시 종료사유 컬럼(갭3)과 함께.
-10. **`timePerRoundSec` 허용 범위**, 빠른시작 기본 `roundCount`/게임별 기본 라운드시간.
-
-### C. 인게임 실시간 (§3)
-11. **매치 result 집계 공식**: `shared`에 추가할 순수 함수 `aggregateMatch(rounds): MatchResult`의 규칙(라운드 다득제/best-of-N, 타이 처리). §3.0·§5.5·§5.8 갭1과 직결.
-12. **카운트다운**: `round:countdown` 이벤트 vs `startsAtServerMs` 클라 계산 중 택1.
-13. **게임2 밸런스 수치**(`DEFAULT_GAME2_CONFIG` 임시값) 확정 — 확정 시 §5.8 갭2와 함께 저장 여부.
-14. **게임2 자기 개체 예측 도입 여부**(모델 B의 예측 단계) — v1은 보간-only 기본, 플레이테스트 후 결정. seed 클라 소비 여부와 연동(§4.3.3).
-15. **지연 보상(lag compensation)** v1 미도입 확정 여부.
-
-### D. 데이터흐름·영속화 (§4·§5)
-16. **점수 공식 가중치**(`score_config` win/draw/loss) 및 리더보드 타이브레이크.
-17. **스키마 갭 1~4** 채택 여부(라운드 상세 테이블, config 저장, 종료사유/역할 컬럼, 인메모리 재시작 대응) — 채택 시 `docs/ERD.md` 선행 갱신.
+```
+쓰기 트리거:
+  1) 최초 구글로그인          → app_user  INSERT/upsert (google_sub 없을 때)
+  2) 온보딩 완료              → app_user  UPDATE (nickname, group_id)
+  3) 매치 종료(result≠null)   → game_match INSERT (커밋 후에만 match:end 방송)
+  (admin) 결과 수정           → game_match UPDATE + match_edit_history INSERT (트랜잭션)
+읽기 트리거:
+  A) 매치 시작 전             → app_user/user_group SELECT (신원)
+  B) 리더보드/전적/승률       → game_match 집계 × score_config (raw SQL, played CTE)
+절대 규칙:
+  · 라이브 state(gauge/hp/c/feed/seed…) DB 금지 — 서버 RAM 권위
+  · result 매핑: 'P1'→P1_WIN / 'P2'→P2_WIN / 'DRAW'→DRAW / null→저장안함
+  · player1_id=P1(Q/W), player2_id=P2(U/I) — 매칭 시 고정, 뒤바뀌지 않음
+  · INSERT 커밋 성공 → 그제서야 match:end. 실패 시 match:error(가짜 성공 금지)
+  · 경계: DB↔서버=Prisma/SQL, 서버↔클라=JSON, 앱 설정 포맷=(미확정)
+```
 
 ---
 
+<a id="open"></a>
+## 열린 질문 (미확정 목록)
+
+1. **게임2 역할 스왑 정책** (§2.4) — 라운드마다 스왑 vs 매치 고정, 홀수라운드 시작역할 결정 방식.
+2. **멀티라운드(best-of-N)** (§0.4) — v1은 `totalRounds=1` 기본. `rounds>1` 집계 규칙·DB 최종결과 정의는 미정(코어엔 없는 오케스트레이션 개념).
+3. **라운드 시간** (§0.5, §2.2) — 코어 `GAME_DURATION=10` 상수 vs 방장 설정값(현재 충돌).
+4. **게임3 서버 틱 모델** (§0.5) — `TECH_STACK.md`의 "1초 틱 RPS"는 채택 코드(연속 서브프레임 0.06s 창)와 불일치 → 코드 기준 폐기 필요.
+5. **`t` 권위화** (§0.2) — 클라 `t` clamp(코드 동작, v1 채택) vs 서버 도착시각 재계산.
+6. **클라 로컬 키 바인딩/리매핑 UI** (§0.2) — 서버 재기입 규칙은 고정, 클라 표시/리매핑은 미정.
+7. **게임2 델타 전송** (§3.5) — 도입 시 `Bullet.id`(서버발급) 필요(현재 코드 없음).
+8. **최초 로그인 닉네임 전략** (§1.2, §4.6) — PENDING 세션 후 온보딩 INSERT vs 임시닉 INSERT 후 UPDATE.
+9. **R2 서빙 방식** (§4.7) — 퍼블릭 URL vs presigned vs 서버 프록시.
+10. **입력 `seq`/신뢰 재전송** (§0.2) — v1 미강제, 필요 시 추가.
+11. **앱 설정 포맷** (§4.8) — 스택 문서 미지정(YAML 단정 근거 없음).
+12. **통계 캐시 테이블** (§4.4) — 도입 시 INSERT를 `$transaction`으로 묶음.
+
+---
+
+<a id="roadmap"></a>
 ## 구현 로드맵
 
-`TECH_STACK.md §6` 우선순위에 맞춘 "무엇부터" 순서. 각 단계는 `단계 → 검증(verify)` 형태로 둔다.
+각 단계는 `step → verify: check` 형태로 검증 가능하게.
 
-| 순번 | 구현 대상 | 이 문서 근거 | 검증 기준 |
-|---|---|---|---|
-| 1 | **모노레포 + 소켓 왕복 + 구글 로그인** | §0 공통 규약, §1.3~1.6 | `/auth/google/*` 왕복으로 `madpump_sid` 발급 → `GET /api/me`가 `USER` 반환; 소켓 핸드셰이크가 세션+Origin 검증 통과 |
-| 2 | **온보딩 + 분반** (`POST /api/onboarding`, `GET /api/groups`) | §1.4 | 신규 유저가 닉네임 제출 시 `app_user` INSERT + 세션 `USER` 승격; 중복 닉네임 `409 NICKNAME_TAKEN` |
-| 3 | **코드방** (`room:create/join/configure/ready/start`, `GET /api/rooms/:code`) | §2.3 | 2인 입장 → `room:state` 동기화 → 방장 `room:start`가 `NOT_READY` 게이트 통과 시 양쪽에 개별 `match:start`(role 다름) |
-| 4 | **게임3 온라인** (1초 틱, `game:move`/`game:tick`) + 라운드 오케스트레이터 | §3.0·§3.5, `aggregateMatch` | 서버 1초 윈도우 상성 판정이 `game3.ts`와 일치; role 위조(`player` 스푸핑)를 서버 덮어쓰기로 차단(§3.7) |
-| 5 | **게임1 온라인** (`game:input`/`game:state`) | §3.3 | ±1 이벤트 → 서버 `[1,100]` 클램프 + `holdMs>=3000` 승리 / 타임아웃 `DRAW`(§3.3) |
-| 6 | **매치 기록 + 리더보드** (`game_match` INSERT, `GET /api/leaderboard`) | §5.5·§5.6 | INSERT 커밋 성공 후에만 `match:end`(recordedMatchId) 방송; 리더보드가 `score_config` 가중치로 집계 |
-| 7 | **오프라인 모드** (로컬 2인, shared 코어 직접) | §2.6 | 소켓/DB 무경유로 세 게임 로컬 플레이; `game_match` 미기록 확인 |
-| 8 | **게임2 온라인 + 빠른시작** (20Hz 시뮬 브로드캐스트, 보간; `queue:*`) | §3.4·§2.4 | 서버 권위 20Hz 스냅샷(총알 `vy` 미전송, 클라 보간); FIRE 예측 금지; 비대칭 역할 공정성(열린질문 7) 반영 |
-| 9 | **admin** (`POST /api/admin/login`, 콘솔 API) | §1.5 | `madpump_admin_sid`로 분리 인증; `match_edit_history` 감사 기록 |
+1. **shared 코어 이식** → `verify:` game-lab `shared/src/games/*`를 main `shared/`로 이식, 오프라인 97 tests 통과 유지.
+2. **투영 함수 + View 타입** → `verify:` `projectG{1,2,3}(state)→G*View` 작성 후 `render{1,2,3}`가 View만으로 렌더됨을 타입체크 + 오프라인 재생으로 확인(seed/rate 없이 렌더 무손실).
+3. **서버 권위 루프(단일 매치)** → `verify:` Fastify+Socket.IO에서 `round:start(create)→step 루프→game:state 브로드캐스트`를 봇 2개로 돌려 `result` 도달 확인.
+4. **입력 재기입 + `t` clamp** → `verify:` P2가 `KeyQ` 주입 시 P1 조종 불가(재기입) + 위조 `t`가 틱창으로 clamp되는 유닛테스트.
+5. **인증/세션(§1)** → `verify:` OAuth 왕복 → `mp_session` → `GET /api/me`가 `USER` 반환, 온보딩 INSERT.
+6. **로비/방/큐(§2)** → `verify:` 2 클라 코드방 매칭 → `room:state` 정본 일치 → `match:start` role 개별 전달.
+7. **결과 영속(§4)** → `verify:` `result≠null` → `game_match` INSERT 커밋 후에만 `match:end`, 실패 시 `match:error`(가짜 성공 없음).
+8. **리더보드(§4.5)** → `verify:` played CTE 집계가 `score_config` 가중치와 일치, 분반/게임별 순위 스냅샷.
+9. **디자인 시안 결합** → `verify:` design-lab UI(로그인/로비/매칭/게임선택/결과)를 위 API에 배선, 게임 캔버스만 `game:state` 덤 렌더로 교체.
 
-각 단계는 "버그 고쳐"가 아니라 "재현 테스트 후 통과"로 검증한다. 게임 로직은 shared 코어의 결정성을 단위 테스트로, 네트워크 계층은 서버 권위 판정이 클라 위조 입력을 무시하는지(§3.7)를 통합 테스트로 확인한다.
-
-<!-- notify: API 명세서 5개 섹션 종합 완료 -->
+<!-- notify: API·JSON·DB 통합 명세서 종합 완료 -->

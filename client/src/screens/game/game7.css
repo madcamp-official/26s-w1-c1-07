@@ -1,0 +1,123 @@
+/**
+ * 게임7 — 스피드 오목 전용 스타일 (game7 에이전트 소유).
+ * 공용 theme.css 유틸(.crt-bezel .vanish-grid .font-arcade .font-display .glow-text 등) 위에
+ * 레이아웃/연출만 얹는다. 토큰·글로우 공식은 PLAN §1 준수. design-lab 참조 0.
+ */
+
+.g7-screen {
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px 18px;
+  overflow: hidden;
+}
+
+.g7-topbar {
+  width: min(1020px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.g7-title {
+  font-size: 15px;
+  letter-spacing: 0.1em;
+}
+
+.g7-hudwrap {
+  width: min(1020px, 100%);
+}
+
+/* CRT 스테이지 — 베젤은 theme.css .crt-bezel, 여기서는 크기만.
+   세로 뷰포트 기반 캡으로 하단 키캡 잘림 방지(상하 고정 크롬 ≈ 310px, 베젤 테두리 28px).
+   캔버스 16:9 → 스테이지 폭 ≤ (100vh − 크롬) × 16/9 + 28px */
+.g7-stage {
+  width: min(1020px, 100%, calc((100vh - 310px) * 16 / 9 + 28px));
+}
+
+.g7-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+/* 라운드 인트로 — sign-on 플리커 후 소등 (steps, 부드러운 fade 금지 §1.4) */
+.g7-round-intro {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  pointer-events: none;
+  opacity: 0;
+  animation: g7-intro 1500ms steps(1, end) both;
+}
+
+.g7-round-intro__big {
+  font-size: 30px;
+}
+
+.g7-round-intro__sub {
+  font-size: 20px;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+}
+
+@keyframes g7-intro {
+  0% { opacity: 0; }
+  6% { opacity: 1; }
+  14% { opacity: 0; }
+  20% { opacity: 1; }
+  27% { opacity: 0; }
+  33% { opacity: 1; }
+  80% { opacity: 1; }
+  81% { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .g7-round-intro {
+    animation: none;
+    opacity: 0; /* HUD의 ROUND n/m 캡션이 정보 정본 — 인트로는 장식이라 생략 */
+  }
+}
+
+/* 하단 키캡 열 — 좌 P1(시안) / 우 P2(핑크), 실제 배정 키 표기 (SPEC Q2) */
+.g7-keys {
+  width: min(1020px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.g7-keys__group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.g7-keys__tag {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  opacity: 0.85;
+  padding: 0 6px;
+}
+
+.g7-keys__hint {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-align: center;
+  opacity: 0.9;
+}
+
+@media (max-width: 720px) {
+  .g7-keys__hint {
+    display: none;
+  }
+}

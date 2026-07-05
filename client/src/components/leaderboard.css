@@ -1,0 +1,80 @@
+/* LeaderboardTable 스타일 (아키텍트 소유) — PLAN §1.5 HI-SCORE 테이블 */
+
+.nc-lb {
+  border: 2px solid var(--p1);
+  box-shadow:
+    0 0 6px var(--p1),
+    0 0 20px color-mix(in srgb, var(--p1) 45%, transparent);
+  background: var(--surface);
+}
+
+.nc-lb__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.nc-lb__table th {
+  padding: 10px 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: left;
+  border-bottom: 1px solid var(--hairline);
+  font-weight: normal;
+}
+
+.nc-lb__table td {
+  padding: 12px 8px;
+  font-size: 14px;
+}
+
+/* 행 디바이더 없이 짝수행 --surface-deep (§1.5) */
+.nc-lb__table tbody tr:nth-child(even) {
+  background: var(--surface-deep);
+}
+
+.nc-lb__rank {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.nc-lb__num {
+  font-size: 11px;
+  text-align: right;
+  color: var(--text);
+}
+
+.nc-lb__name-col {
+  width: 40%;
+}
+
+/* 내 행: 좌측 4px 시안 바 + YOU 점멸 (§1.5) */
+.nc-lb__me {
+  border-top: 1px solid var(--hairline);
+  border-left: 4px solid var(--p1);
+  background: var(--surface-deep);
+}
+
+.nc-lb__me-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 10px;
+}
+
+.nc-lb__you-tag {
+  font-size: 10px;
+}
+
+.nc-lb__me-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nc-lb__empty {
+  padding: 18px 12px;
+  font-size: 13px;
+  text-align: center;
+}

@@ -1,0 +1,128 @@
+/* Button / CoinButton 스타일 (아키텍트 소유) — PLAN §1.5 + §1.4 호버 플리커 */
+
+.nc-btn {
+  --btn-color: var(--p1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 26px;
+  background: var(--surface);
+  border: 2px solid var(--btn-color);
+  border-radius: 0; /* 각진 사각 (§1.3) */
+  color: var(--btn-color);
+  font-size: 16px;
+  letter-spacing: 0.06em;
+  box-shadow:
+    0 0 6px var(--btn-color),
+    0 0 20px color-mix(in srgb, var(--btn-color) 45%, transparent),
+    inset 0 0 8px color-mix(in srgb, var(--btn-color) 25%, transparent);
+  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+}
+
+.nc-btn--block {
+  display: flex;
+  width: 100%;
+}
+
+.nc-btn--primary { --btn-color: var(--accent); }
+.nc-btn--secondary { --btn-color: var(--p1); }
+.nc-btn--danger { --btn-color: var(--error); }
+
+.nc-btn--tertiary {
+  --btn-color: var(--text-muted);
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
+  text-shadow: none;
+  color: var(--text-muted);
+  padding: 8px 14px;
+}
+
+/* 호버 플리커: 80ms 1회 플리커 후 밝기 1.4배 유지 (§1.4) */
+@keyframes btn-flicker {
+  0% { filter: brightness(1.4); }
+  49% { filter: brightness(1.4); }
+  50% { filter: brightness(0.7); }
+  99% { filter: brightness(0.7); }
+  100% { filter: brightness(1.4); }
+}
+
+.nc-btn:hover:not(:disabled) {
+  animation: btn-flicker 80ms steps(1, end) 1;
+  filter: brightness(1.4);
+}
+
+.nc-btn--tertiary:hover:not(:disabled) {
+  color: var(--p1);
+  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  animation: none;
+  filter: none;
+}
+
+/* press: 글로우 소멸 + 안쪽으로 눌린 톤 120ms (§1.4) */
+.nc-btn:active:not(:disabled) {
+  background: var(--surface-deep);
+  box-shadow: none;
+  text-shadow: none;
+  animation: none;
+  filter: none;
+  transition: background 120ms;
+}
+
+.nc-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+.nc-btn__coin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  font-family: var(--font-arcade);
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* ---- CoinButton: 원형 네온 링 (§1.5) ---- */
+.nc-coinbtn {
+  --ring-color: var(--accent2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--ring-color);
+  color: var(--ring-color);
+  font-size: 18px;
+  box-shadow:
+    0 0 6px var(--ring-color),
+    0 0 20px color-mix(in srgb, var(--ring-color) 45%, transparent);
+}
+
+.nc-coinbtn:hover:not(:disabled) {
+  animation: btn-flicker 80ms steps(1, end) 1;
+  filter: brightness(1.4);
+}
+
+.nc-coinbtn:active:not(:disabled) {
+  box-shadow: none;
+  background: var(--surface-deep);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nc-btn:hover:not(:disabled),
+  .nc-coinbtn:hover:not(:disabled) {
+    animation: none;
+  }
+}

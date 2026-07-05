@@ -32,9 +32,10 @@
 ```mermaid
 erDiagram
     user_group ||--o{ app_user : "소속(선택)"
-    game ||--o{ game_match : "게임 종류"
-    app_user ||--o{ game_match : "player1"
-    app_user ||--o{ game_match : "player2"
+    game ||--o{ game_round : "라운드 게임 종류"
+    game_match ||--o{ game_round : "라운드"
+    app_user ||--o{ game_match : "playerA"
+    app_user ||--o{ game_match : "playerB"
     game_match ||--o{ match_edit_history : "수정이력"
     admin_account ||--o{ match_edit_history : "수정자"
     admin_account ||--o{ score_config : "최종수정자"
@@ -69,19 +70,25 @@ erDiagram
     }
     game_match {
         bigint id PK
-        tinyint game_id FK "game 사전 참조"
-        bigint player1_id FK
-        bigint player2_id FK
-        varchar result "P1_WIN P2_WIN DRAW 중 단일값"
+        bigint player_a_id FK
+        bigint player_b_id FK
+        varchar result "A_WIN B_WIN DRAW (매치 최종)"
         datetime played_at
         datetime deleted_at "soft delete"
+    }
+    game_round {
+        bigint id PK
+        bigint match_id FK
+        int round_index
+        tinyint game_type FK "라운드마다 랜덤"
+        varchar result "A_WIN B_WIN DRAW (라운드)"
     }
     match_edit_history {
         bigint id PK
         bigint match_id FK
         bigint admin_id FK
-        varchar before_result
-        varchar after_result
+        varchar before_result "A_WIN B_WIN DRAW"
+        varchar after_result "A_WIN B_WIN DRAW"
         datetime edited_at
     }
     score_config {
@@ -142,20 +149,31 @@ CREATE TABLE game (
 
 CREATE TABLE game_match (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT '매치 ID',
-  game_id TINYINT NOT NULL COMMENT '게임 종류',
-  player1_id BIGINT NOT NULL COMMENT 'Player 1 유저',
-  player2_id BIGINT NOT NULL COMMENT 'Player 2 유저',
-  result VARCHAR(10) NOT NULL COMMENT '단일값: P1_WIN 또는 P2_WIN 또는 DRAW (구현 시 ENUM/CHECK)',
+  player_a_id BIGINT NOT NULL COMMENT '참가자 A (고정 신원, 게임역할 아님)',
+  player_b_id BIGINT NOT NULL COMMENT '참가자 B (고정 신원)',
+  result VARCHAR(10) NOT NULL COMMENT '매치 최종 승자: A_WIN | B_WIN | DRAW (라운드 다승 집계, 구현 시 ENUM)',
   played_at DATETIME NOT NULL COMMENT '매치 일시',
   deleted_at DATETIME NULL COMMENT 'admin 삭제 시각 (soft delete)',
   PRIMARY KEY (id),
-  KEY ix_match_p1 (player1_id, played_at),
-  KEY ix_match_p2 (player2_id, played_at),
+  KEY ix_match_pa (player_a_id, played_at),
+  KEY ix_match_pb (player_b_id, played_at),
   KEY ix_match_played (played_at),
-  CONSTRAINT fk_match_game FOREIGN KEY (game_id) REFERENCES game (id),
-  CONSTRAINT fk_match_p1 FOREIGN KEY (player1_id) REFERENCES app_user (id),
-  CONSTRAINT fk_match_p2 FOREIGN KEY (player2_id) REFERENCES app_user (id)
-) COMMENT='매치 결과 (온라인 매치만 기록)';
+  CONSTRAINT fk_match_pa FOREIGN KEY (player_a_id) REFERENCES app_user (id),
+  CONSTRAINT fk_match_pb FOREIGN KEY (player_b_id) REFERENCES app_user (id)
+) COMMENT='매치 결과 (온라인 매치만 기록). 매치=여러 라운드, game_type은 game_round로 이동';
+
+CREATE TABLE game_round (
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '라운드 ID',
+  match_id BIGINT NOT NULL COMMENT '소속 매치',
+  round_index INT NOT NULL COMMENT '몇 번째 라운드 (0-based)',
+  game_type TINYINT NOT NULL COMMENT '이 라운드 게임 (라운드마다 랜덤)',
+  result VARCHAR(10) NOT NULL COMMENT '라운드 승자: A_WIN | B_WIN | DRAW (playerA/B 슬롯 기준)',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_round_match_idx (match_id, round_index),
+  KEY ix_round_game (game_type),
+  CONSTRAINT fk_round_match FOREIGN KEY (match_id) REFERENCES game_match (id),
+  CONSTRAINT fk_round_game FOREIGN KEY (game_type) REFERENCES game (id)
+) COMMENT='라운드 결과 (매치당 여러 행). 게임역할 P1/P2는 저장 안 함 — 이겼냐 졌냐만';
 
 CREATE TABLE match_edit_history (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT '이력 ID',

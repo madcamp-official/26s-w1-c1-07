@@ -1,0 +1,121 @@
+/* ResultOverlay 전용 스타일 — game1 에이전트 소유 (전 게임 S9~S12 공용, PLAN 인게임 공통) */
+
+.rov {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(13, 2, 33, 0.82);
+  padding: 24px;
+}
+
+/* 하이스코어 등록 화면 무드의 패널 — 승패색 보더 + 코너 브래킷 + 글로우 */
+.rov__panel {
+  --rov-color: var(--accent2);
+  --bracket-color: var(--rov-color);
+  background: var(--surface);
+  border: 2px solid var(--rov-color);
+  box-shadow:
+    0 0 6px var(--rov-color),
+    0 0 20px color-mix(in srgb, var(--rov-color) 45%, transparent),
+    inset 0 0 8px color-mix(in srgb, var(--rov-color) 25%, transparent);
+  padding: 32px clamp(28px, 6vw, 60px) 34px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  min-width: min(440px, 92vw);
+  max-width: 92vw;
+  text-align: center;
+}
+
+.rov__stage-cap {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--text-muted);
+}
+
+/* WINNER 네온 사인 — sign-on 플리커(theme) + 판정 순간 글리치 1회 (PLAN §1.4) */
+@keyframes rov-glitch {
+  0% {
+    text-shadow: -2px 0 var(--p1), 2px 0 var(--p2);
+    transform: translateX(2px);
+  }
+  50% {
+    text-shadow: 2px 0 var(--p1), -2px 0 var(--p2);
+    transform: translateX(-2px);
+  }
+  100% {
+    text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+    transform: none;
+  }
+}
+
+.rov__text {
+  font-size: clamp(28px, 5vw, 44px);
+  line-height: 1.2;
+  color: var(--rov-color);
+  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+}
+
+.rov__text--glitch {
+  animation: rov-glitch 180ms steps(2, end) both;
+}
+
+.rov__winner-name {
+  font-size: 17px;
+  color: var(--text);
+}
+
+.rov__score {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  font-size: 18px;
+}
+
+.rov__score .c-p1,
+.rov__score .c-p2 {
+  text-shadow: 0 0 4px currentColor, 0 0 14px currentColor;
+}
+
+.rov__score-sep {
+  color: var(--text-muted);
+}
+
+/* 매치 최종 — 라운드별 결과 순위표 (HI-SCORE 테이블 문법 축소판) */
+.rov__table {
+  border: 2px solid var(--p1);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--p1) 60%, transparent);
+  border-collapse: collapse;
+  font-size: 10px;
+  min-width: 220px;
+}
+
+.rov__table th {
+  padding: 8px 18px;
+  color: var(--text-muted);
+  letter-spacing: 0.15em;
+  font-weight: 400;
+}
+
+.rov__table td {
+  padding: 7px 18px;
+}
+
+.rov__table tbody tr:nth-child(even) {
+  background: var(--surface-deep);
+}
+
+.rov__continue {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rov__text--glitch {
+    animation: none;
+  }
+}

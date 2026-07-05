@@ -1,0 +1,121 @@
+/**
+ * 게임9 · 줄다리기 전용 스타일 — game9 에이전트 소유 (NEON COIN-OP).
+ * 공용 theme.css 유틸(.crt-bezel/.vanish-grid/.font-arcade/.glow-text/토큰) 위에
+ * 레이아웃/연출만 얹는다. 색·글로우 공식은 PLAN §1 준수 — 새 발광값 임의 도입 금지.
+ */
+
+.g9-screen {
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px 18px;
+  overflow: hidden;
+}
+
+.g9-topbar {
+  width: min(1020px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 1;
+}
+
+.g9-title {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+.g9-hudwrap {
+  width: min(1020px, 100%);
+  z-index: 1;
+}
+
+/* CRT 스테이지 — 베젤은 theme.css .crt-bezel, 여기서는 크기만.
+   세 번째 항: 뷰포트 높이 기반 캡(하단 키캡 잘림 방지).
+   상하 고정 크롬(topbar+HUD+키캡+gap+padding) + 베젤 테두리 28px,
+   캔버스 16:9 → 스테이지 폭 ≤ (100vh − 크롬) × 16/9 + 28px */
+.g9-stage {
+  width: min(1020px, 100%, calc((100vh - 310px) * 16 / 9 + 28px));
+  z-index: 1;
+}
+
+.g9-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+/* 라운드 인트로 — sign-on 플리커 후 소등 (steps, 부드러운 fade 금지 §1.4) */
+.g9-round-intro {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  pointer-events: none;
+  opacity: 0;
+  animation: g9-intro 1500ms steps(1, end) both;
+}
+
+.g9-round-intro__big {
+  font-size: 30px;
+}
+
+.g9-round-intro__sub {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+@keyframes g9-intro {
+  0% { opacity: 0; }
+  6% { opacity: 1; }
+  14% { opacity: 0; }
+  20% { opacity: 1; }
+  27% { opacity: 0; }
+  33% { opacity: 1; }
+  80% { opacity: 1; }
+  81% { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .g9-round-intro {
+    animation: none;
+    opacity: 0; /* HUD의 ROUND n/m 캡션이 정보 정본 — 인트로는 장식이라 생략 */
+  }
+}
+
+/* 하단 키캡 열 — 좌 P1(시안) / 우 P2(핑크), 실제 배정 키 표기 (SPEC Q2) */
+.g9-keys {
+  width: min(1020px, 100%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  z-index: 1;
+}
+
+.g9-keys__group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.g9-keys__tag {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  opacity: 0.85;
+  padding: 0 6px;
+}
+
+.g9-keys__hint {
+  align-self: center;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-align: center;
+}
