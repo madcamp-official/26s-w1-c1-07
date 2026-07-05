@@ -22,8 +22,15 @@ import { persistMatch, type RoundRecord } from './db'
 import type { Room } from './rooms'
 import type { MatchRuntime } from './match-types'
 
-const TICK_MS = 16 // ~60Hz 서버 틱(클라 rAF와 맞춰 온라인 렌더 부드럽게 — 30Hz는 빠른 게임에서 끊겨 보임)
+// 시뮬(계산)과 브로드캐스트(전송)를 분리한다.
+//  · SIM_HZ       = 게임 스텝 계산 주기(물리/판정 정밀도). 높을수록 정확.
+//  · BROADCAST_HZ = 상태 전송 주기(네트워크/클라 렌더 부하). 낮을수록 가벼움(렉↓).
+// 전송은 매 틱이 아니라 BROADCAST_EVERY 틱마다 1번만. (부드러움이 부족하면 클라 보간으로 보완)
+const SIM_HZ = 60
+const BROADCAST_HZ = 30
+const TICK_MS = Math.round(1000 / SIM_HZ) // ≈16ms — 계산 틱 간격
 const DT = TICK_MS / 1000
+const BROADCAST_EVERY = Math.max(1, Math.round(SIM_HZ / BROADCAST_HZ)) // 2 → 2틱마다 전송 = 30Hz
 const GAME_DURATION = 10
 const COUNTDOWN_MS = 3000
 const ROUND_GAP_MS = 2500 // round:end 후 다음 라운드까지
@@ -52,6 +59,7 @@ export class MatchRunner implements MatchRuntime {
   private state: ReturnType<typeof createState> | null = null
   private inputQueue: GameInputEvent[] = []
   private seq = 0
+  private tickCount = 0 // 이 라운드의 시뮬 틱 수(BROADCAST_EVERY로 전송 주기 결정)
   private timer: NodeJS.Timeout | null = null
   private elapsed = 0
   private stopped = false
@@ -124,6 +132,7 @@ export class MatchRunner implements MatchRuntime {
     this.state = createState(this.gameId, rand)
     this.inputQueue = []
     this.elapsed = 0
+    this.tickCount = 0
     this.timer = setInterval(() => this.tick(), TICK_MS)
   }
 
@@ -133,18 +142,22 @@ export class MatchRunner implements MatchRuntime {
     this.inputQueue = []
     this.state = stepState(this.gameId, this.state, events, DT)
     this.elapsed += DT
-
-    // 상태 투영 브로드캐스트 (seq 단조증가)
-    const msg = {
-      matchId: this.matchId,
-      round: this.currentRound + 1,
-      seq: this.seq++,
-      state: projectState(this.state),
-    }
-    this.io.to(this.a.socketId).emit(EV.gameState, msg)
-    this.io.to(this.b.socketId).emit(EV.gameState, msg)
+    this.tickCount++
 
     const done = this.state.result !== null || this.elapsed >= GAME_DURATION + 0.5
+
+    // 전송은 시뮬(매 틱)보다 낮은 주기(BROADCAST_EVERY 틱마다). 단, 종료 프레임은 항상 보낸다.
+    if (this.tickCount % BROADCAST_EVERY === 0 || done) {
+      const msg = {
+        matchId: this.matchId,
+        round: this.currentRound + 1,
+        seq: this.seq++, // 전송 순서(단조증가) — 클라 순서역전 무시용
+        state: projectState(this.state),
+      }
+      this.io.to(this.a.socketId).emit(EV.gameState, msg)
+      this.io.to(this.b.socketId).emit(EV.gameState, msg)
+    }
+
     if (done) this.endRound()
   }
 
