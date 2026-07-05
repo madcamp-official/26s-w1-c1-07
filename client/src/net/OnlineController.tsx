@@ -6,6 +6,7 @@
 import { useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { resetOnline, useOnline } from './online'
+import { closeModal } from '../state/flow'
 import './online.css'
 
 export default function OnlineController() {
@@ -16,6 +17,7 @@ export default function OnlineController() {
   // 현재 라운드 게임 화면으로 이동(게임이 라운드마다 랜덤이라 매 round:start마다)
   useEffect(() => {
     if ((o.phase === 'countdown' || o.phase === 'playing') && o.gameId) {
+      closeModal() // 매치 시작 시 온라인/설정 모달 자동 닫기(게임 시작해도 모달이 남아있던 버그)
       const target = `/game/${o.gameId}`
       if (loc.pathname !== target) navigate(target)
     }
