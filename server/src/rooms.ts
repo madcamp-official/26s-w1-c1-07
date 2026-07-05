@@ -13,7 +13,12 @@ export interface Member {
   socketId: string
   role: Role
   ready: boolean
+  /** 이 매치에 건 코인 (참가 시 보유량 검증 완료) */
+  bet: number
 }
+
+/** 매치 종류 — 코인 정산 규칙이 다르다 (shared/src/coins.ts 참고) */
+export type RoomKind = 'quick' | 'code'
 
 export interface Room {
   code: string
@@ -22,6 +27,7 @@ export interface Room {
   rounds: number
   /** 이 방에서 플레이 가능한 게임(설정 체크박스). 매치러너가 이 중에서만 라운드 게임을 뽑는다. */
   games: GameId[]
+  kind: RoomKind
   members: Member[]
   match?: MatchRuntime
 }
@@ -34,6 +40,8 @@ export interface QueueEntry {
   nickname: string
   imageUrl: string | null
   socketId: string
+  /** 빠른시작 베팅액 */
+  bet: number
 }
 export const quickQueue: QueueEntry[] = []
 

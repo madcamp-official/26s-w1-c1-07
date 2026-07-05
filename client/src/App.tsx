@@ -29,6 +29,7 @@ import Game10 from './screens/game/Game10';
 import LoginRequiredModal from './modals/LoginRequired';
 import LoginModal from './modals/Login';
 import SettingsModal from './modals/Settings';
+import ThemeShopModal from './modals/ThemeShop';
 import OnlineModal from './modals/Online';
 import MatchingModal from './modals/Matching';
 import OnlineController from './net/OnlineController';
@@ -60,6 +61,7 @@ export default function App() {
       <LoginRequiredModal />
       <LoginModal />
       <SettingsModal />
+      <ThemeShopModal />
       <OnlineModal />
       <MatchingModal />
       {/* 온라인 매치 네비게이션 + 종료 오버레이 (실서버) */}

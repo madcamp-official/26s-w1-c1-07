@@ -41,3 +41,25 @@ export async function persistMatch(
   return match.id.toString()
 }
 
+/**
+ * 매치 코인 정산 — 두 플레이어 코인을 한 트랜잭션으로 증감하고 정산 후 잔액을 돌려준다.
+ * (베팅액은 참가 시점에 보유량 검증됨. 음수 방지로 0 바닥 클램프)
+ */
+export async function settleCoins(
+  aId: bigint,
+  deltaA: number,
+  bId: bigint,
+  deltaB: number,
+): Promise<{ a: number; b: number }> {
+  const [a, b] = await prisma.$transaction([
+    prisma.appUser.update({ where: { id: aId }, data: { coins: { increment: deltaA } }, select: { coins: true } }),
+    prisma.appUser.update({ where: { id: bId }, data: { coins: { increment: deltaB } }, select: { coins: true } }),
+  ])
+  // 동시 매치 등으로 음수가 됐으면 0으로 보정 (일반 경로에선 발생하지 않음)
+  const fixes = []
+  if (a.coins < 0) fixes.push(prisma.appUser.update({ where: { id: aId }, data: { coins: 0 } }))
+  if (b.coins < 0) fixes.push(prisma.appUser.update({ where: { id: bId }, data: { coins: 0 } }))
+  if (fixes.length) await prisma.$transaction(fixes)
+  return { a: Math.max(0, a.coins), b: Math.max(0, b.coins) }
+}
+

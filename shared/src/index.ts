@@ -40,3 +40,6 @@ export type { Game3Config, Game3State, FencerState, DodgeStyle } from './games/g
 export { GAME_CORES, ALL_GAME_IDS } from './games/registry'
 export type { GameId } from './games/registry'
 export * from './net/events'
+
+// 코인 시스템 (베팅·게임 해금)
+export * from './coins'

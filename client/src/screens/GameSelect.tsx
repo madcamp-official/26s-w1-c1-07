@@ -7,12 +7,18 @@
  *   좌상단 [◀ 메인으로](tertiary), 상단 중앙 소형 MADPUMP 워드마크.
  * SPEC QA-S8-01~04: 카드 클릭 → startOfflineGame(n); navigate(`/game/${n}`) — 매칭 없이 즉시.
  *   로그인 불필요(라우트 가드 없음). 메인 복귀 수단 = [◀ 메인으로].
+ * 코인 해금 (shared/src/coins.ts): 1·3·6만 기본 오픈, 나머지는 2→7→4→8→5→9→10 순서로만
+ *   해금 가능(비용 3→3→5→10→30→50→100). 잠긴 카드 중 "다음 순서"만 클릭 → 하단 확인 바 →
+ *   POST /api/unlock. 비로그인은 해금 불가(기본 3종만 플레이 가능).
  */
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { nextUnlock, unlockedGameIds } from '@madpump/shared';
 import type { GameId } from '@/shell';
 import { Button } from '../components';
 import { useDebugScreen } from '../debug';
 import { startOfflineGame } from '../state/flow';
+import { restoreSession, unlockNextGame, useSession } from '../state/session';
 import './game-select.css';
 
 interface CabinetSpec {
@@ -91,10 +97,43 @@ function Pictogram({ id }: { id: GameId }) {
 export default function GameSelect() {
   useDebugScreen('scr-game-select');
   const navigate = useNavigate();
+  const session = useSession();
+
+  /** 해금 확인 바 대상 (다음 순서 게임 클릭 시) */
+  const [armed, setArmed] = useState<GameId | null>(null);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [unlocking, setUnlocking] = useState(false);
+
+  // 매치/해금으로 코인이 변했을 수 있으니 진입 시 지갑 새로고침
+  useEffect(() => {
+    if (session.loggedIn) void restoreSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const unlocked = unlockedGameIds(session.loggedIn ? session.unlockedCount : 0);
+  const next = session.loggedIn ? nextUnlock(session.unlockedCount) : null;
 
   const pick = (id: GameId) => {
-    startOfflineGame(id); // 매칭 단계 없이 즉시 인게임 (주석 16:1665)
-    navigate(`/game/${id}`);
+    if (unlocked.has(id)) {
+      startOfflineGame(id); // 매칭 단계 없이 즉시 인게임 (주석 16:1665)
+      navigate(`/game/${id}`);
+      return;
+    }
+    // 잠긴 게임: 다음 해금 순서인 것만 확인 바 표시
+    setUnlockError(null);
+    if (next && id === next.gameId) setArmed(id);
+  };
+
+  const onUnlock = async () => {
+    if (unlocking || !next) return;
+    setUnlocking(true);
+    const r = await unlockNextGame();
+    setUnlocking(false);
+    if (r.error) {
+      setUnlockError(r.error);
+      return;
+    }
+    setArmed(null); // 성공 — 세션 store가 갱신돼 카드가 열린다
   };
 
   return (
@@ -109,37 +148,90 @@ export default function GameSelect() {
           <span className="c-p2 glow-text">MAD</span>
           <span className="c-p1 glow-text">PUMP</span>
         </p>
-        <span className="s8-header-spacer" aria-hidden />
+        {session.loggedIn ? (
+          <span className="s8-coins font-arcade c-accent glow-text" data-testid="coin-balance">
+            🪙 {session.coins}
+          </span>
+        ) : (
+          <span className="s8-header-spacer" aria-hidden />
+        )}
       </header>
 
       <p className="s8-caption font-arcade c-accent2">SELECT YOUR GAME</p>
 
       <div className="s8-floor">
-        {CABINETS.map((cab) => (
-          <button
-            key={cab.id}
-            type="button"
-            className="s8-cabinet"
-            data-testid={`card-game${cab.id}`}
-            style={{ '--cab-color': cab.colorVar } as React.CSSProperties}
-            onClick={() => pick(cab.id)}
-          >
-            <span className="s8-marquee">
-              <span className="lamp" aria-hidden />
-              <span className="s8-marquee-title font-arcade">{cab.title}</span>
-              <span className="lamp" aria-hidden />
-            </span>
-            <span className="s8-screen">
-              <Pictogram id={cab.id} />
-            </span>
-            <span className="s8-name font-display">{cab.name}</span>
-            <span className="s8-panel" aria-hidden>
-              <span className="s8-dot s8-dot--p1" />
-              <span className="s8-dot s8-dot--p2" />
-            </span>
-          </button>
-        ))}
+        {CABINETS.map((cab) => {
+          const isLocked = !unlocked.has(cab.id);
+          const isNext = next?.gameId === cab.id;
+          return (
+            <button
+              key={cab.id}
+              type="button"
+              className={`s8-cabinet${isLocked ? ' s8-cabinet--locked' : ''}${
+                armed === cab.id ? ' s8-cabinet--armed' : ''
+              }`}
+              data-testid={`card-game${cab.id}`}
+              style={{ '--cab-color': cab.colorVar } as React.CSSProperties}
+              onClick={() => pick(cab.id)}
+              aria-disabled={isLocked && !isNext}
+            >
+              <span className="s8-marquee">
+                <span className="lamp" aria-hidden />
+                <span className="s8-marquee-title font-arcade">{cab.title}</span>
+                <span className="lamp" aria-hidden />
+              </span>
+              <span className="s8-screen">
+                <Pictogram id={cab.id} />
+                {isLocked && (
+                  <span className="s8-lock" aria-hidden>
+                    <span className="s8-lock-icon">🔒</span>
+                    {isNext ? (
+                      <span className="s8-lock-cost font-arcade">{next!.cost} COIN</span>
+                    ) : (
+                      <span className="s8-lock-cost font-arcade c-muted">LOCKED</span>
+                    )}
+                  </span>
+                )}
+              </span>
+              <span className="s8-name font-display">{cab.name}</span>
+              <span className="s8-panel" aria-hidden>
+                <span className="s8-dot s8-dot--p1" />
+                <span className="s8-dot s8-dot--p2" />
+              </span>
+            </button>
+          );
+        })}
       </div>
+
+      {/* 해금 확인 바 — 잠긴 "다음 순서" 카드를 눌렀을 때 */}
+      {armed !== null && next && (
+        <div className="s8-unlock-bar" data-testid="unlock-bar" role="dialog" aria-live="polite">
+          <span className="font-display">
+            GAME {next.gameId} ({CAB_NAMES[next.gameId]}) 를{' '}
+            <strong className="c-accent">{next.cost}코인</strong>으로 해금할까요?
+          </span>
+          {unlockError && <span className="s8-unlock-err c-error font-display">{unlockError}</span>}
+          <div className="s8-unlock-actions">
+            <Button variant="primary" data-testid="btn-unlock" onClick={onUnlock} disabled={unlocking}>
+              {unlocking ? '해금 중…' : '해금하기'}
+            </Button>
+            <Button variant="tertiary" onClick={() => setArmed(null)} disabled={unlocking}>
+              취소
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* 코인 노가다 미니게임 (준비 중 — mock 버튼) */}
+      <button
+        type="button"
+        className="s8-grind font-display"
+        data-testid="btn-coin-grind"
+        disabled
+        title="준비 중"
+      >
+        ⛏ 코인 노가다하기 <span className="s8-grind-soon font-arcade">SOON</span>
+      </button>
     </main>
   );
 }

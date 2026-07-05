@@ -62,6 +62,8 @@ erDiagram
         varchar nickname "분반 내 유니크"
         varchar uploaded_image_key "업로드 사진(우선)"
         bigint group_id FK "NULL 허용 — UNIQUE(group_id, nickname)"
+        int coins "보유 코인 (시작 30) — docs/COINS.md"
+        tinyint unlocked_count "오프라인 게임 해금 수 (0~7)"
         datetime created_at
         datetime deleted_at "soft delete"
     }
@@ -121,6 +123,8 @@ CREATE TABLE app_user (
   nickname VARCHAR(50) NOT NULL COMMENT '닉네임 (분반 내 유니크 — 로스터 명단, docs/AUTH.md)',
   uploaded_image_key VARCHAR(300) NULL COMMENT '업로드한 프로필 사진의 스토리지 키 (있으면 이것 우선)',
   group_id BIGINT NULL COMMENT '소속 분반 (무소속 가능)',
+  coins INT NOT NULL DEFAULT 30 COMMENT '보유 코인 — 온라인 베팅·게임 해금 (docs/COINS.md)',
+  unlocked_count TINYINT NOT NULL DEFAULT 0 COMMENT '오프라인 게임 해금 수 (UNLOCK_ORDER 앞에서부터 n개)',
   created_at DATETIME NOT NULL COMMENT '가입일시',
   deleted_at DATETIME NULL COMMENT '계정 삭제 시각 (soft delete)',
   PRIMARY KEY (id),

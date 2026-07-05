@@ -18,7 +18,7 @@ import {
   type SlotResult,
 } from '@madpump/shared'
 import { createState, projectState, rewriteCodeForRole, stepState } from './game-adapter'
-import { persistMatch, type RoundRecord } from './db'
+import { persistMatch, settleCoins, type RoundRecord } from './db'
 import type { Room } from './rooms'
 import type { MatchRuntime } from './match-types'
 
@@ -42,6 +42,8 @@ interface Participant {
   socketId: string
   nickname: string
   imageUrl: string | null
+  /** 이 매치에 건 코인 (참가 시 검증 완료) */
+  bet: number
 }
 
 export class MatchRunner implements MatchRuntime {
@@ -215,9 +217,34 @@ export class MatchRunner implements MatchRuntime {
       console.error('[match] persist 실패', err)
     }
 
+    // 코인 정산 (shared/src/coins.ts 규칙):
+    //  빠른시작(quick): 승자 +자기 베팅 / 패자 -자기 베팅
+    //  코드방(code):    승자 +패자 베팅 / 패자 -자기 베팅
+    //  무승부: 변동 없음
+    let deltaA = 0
+    let deltaB = 0
+    if (result === 'A_WIN') {
+      deltaA = this.room.kind === 'quick' ? this.a.bet : this.b.bet
+      deltaB = -this.b.bet
+    } else if (result === 'B_WIN') {
+      deltaB = this.room.kind === 'quick' ? this.b.bet : this.a.bet
+      deltaA = -this.a.bet
+    }
+    let balanceA = 0
+    let balanceB = 0
+    try {
+      const balances = await settleCoins(this.a.dbId, deltaA, this.b.dbId, deltaB)
+      balanceA = balances.a
+      balanceB = balances.b
+    } catch (err) {
+      console.error('[match] 코인 정산 실패', err)
+      deltaA = 0
+      deltaB = 0
+    }
+
     const end = { matchId: this.matchId, result, recordedMatchId, playedAt }
-    this.io.to(this.a.socketId).emit(EV.matchEnd, end)
-    this.io.to(this.b.socketId).emit(EV.matchEnd, end)
+    this.io.to(this.a.socketId).emit(EV.matchEnd, { ...end, coinDelta: deltaA, coinBalance: balanceA })
+    this.io.to(this.b.socketId).emit(EV.matchEnd, { ...end, coinDelta: deltaB, coinBalance: balanceB })
 
     // 방 정리 (대기 상태로 복귀)
     this.stopped = true

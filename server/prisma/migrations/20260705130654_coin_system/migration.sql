@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE `app_user` ADD COLUMN `coins` INTEGER NOT NULL DEFAULT 30,
+    ADD COLUMN `unlocked_count` TINYINT NOT NULL DEFAULT 0;

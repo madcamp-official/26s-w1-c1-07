@@ -1,0 +1,52 @@
+/* 테마 상점 모달 (mock) — ThemeShop.tsx */
+
+.ts-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 2px 8px;
+}
+.ts-title {
+  margin: 0;
+  font-size: 20px;
+}
+.ts-balance {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.ts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.ts-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  background: var(--surface-deep, #100c20);
+  border: 1px solid color-mix(in srgb, var(--accent2) 40%, transparent);
+}
+.ts-card-name {
+  font-size: 16px;
+  color: var(--text);
+}
+.ts-card-desc {
+  font-size: 12px;
+  min-height: 30px;
+}
+.ts-card-price {
+  font-size: 12px;
+}
+.ts-note {
+  margin: 0;
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .ts-grid {
+    grid-template-columns: 1fr;
+  }
+}
