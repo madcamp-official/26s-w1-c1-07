@@ -392,6 +392,52 @@ function drawScene(
 }
 
 // ---------------------------------------------------------------------------
+// JIT/페인트 프리워밍 — 라운드 시작 전에 step·drawScene를 최적화 티어까지 올린다.
+// (초반 콜드스타트 렉 완화. V8은 강제 컴파일 API가 없어 '미리 여러 번 실행'이 유일한 방법.)
+//
+// shape 일치가 생명 — 워밍과 실제 플레이의 객체 구조가 다르면 deopt로 워밍이 무효가 된다.
+// 그래서 손으로 상태를 짓지 않고 '진짜' 경로만 쓴다: game2.create로 state 생성,
+// game2.step에 실제 KeyW 이벤트를 먹여 로켓을 진짜 스폰(vx/vy가 Double로 실전과 동일),
+// drawScene도 실제 시그니처로 호출. 오프스크린 캔버스라 화면 깜빡임 없음.
+// 청크(프레임당 소량)로 나눠 워밍 자체가 spike가 되지 않게 한다.
+// 반환값 = 취소 함수(언마운트 시 rAF 정리).
+// ---------------------------------------------------------------------------
+
+function prewarmGame2(): () => void {
+  const scratch = document.createElement('canvas');
+  scratch.width = CW;
+  scratch.height = CH;
+  const sctx = scratch.getContext('2d');
+  if (!sctx) return () => {};
+
+  let s = game2.create(Math.random);
+  const fire: GameInputEvent[] = [{ code: 'KeyW', type: 'down', t: 0 }];
+  const noEvents: GameInputEvent[] = [];
+  const TOTAL = 300; // step·drawScene 300회면 최적화 티어 진입에 충분
+  const PER_FRAME = 6; // 청크: 프레임당 6회(≈50프레임/0.8s, 카운트다운 3s 안에 넉넉)
+
+  let i = 0;
+  let raf = 0;
+  let cancelled = false;
+  const tick = () => {
+    if (cancelled) return;
+    for (let k = 0; k < PER_FRAME && i < TOTAL; k++, i += 1) {
+      // 주기적 KeyW → step이 로켓을 실제 방식으로 스폰(쿨다운은 코어가 처리)
+      s = game2.step(s, i % 8 === 0 ? fire : noEvents, 1 / 60);
+      if (s.result) s = game2.create(Math.random); // 라운드 끝나면 리셋
+      drawScene(sctx, s, [], [], i * 16, true);
+    }
+    if (i < TOTAL) raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+
+  return () => {
+    cancelled = true;
+    if (raf) cancelAnimationFrame(raf);
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 컴포넌트
 // ---------------------------------------------------------------------------
 
@@ -457,6 +503,10 @@ export default function Game2() {
     c.height = CH * dpr;
     c.getContext('2d')?.scale(dpr, dpr);
   }, []);
+
+  // JIT/페인트 프리워밍 — 마운트 직후 1회. 카운트다운(3s) 유휴시간에 겹쳐 돌아
+  // step·drawScene가 실제 첫 프레임 전에 최적화된 기계어로 준비된다. 반환=언마운트 정리.
+  useEffect(() => prewarmGame2(), []);
 
   // 키보드 — 로컬 어댑터. GameInputEvent를 큐에 쌓고, 램프 점등.
   // (playerL Q/W = P1, playerR U/I = P2 — 코어가 엣지/홀드 판정)
