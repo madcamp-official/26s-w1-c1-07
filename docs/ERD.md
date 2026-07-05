@@ -1,7 +1,13 @@
-# MADPUMP ERD 정본 (v1, 2026-07-03)
+# MADPUMP ERD 정본 (v2, 2026-07-05)
 
 > **사용법**: 아래 "MySQL DDL" 블록 전체를 복사해 ERDCloud **IMPORT** 창에 붙여넣으면 테이블+FK 관계가 생성된다. 구현(Prisma migration)도 같은 DDL이 소스.
 > 기준: Figma **ver4** 보드(16:1263) + 기능정의서 "madpump v1" 탭. 스택 전제는 `TECH_STACK.md` 참조.
+>
+> **⚠️ v2 (2026-07-05) — 로스터 로그인 전환**: 구글 OAuth가 학교 내부망(KCLOUD)에서 접근
+> 불가라 폐기됨. `app_user`에서 `google_sub`/`email`/`google_image_url` 제거, 닉네임 유니크는
+> 전역 → **분반 단위**(`UNIQUE(group_id, nickname)`)로 변경(같은 이름이 다른 분반에 존재 — "이서진").
+> 유저는 가입이 아니라 **시드된 분반별 고정 명단**에서 선택해 로그인한다.
+> 배경·API·명단은 **`docs/AUTH.md`** 참조. 아래 본문 중 구글 관련 서술(note #9·#12·#13 등)은 v1 유물.
 
 ---
 
@@ -10,7 +16,7 @@
 | 테이블 | 역할 | ver4 근거 화면 |
 |---|---|---|
 | `user_group` | 분반/그룹 | admin 그룹 관리 (그룹명·인원·생성일시·공개 여부·점수 및 랭킹) |
-| `app_user` | 구글 로그인 유저 | 회원가입(닉네임 유니크 검증·분반 선택), admin 인원 관리 |
+| `app_user` | 로스터 로그인 유저 (분반별 고정 명단 — docs/AUTH.md) | 로그인(분반→멤버 선택), admin 인원 관리 |
 | `admin_account` | 관리자 (별도 ID/PW) | admin 시작 페이지 (ID/PW 로그인) |
 | `game` | 게임 종류 사전 (lookup, 계속 증가) | 게임1/2/3 + 향후 추가 게임 |
 | `game_match` | 매치 결과 기록 | admin 매치 결과 관리 (일시·P1·P2·결과·수정/삭제) |
@@ -53,12 +59,9 @@ erDiagram
     }
     app_user {
         bigint id PK
-        varchar google_sub UK "구글 OAuth sub"
-        varchar email
-        varchar nickname UK "중복 검증"
-        varchar google_image_url "구글 사진(기본값)"
+        varchar nickname "분반 내 유니크"
         varchar uploaded_image_key "업로드 사진(우선)"
-        bigint group_id FK "NULL 허용"
+        bigint group_id FK "NULL 허용 — UNIQUE(group_id, nickname)"
         datetime created_at
         datetime deleted_at "soft delete"
     }
@@ -115,20 +118,16 @@ CREATE TABLE user_group (
 
 CREATE TABLE app_user (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT '유저 ID',
-  google_sub VARCHAR(64) NOT NULL COMMENT '구글 계정 고유 ID (OAuth sub)',
-  email VARCHAR(255) NOT NULL COMMENT '구글 이메일 (admin 화면의 Google ID)',
-  nickname VARCHAR(50) NOT NULL COMMENT '닉네임 (전역 유니크, 중복 검증)',
-  google_image_url VARCHAR(500) NULL COMMENT '구글 프로필 사진 URL (매 로그인 갱신, 기본값)',
+  nickname VARCHAR(50) NOT NULL COMMENT '닉네임 (분반 내 유니크 — 로스터 명단, docs/AUTH.md)',
   uploaded_image_key VARCHAR(300) NULL COMMENT '업로드한 프로필 사진의 스토리지 키 (있으면 이것 우선)',
   group_id BIGINT NULL COMMENT '소속 분반 (무소속 가능)',
   created_at DATETIME NOT NULL COMMENT '가입일시',
   deleted_at DATETIME NULL COMMENT '계정 삭제 시각 (soft delete)',
   PRIMARY KEY (id),
-  UNIQUE KEY uq_user_google (google_sub),
-  UNIQUE KEY uq_user_nickname (nickname),
+  UNIQUE KEY uq_user_group_nick (group_id, nickname),
   KEY ix_user_group (group_id),
   CONSTRAINT fk_user_group FOREIGN KEY (group_id) REFERENCES user_group (id)
-) COMMENT='구글 로그인 유저';
+) COMMENT='로스터 로그인 유저 (분반별 고정 명단 시드)';
 
 CREATE TABLE admin_account (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT '관리자 ID',

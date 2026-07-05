@@ -66,8 +66,7 @@ button {
   cursor: pointer;
 }
 
-input,
-select {
+input {
   font: inherit;
   color: inherit;
   background: none;
@@ -425,22 +424,11 @@ select {
   box-shadow: 0 6px 12px -6px color-mix(in srgb, var(--p1) 70%, transparent);
 }
 
-.neon-input input,
-.neon-input select {
+.neon-input input {
   flex: 1;
   color: var(--p1);
   caret-color: var(--p1);
   min-width: 0;
-}
-
-.neon-input select {
-  cursor: pointer;
-}
-
-/* 드랍다운 펼침 목록(option)은 브라우저 기본 흰 배경 — 글자가 보이도록 어두운 색 지정 */
-.neon-input select option {
-  color: var(--surface-deep, #111);
-  background: #fff;
 }
 
 .neon-input.error {
@@ -449,7 +437,6 @@ select {
 }
 
 .neon-input.error input,
-.neon-input.error select,
 .neon-input.error .prompt {
   color: var(--error);
   caret-color: var(--error);

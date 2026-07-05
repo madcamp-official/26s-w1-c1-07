@@ -38,13 +38,12 @@ model UserGroup {
   @@map("user_group")
 }
 
-/// 구글 로그인 유저
+/// 로스터 로그인 유저 — 분반별 고정 멤버 명단(prisma/seed.ts)에서 선택해 로그인.
+/// (구글 OAuth는 내부망에서 접근 불가라 폐기 — docs/AUTH.md 참조.
+///  같은 이름이 다른 분반에 있을 수 있어 nickname 유니크는 분반 단위.)
 model AppUser {
   id               BigInt    @id @default(autoincrement())
-  googleSub        String    @unique(map: "uq_user_google") @map("google_sub") @db.VarChar(64)
-  email            String    @db.VarChar(255)
-  nickname         String    @unique(map: "uq_user_nickname") @db.VarChar(50)
-  googleImageUrl   String?   @map("google_image_url") @db.VarChar(500)
+  nickname         String    @db.VarChar(50)
   uploadedImageKey String?   @map("uploaded_image_key") @db.VarChar(300)
   groupId          BigInt?   @map("group_id")
   createdAt        DateTime  @default(now()) @map("created_at")
@@ -54,6 +53,7 @@ model AppUser {
   matchesAsA GameMatch[] @relation("MatchPlayerA")
   matchesAsB GameMatch[] @relation("MatchPlayerB")
 
+  @@unique([groupId, nickname], map: "uq_user_group_nick")
   @@index([groupId], map: "ix_user_group")
   @@map("app_user")
 }
