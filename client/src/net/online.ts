@@ -79,29 +79,20 @@ let socket: Socket | null = null
 // 호스트가 room:state 마다 roomStart를 중복 emit해 매치가 2번 시작되는 것 방지(방 코드당 1회).
 let startRequestedForRoom: string | null = null
 
-/** 서버 세션 확보(구글 로그인 세션 재사용, 없으면 dev 로그인 폴백) → 소켓 연결 + 이벤트 배선 */
-export async function connectOnline(nickname: string): Promise<void> {
+/** 서버 세션(로스터 로그인 쿠키) 확인 → 소켓 연결 + 이벤트 배선 */
+export async function connectOnline(): Promise<void> {
   onlineStore.set({ phase: 'connecting', error: null })
-  // 1) 이미 세션 쿠키가 있으면(구글 로그인) 그대로 사용
+  // 1) 세션 확인 — 로그인(분반→멤버 선택)이 선행돼야 한다
   let hasSession = false
   try {
     const me = await fetch(`${SERVER_URL}/api/me`, { credentials: 'include' })
     if (me.ok) hasSession = (await me.json()).status === 'USER'
   } catch {
-    /* 아래 dev 로그인에서 재시도 */
+    /* 아래에서 에러 처리 */
   }
-  // 2) 없으면 dev 로그인 폴백 (로컬 개발 편의 — 구글 설정 없이도 온라인 테스트 가능)
   if (!hasSession) {
-    const res = await fetch(`${SERVER_URL}/api/dev/login`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ nickname }),
-    })
-    if (!res.ok) {
-      onlineStore.set({ phase: 'idle', error: '로그인 실패' })
-      return
-    }
+    onlineStore.set({ phase: 'idle', error: '로그인 필요' })
+    return
   }
   // 2) 소켓 연결 (쿠키 자동 동봉)
   if (socket) socket.disconnect()

@@ -41,21 +41,3 @@ export async function persistMatch(
   return match.id.toString()
 }
 
-/** dev 로그인 스텁 — 닉네임으로 app_user upsert (Google OAuth 전 임시). */
-export async function devUpsertUser(nickname: string): Promise<{
-  id: bigint
-  nickname: string
-  imageUrl: string | null
-}> {
-  const sub = `dev:${nickname}`
-  const user = await prisma.appUser.upsert({
-    where: { googleSub: sub },
-    update: {},
-    create: {
-      googleSub: sub,
-      email: `${nickname}@dev.local`,
-      nickname,
-    },
-  })
-  return { id: user.id, nickname: user.nickname, imageUrl: user.googleImageUrl }
-}

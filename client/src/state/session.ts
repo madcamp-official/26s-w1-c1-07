@@ -1,13 +1,13 @@
 /**
- * 세션 상태 — 실제 서버 인증(구글 OAuth + 쿠키 세션) 연동.
+ * 세션 상태 — 로스터 로그인(분반→멤버 선택, docs/AUTH.md) + 쿠키 세션.
  * 서버가 mp_session 쿠키를 발급하고, 클라는 이 스토어에 유저 정보를 미러링한다.
  *
  * 사용법:
- *   const session = useSession();                       // React 컴포넌트에서 구독
- *   restoreSession();                                   // 부팅 시 GET /api/me 로 세션 복원
- *   const dest = await googleLogin(credential);         // 'onboarding' | 'main' — 그쪽으로 navigate
- *   await completeOnboarding('철수', '1분반');           // 'ok' | 'taken' | 'error'
- *   logout();                                           // S2 로그아웃 → 이후 navigate('/')
+ *   const session = useSession();          // React 컴포넌트에서 구독
+ *   restoreSession();                      // 부팅 시 GET /api/me 로 세션 복원
+ *   await fetchRoster();                   // 로그인 다이얼로그용 분반·멤버 명단
+ *   await loginAs(userId);                 // 멤버 선택 → 즉시 로그인 (인증 절차 없음)
+ *   logout();                              // 로그아웃 → 이후 navigate('/')
  */
 import { createStore, useStore } from './store';
 import { SERVER_URL } from '../net/config';
@@ -17,18 +17,15 @@ export interface SessionUser {
   id: string;
   /** Avatar 컴포넌트 palette 인덱스 (0~7) */
   avatarColorIndex: number;
-  /** 구글 프로필 사진 URL (없으면 null) */
+  /** 프로필 사진 URL (로스터 로그인은 항상 null — 아바타 색으로 표시) */
   imageUrl: string | null;
 }
 
 export interface SessionState {
   loggedIn: boolean;
-  /** 온보딩 완료 전엔 null */
   nickname: string | null;
-  /** 분반 이름 (예: '1분반') — 온보딩 완료 전엔 null */
+  /** 분반 이름 (예: '1분반') */
   groupName: string | null;
-  /** 로그인했지만 아직 닉네임 온보딩(S5)을 안 끝낸 상태 */
-  needsOnboarding: boolean;
   user: SessionUser | null;
 }
 
@@ -36,7 +33,6 @@ const INITIAL: SessionState = {
   loggedIn: false,
   nickname: null,
   groupName: null,
-  needsOnboarding: false,
   user: null,
 };
 
@@ -72,17 +68,7 @@ function setLoggedInUser(u: ServerUser): void {
     loggedIn: true,
     nickname: u.nickname,
     groupName: u.groupName ?? null,
-    needsOnboarding: false,
     user: { id: u.id, avatarColorIndex: avatarIndexOf(u.id), imageUrl: u.imageUrl },
-  });
-}
-
-async function postJson(path: string, body: unknown): Promise<Response> {
-  return fetch(`${SERVER_URL}${path}`, {
-    method: 'POST',
-    credentials: 'include', // 세션 쿠키 필수
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
   });
 }
 
@@ -101,56 +87,49 @@ export async function restoreSession(): Promise<void> {
   }
 }
 
-/** NEEDS_NICKNAME 응답 시 온보딩 제출까지 들고 갈 구글 credential (메모리 전용) */
-let pendingCredential: string | null = null;
+/** 로그인 다이얼로그용 분반·멤버 명단 (GET /api/roster) */
+export interface RosterMember {
+  id: string;
+  nickname: string;
+}
+export interface RosterGroup {
+  id: string;
+  name: string;
+  members: RosterMember[];
+}
 
-/**
- * 구글 로그인 — GIS 버튼 콜백의 credential 을 서버로 보내 검증.
- * @returns 'onboarding' — 신규 유저, S5로 navigate 할 것
- *          'main'       — 기존 유저, S2(메인)로 navigate 할 것
- * @throws 검증 실패/네트워크 오류
- */
-export async function googleLogin(credential: string): Promise<'onboarding' | 'main'> {
-  const res = await postJson('/api/auth/google', { credential });
-  if (!res.ok) throw new Error('GOOGLE_LOGIN_FAILED');
+export async function fetchRoster(): Promise<RosterGroup[]> {
+  const res = await fetch(`${SERVER_URL}/api/roster`, { credentials: 'include' });
+  if (!res.ok) throw new Error('ROSTER_FAILED');
   const data = await res.json();
-  if (data.status === 'USER' && data.user) {
-    setLoggedInUser(data.user);
-    return 'main';
-  }
-  // NEEDS_NICKNAME — 아직 서버 세션 없음. 온보딩 화면으로 보내고 credential 보관.
-  pendingCredential = credential;
-  sessionStore.set({ loggedIn: true, nickname: null, groupName: null, needsOnboarding: true, user: null });
-  return 'onboarding';
+  return (data.groups ?? []) as RosterGroup[];
 }
 
 /**
- * S5 온보딩 제출 — 닉네임+분반으로 회원 생성.
- * @returns 'ok' 성공(세션 발급됨) / 'taken' 닉네임 중복 / 'error' 그 외 실패
+ * 멤버 선택 로그인 (POST /api/login) — 성공 시 세션 쿠키 발급 + 스토어 갱신.
+ * @returns true 성공 / false 실패
  */
-export async function completeOnboarding(nickname: string, groupName: string): Promise<'ok' | 'taken' | 'error'> {
-  if (!pendingCredential) return 'error'; // 새로고침 등으로 credential 유실 — 재로그인 필요
+export async function loginAs(userId: string): Promise<boolean> {
   try {
-    const res = await postJson('/api/auth/signup', {
-      credential: pendingCredential,
-      nickname: nickname.trim(),
-      groupName: groupName.trim(),
+    const res = await fetch(`${SERVER_URL}/api/login`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ userId }),
     });
-    if (res.status === 409) return 'taken';
-    if (!res.ok) return 'error';
+    if (!res.ok) return false;
     const data = await res.json();
-    pendingCredential = null;
+    if (data.status !== 'USER' || !data.user) return false;
     setLoggedInUser(data.user);
-    return 'ok';
+    return true;
   } catch {
-    return 'error';
+    return false;
   }
 }
 
-/** S2 로그아웃. 호출자가 navigate('/') 할 것 (S1으로 전환됨). */
+/** 로그아웃. 호출자가 navigate('/') 할 것 (S1으로 전환됨). */
 export function logout(): void {
   void fetch(`${SERVER_URL}/api/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
   disconnectOnline(); // 소켓/온라인 상태도 정리
-  pendingCredential = null;
   sessionStore.set({ ...INITIAL });
 }

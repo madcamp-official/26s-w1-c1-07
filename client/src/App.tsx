@@ -3,11 +3,11 @@
  *
  * 라우트:
  *   /            → 세션 게이트: loggedIn ? S2(MainLoggedIn) : S1(MainLoggedOut)
- *   /onboarding  → S5 (로그인 안 했으면 /로 리다이렉트)
  *   /select      → S8 게임 선택 (로그인 불필요)
  *   /game/1|2|3  → S9 / S10·S11 / S12
+ * (온보딩(S5)은 로스터 로그인 전환으로 폐기 — 닉네임/분반이 명단에 고정, docs/AUTH.md)
  *
- * 모달 4종은 전역 호스트로 항상 마운트 — 각 모달이 flow.modal을 보고 스스로 열림/닫힘.
+ * 모달 5종은 전역 호스트로 항상 마운트 — 각 모달이 flow.modal을 보고 스스로 열림/닫힘.
  * (모달 컴포넌트 안에서 useNavigate 사용 가능하도록 BrowserRouter 안에 위치)
  * 스캔라인+비네팅(.crt-overlay)은 여기서 1장만 렌더 — 화면들이 중복 렌더하지 말 것.
  */
@@ -15,7 +15,6 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { useSession } from './state/session';
 import MainLoggedOut from './screens/MainLoggedOut';
 import MainLoggedIn from './screens/MainLoggedIn';
-import Onboarding from './screens/Onboarding';
 import GameSelect from './screens/GameSelect';
 import Game1 from './screens/game/Game1';
 import Game2 from './screens/game/Game2';
@@ -28,6 +27,7 @@ import Game8 from './screens/game/Game8';
 import Game9 from './screens/game/Game9';
 import Game10 from './screens/game/Game10';
 import LoginRequiredModal from './modals/LoginRequired';
+import LoginModal from './modals/Login';
 import SettingsModal from './modals/Settings';
 import OnlineModal from './modals/Online';
 import MatchingModal from './modals/Matching';
@@ -35,14 +35,7 @@ import OnlineController from './net/OnlineController';
 
 function MainGate() {
   const session = useSession();
-  if (session.loggedIn && session.needsOnboarding) return <Navigate to="/onboarding" replace />;
   return session.loggedIn ? <MainLoggedIn /> : <MainLoggedOut />;
-}
-
-function OnboardingGate() {
-  const session = useSession();
-  if (!session.loggedIn) return <Navigate to="/" replace />;
-  return <Onboarding />;
 }
 
 export default function App() {
@@ -50,7 +43,6 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<MainGate />} />
-        <Route path="/onboarding" element={<OnboardingGate />} />
         <Route path="/select" element={<GameSelect />} />
         <Route path="/game/1" element={<Game1 />} />
         <Route path="/game/2" element={<Game2 />} />
@@ -66,6 +58,7 @@ export default function App() {
       </Routes>
       {/* 전역 모달 호스트 */}
       <LoginRequiredModal />
+      <LoginModal />
       <SettingsModal />
       <OnlineModal />
       <MatchingModal />

@@ -1,0 +1,73 @@
+/* 로그인 모달 (로스터 2단계) — Login.tsx */
+
+.lg-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 4px;
+}
+
+.lg-title {
+  margin: 0;
+  text-align: center;
+  font-size: 18px;
+  color: var(--text);
+}
+
+.lg-loading {
+  margin: 12px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.lg-err {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--error, #ff5470);
+}
+
+.lg-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 멤버 그리드 — 최대 20명, 4열 */
+.lg-members {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.lg-member {
+  padding: 10px 6px;
+  font-size: 15px;
+  color: var(--p1);
+  background: var(--surface-deep);
+  border: 1px solid color-mix(in srgb, var(--p1) 45%, transparent);
+  transition: background 100ms, box-shadow 100ms, transform 60ms;
+}
+
+.lg-member:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--p1) 18%, var(--surface-deep));
+  box-shadow: 0 0 10px -2px var(--p1);
+}
+
+.lg-member:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.lg-member:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (max-width: 560px) {
+  .lg-members {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

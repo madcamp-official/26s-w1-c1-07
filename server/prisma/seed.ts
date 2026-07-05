@@ -1,6 +1,6 @@
 /**
  * MADPUMP 시드 데이터
- * 정본: docs/ERD.md note #15(게임 사전) / note #17(점수 설정 단일 행)
+ * 정본: docs/ERD.md note #15(게임 사전) / note #17(점수 설정 단일 행) / docs/AUTH.md(로스터 로그인)
  *
  * 멱등(idempotent): 여러 번 실행해도 안전하도록 upsert 사용.
  * 실행: npm --workspace @madpump/server run db:seed  (또는 npx prisma db seed)
@@ -23,8 +23,24 @@ const GAMES = [
   { id: 10, name: "라이트 사이클" },
 ] as const;
 
-// 표준 분반 — 온보딩 드랍다운/서버 검증(index.ts ALLOWED_GROUPS)과 1:1
-const GROUPS = ["1분반", "2분반", "3분반"] as const;
+// 분반별 고정 멤버 로스터 — 로그인은 이 명단에서 선택 (docs/AUTH.md).
+// 같은 이름이 다른 분반에 있을 수 있다(예: 이서진) → app_user 유니크는 (group_id, nickname).
+const ROSTER: Record<string, string[]> = {
+  "1분반": [
+    "이지민", "박준서", "라태형", "이종혁", "유나연", "유영석", "김태현", "권순호",
+    "이유담", "안종화", "허서준", "이서진", "정서영", "이예원", "김희서", "주성민",
+  ],
+  "2분반": [
+    "박서윤", "최재윤", "김민재", "이예지", "김경원", "이재준", "양우현", "주영준",
+    "박지민", "황시우", "박채훈", "박소요", "원건희", "이서영", "임유빈", "박도현",
+    "박정준", "김도현", "김도연",
+  ],
+  "3분반": [
+    "손기환", "김윤서", "양호성", "정유진", "김민", "조예준", "안소희", "이서진",
+    "강우현", "송재훈", "이지오", "김재훈", "임성진", "박지호", "조준호", "김규민",
+    "서영빈", "김혜리", "박수현", "박민수",
+  ],
+};
 
 async function main() {
   for (const g of GAMES) {
@@ -35,12 +51,22 @@ async function main() {
     });
   }
 
-  for (const name of GROUPS) {
-    await prisma.userGroup.upsert({
-      where: { name },
+  // 분반 + 멤버 로스터
+  let userCount = 0;
+  for (const [groupName, members] of Object.entries(ROSTER)) {
+    const group = await prisma.userGroup.upsert({
+      where: { name: groupName },
       update: {},
-      create: { name, isPublic: true },
+      create: { name: groupName, isPublic: true },
     });
+    for (const nickname of members) {
+      await prisma.appUser.upsert({
+        where: { groupId_nickname: { groupId: group.id, nickname } },
+        update: { deletedAt: null }, // soft-delete 됐던 멤버도 로스터에 있으면 복구
+        create: { nickname, groupId: group.id },
+      });
+      userCount += 1;
+    }
   }
 
   // 점수 설정: 항상 단일 행(id=1). 승3 / 무1 / 패0 기본값.
@@ -50,11 +76,15 @@ async function main() {
     create: { id: 1, winPoints: 3, drawPoints: 1, lossPoints: 0 },
   });
 
-  const [games, cfg] = await Promise.all([
+  const [games, groups, users, cfg] = await Promise.all([
     prisma.game.count(),
+    prisma.userGroup.count(),
+    prisma.appUser.count(),
     prisma.scoreConfig.count(),
   ]);
-  console.log(`✅ Seed 완료 — game ${games}행, score_config ${cfg}행`);
+  console.log(
+    `✅ Seed 완료 — game ${games}행, user_group ${groups}행, app_user ${users}행(로스터 ${userCount}명), score_config ${cfg}행`,
+  );
 }
 
 main()

@@ -14,14 +14,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, CoinButton, Modal } from '../components';
 import { closeModal, isValidRoomCode, openModal, useFlow } from '../state/flow';
-import { getSession } from '../state/session';
 import { connectOnline, createRoom, joinQueue, joinRoom } from '../net/online';
 import './online.css';
-
-/** 온라인용 닉네임 — mock 세션 닉네임이 있으면 그것, 없으면 랜덤 */
-function onlineNick(): string {
-  return getSession().nickname || `Player${Math.floor(1000 + Math.random() * 9000)}`;
-}
 
 export default function OnlineModal() {
   const flow = useFlow();
@@ -76,14 +70,14 @@ export default function OnlineModal() {
 
   const onQuickStart = async () => {
     clearJoinTimer();
-    await connectOnline(onlineNick()); // 서버 세션 + 소켓
+    await connectOnline(); // 세션 확인 + 소켓
     joinQueue(); // 글로벌 FIFO 큐 (2명 모이면 서버가 자동 매칭·시작)
     openModal('matching'); // 대기 연출 — 매칭되면 OnlineController가 게임으로 이동
   };
 
   const onCreateCode = async () => {
     setCopied(false);
-    await connectOnline(onlineNick());
+    await connectOnline();
     const room = await createRoom(); // 서버가 코드 발급
     if (room) setCreatedCode(room.code); // 상대 입장 시 서버가 자동 시작 → 자동 이동
   };
@@ -118,7 +112,7 @@ export default function OnlineModal() {
     }
     setJoinError(null);
     clearJoinTimer();
-    await connectOnline(onlineNick());
+    await connectOnline();
     const ok = await joinRoom(joinCode.trim());
     if (ok) openModal('matching'); // 입장 성공 → 대기(자동 시작 시 이동)
     else setJoinError('방을 찾을 수 없어요');
