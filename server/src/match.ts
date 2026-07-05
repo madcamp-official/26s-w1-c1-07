@@ -53,6 +53,8 @@ export class MatchRunner implements MatchRuntime {
   private roundResults: RoundRecord[] = []
   private currentRound = 0
   private usedGames: GameId[] = []
+  private totalRounds = TOTAL_ROUNDS // 방 설정(rounds)에서 구성자에 결정
+  private games: GameId[] = ALL_GAME_IDS // 방 설정 체크박스(games)에서 구성자에 결정
   // 현재 라운드 런타임
   private gameId: GameId = 1
   private roleOfA: Role = 'P1'
@@ -72,6 +74,10 @@ export class MatchRunner implements MatchRuntime {
     this.matchId = `m_${randomInt(0x100000, 0xffffff).toString(16)}`
     // 색상(역할)은 매치 시작 때 한 번만 정한다 — 이 매치의 모든 라운드에서 A/B가 같은 역할(색) 유지.
     this.roleOfA = randomInt(0, 2) === 0 ? 'P1' : 'P2'
+    // 라운드 수 / 플레이 가능 게임은 방 설정에서 결정(없거나 이상하면 기본값으로).
+    this.totalRounds = Math.min(9, Math.max(1, Math.round(room.rounds) || TOTAL_ROUNDS))
+    const picked = (room.games ?? []).filter((g) => ALL_GAME_IDS.includes(g))
+    this.games = picked.length ? picked : ALL_GAME_IDS
   }
 
   start(): void {
@@ -79,13 +85,13 @@ export class MatchRunner implements MatchRuntime {
     this.io.to(this.a.socketId).emit(EV.matchStart, {
       matchId: this.matchId,
       you: 'A',
-      totalRounds: TOTAL_ROUNDS,
+      totalRounds: this.totalRounds,
       opponent: { nickname: this.b.nickname, imageUrl: this.b.imageUrl },
     })
     this.io.to(this.b.socketId).emit(EV.matchStart, {
       matchId: this.matchId,
       you: 'B',
-      totalRounds: TOTAL_ROUNDS,
+      totalRounds: this.totalRounds,
       opponent: { nickname: this.a.nickname, imageUrl: this.a.imageUrl },
     })
     this.beginRound()
@@ -93,8 +99,8 @@ export class MatchRunner implements MatchRuntime {
 
   private pickGame(): GameId {
     // 아직 안 쓴 게임 우선(서로 다른 것), 다 썼으면 전체에서
-    const pool = ALL_GAME_IDS.filter((g) => !this.usedGames.includes(g))
-    const from = pool.length ? pool : ALL_GAME_IDS
+    const pool = this.games.filter((g) => !this.usedGames.includes(g))
+    const from = pool.length ? pool : this.games
     const g = from[randomInt(0, from.length)]
     this.usedGames.push(g)
     return g
@@ -188,7 +194,7 @@ export class MatchRunner implements MatchRuntime {
     })
 
     this.currentRound += 1
-    if (this.currentRound >= TOTAL_ROUNDS) {
+    if (this.currentRound >= this.totalRounds) {
       setTimeout(() => this.finishMatch(), ROUND_GAP_MS)
     } else {
       setTimeout(() => this.beginRound(), ROUND_GAP_MS)

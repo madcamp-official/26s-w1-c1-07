@@ -78,7 +78,7 @@ export default function OnlineModal() {
   const onCreateCode = async () => {
     setCopied(false);
     await connectOnline();
-    const room = await createRoom(); // 서버가 코드 발급
+    const room = await createRoom(flow.roundConfig.roundCount, flow.enabledGames); // 설정(라운드수·게임) 전달
     if (room) setCreatedCode(room.code); // 상대 입장 시 서버가 자동 시작 → 자동 이동
   };
 

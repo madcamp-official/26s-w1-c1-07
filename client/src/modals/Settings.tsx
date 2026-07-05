@@ -1,17 +1,36 @@
 /**
  * S4 설정 모달 (lobby 에이전트 소유).
  * 본체 testid: modal-settings / 부품: btn-settings-save
- * PLAN §2-S4: OPERATOR MENU — 각 행 = 좌 라벨(Gugi + 영문 캡션) + ◀ 스텝 + Press Start 2P
- *   대형 숫자 입력 + ▶ 스텝 + 단위 칩(round/초). 하단 [확인](옐로)/[기본값](시안).
- * SPEC QA-S4-01~06:
- *   확인 → setRoundConfig(local) + closeModal() / 기본값 → local만 리셋(모달 유지, 저장 아님)
- *   배경 클릭/ESC = 저장 안 함(Q11) — 그냥 closeModal, local은 다음 열림에 flow 값으로 재동기화.
+ * - 라운드 수: 온라인 매치의 실제 라운드 수를 결정(방 생성 시 서버로 전달).
+ * - 라운드 시간: 제거됨(온라인은 게임별 고정 시간).
+ * - 게임 선택: 체크박스로 플레이할 게임 선택 — 체크한 게임들 중에서만 라운드 게임이 뽑힌다.
  * 열림 조건: flow.modal === 'settings'.
  */
 import { useEffect, useState } from 'react';
 import { Button, Modal } from '../components';
-import { closeModal, getDefaultRoundConfig, setRoundConfig, useFlow } from '../state/flow';
+import type { GameId } from '@/shell';
+import {
+  ALL_GAME_IDS,
+  closeModal,
+  getDefaultRoundConfig,
+  setEnabledGames,
+  setRoundConfig,
+  useFlow,
+} from '../state/flow';
 import './settings.css';
+
+const GAME_NAMES: Record<GameId, string> = {
+  1: '숫자 맞추기',
+  2: '로켓 피하기',
+  3: '펜싱',
+  4: '공룡 달리기',
+  5: '몬스터 포격전',
+  6: '펌프',
+  7: '스피드 오목',
+  8: '마그마 총격',
+  9: '줄다리기',
+  10: '라이트 사이클',
+};
 
 /** 입력 문자열 → 정수 (min 1 클램프). 파싱 불가면 fallback. */
 function toCount(raw: string, fallback: number): number {
@@ -71,31 +90,44 @@ export default function SettingsModal() {
   const flow = useFlow();
   const open = flow.modal === 'settings';
 
-  // 로컬 편집 값 (문자열 — 입력 중 빈 값 허용). 열릴 때마다 저장된 값으로 재동기화.
   const [rounds, setRounds] = useState(String(flow.roundConfig.roundCount));
-  const [seconds, setSeconds] = useState(String(flow.roundConfig.timePerRoundSec));
+  const [enabled, setEnabled] = useState<Set<GameId>>(new Set(flow.enabledGames));
 
+  // 열릴 때마다 저장된 값으로 재동기화.
   useEffect(() => {
     if (open) {
       setRounds(String(flow.roundConfig.roundCount));
-      setSeconds(String(flow.roundConfig.timePerRoundSec));
+      setEnabled(new Set(flow.enabledGames));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  const toggle = (id: GameId) => {
+    setEnabled((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const noneSelected = enabled.size === 0;
+
   const save = () => {
+    if (noneSelected) return; // 최소 1개 게임 필요
     setRoundConfig({
       roundCount: toCount(rounds, flow.roundConfig.roundCount),
-      timePerRoundSec: toCount(seconds, flow.roundConfig.timePerRoundSec),
+      timePerRoundSec: flow.roundConfig.timePerRoundSec, // 시간은 UI 제거 — 기존값 유지(미사용)
     });
+    setEnabledGames([...enabled]);
     closeModal();
   };
 
   const resetToDefault = () => {
     const d = getDefaultRoundConfig();
     setRounds(String(d.roundCount));
-    setSeconds(String(d.timePerRoundSec));
-    // 모달은 열린 채 유지, 저장은 확인을 눌러야 (QA-S4-05)
+    setEnabled(new Set(ALL_GAME_IDS));
+    // 모달은 열린 채 유지, 저장은 확인을 눌러야
   };
 
   return (
@@ -119,19 +151,35 @@ export default function SettingsModal() {
           onStep={(d) => setRounds(String(Math.max(1, toCount(rounds, 1) + d)))}
           inputAriaLabel="라운드 수"
         />
-        <OperatorRow
-          label="라운드 당 시간"
-          caption="TIME"
-          unit="초"
-          value={seconds}
-          onChange={setSeconds}
-          onStep={(d) => setSeconds(String(Math.max(1, toCount(seconds, 1) + d)))}
-          inputAriaLabel="라운드 당 시간"
-        />
+      </div>
+
+      <div className="s4-games">
+        <p className="s4-games-title font-arcade c-muted">플레이할 게임 (체크한 것만 나옴)</p>
+        <div className="s4-games-grid">
+          {ALL_GAME_IDS.map((id) => (
+            <label key={id} className={`s4-game ${enabled.has(id) ? 'on' : ''}`}>
+              <input
+                type="checkbox"
+                className="s4-game-box"
+                checked={enabled.has(id)}
+                onChange={() => toggle(id)}
+                aria-label={GAME_NAMES[id]}
+              />
+              <span className="s4-game-name font-display">
+                {id}. {GAME_NAMES[id]}
+              </span>
+            </label>
+          ))}
+        </div>
+        {noneSelected && (
+          <p className="s4-games-warn" role="alert">
+            최소 1개 게임은 선택해야 합니다
+          </p>
+        )}
       </div>
 
       <div className="s4-actions">
-        <Button variant="primary" data-testid="btn-settings-save" onClick={save}>
+        <Button variant="primary" data-testid="btn-settings-save" onClick={save} disabled={noneSelected}>
           확인
         </Button>
         <Button variant="secondary" onClick={resetToDefault}>

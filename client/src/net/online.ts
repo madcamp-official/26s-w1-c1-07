@@ -185,9 +185,9 @@ export function leaveQueue(): void {
   socket?.emit(EV.queueLeave)
   onlineStore.set({ phase: 'idle' })
 }
-export function createRoom(): Promise<RoomSnapshot | null> {
+export function createRoom(rounds: number, games: GameId[]): Promise<RoomSnapshot | null> {
   return new Promise((resolve) => {
-    socket?.emit(EV.roomCreate, {}, (ack: { ok: boolean; data?: RoomSnapshot }) => {
+    socket?.emit(EV.roomCreate, { rounds, games }, (ack: { ok: boolean; data?: RoomSnapshot }) => {
       if (ack?.ok && ack.data) {
         onlineStore.set({ room: ack.data, phase: 'room' })
         resolve(ack.data)

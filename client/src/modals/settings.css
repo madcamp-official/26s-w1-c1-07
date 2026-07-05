@@ -100,3 +100,50 @@
   gap: 14px;
   margin-top: 26px;
 }
+
+/* 게임 선택 체크박스 (S4) — 체크한 게임만 온라인 매치에 등장 */
+.s4-games {
+  margin-top: 18px;
+}
+.s4-games-title {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+}
+.s4-games-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.s4-game {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid var(--surface);
+  background: var(--surface-deep);
+  color: var(--text-muted);
+  transition: border-color 0.12s, color 0.12s, box-shadow 0.12s;
+}
+.s4-game.on {
+  border-color: var(--accent);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.s4-game-box {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex: none;
+}
+.s4-game-name {
+  font-size: 13px;
+}
+.s4-games-warn {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--p2);
+}

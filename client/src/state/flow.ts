@@ -62,10 +62,14 @@ export interface FlowState {
   roundResults: RoundResult[];
   /** 매치 최종 결과 (phase === 'match-result'일 때만 non-null) */
   matchResult: MatchResult | null;
+  /** 설정 체크박스: 플레이 가능 게임. 온라인 매치는 이 중에서만 뽑는다. */
+  enabledGames: GameId[];
 }
 
 /** SPEC S4: 기본 3라운드 / 라운드당 60초 (Q1 판정) */
 export const DEFAULT_ROUND_CONFIG: RoundConfig = { roundCount: 3, timePerRoundSec: 60 };
+/** 기본 = 전체 10게임 */
+export const ALL_GAME_IDS: GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 const INITIAL: FlowState = {
   mode: null,
@@ -78,6 +82,7 @@ const INITIAL: FlowState = {
   currentRound: 0,
   roundResults: [],
   matchResult: null,
+  enabledGames: [...ALL_GAME_IDS],
 };
 
 export const flowStore = createStore<FlowState>(INITIAL);
@@ -109,6 +114,12 @@ export function setRoundConfig(config: RoundConfig): void {
 /** S4 "기본값" 버튼용 기본값 (모달 로컬 state를 이 값으로 리셋 — 저장은 확인 눌러야) */
 export function getDefaultRoundConfig(): RoundConfig {
   return { ...DEFAULT_ROUND_CONFIG };
+}
+
+/** 설정 게임 체크박스 저장(최소 1개 보장). */
+export function setEnabledGames(games: GameId[]): void {
+  const uniq = [...new Set(games)].filter((g) => ALL_GAME_IDS.includes(g));
+  flowStore.set({ enabledGames: uniq.length ? uniq : [...ALL_GAME_IDS] });
 }
 
 // ---------------------------------------------------------------------------

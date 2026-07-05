@@ -3,7 +3,7 @@
  * 방/큐는 소켓 연결에 묶임: 연결 끊기면 정리.
  */
 import { randomInt } from 'node:crypto'
-import type { Role, RoomSnapshot, RoomStatus } from '@madpump/shared'
+import type { GameId, Role, RoomSnapshot, RoomStatus } from '@madpump/shared'
 import type { MatchRuntime } from './match-types'
 
 export interface Member {
@@ -20,6 +20,8 @@ export interface Room {
   hostUserId: string
   status: RoomStatus
   rounds: number
+  /** 이 방에서 플레이 가능한 게임(설정 체크박스). 매치러너가 이 중에서만 라운드 게임을 뽑는다. */
+  games: GameId[]
   members: Member[]
   match?: MatchRuntime
 }

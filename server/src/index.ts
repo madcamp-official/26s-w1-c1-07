@@ -12,7 +12,13 @@ import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
 import fstatic from '@fastify/static'
 import { Server as IOServer } from 'socket.io'
-import { EV, type GameInputMsg, type RoomSnapshot } from '@madpump/shared'
+import {
+  ALL_GAME_IDS,
+  EV,
+  type GameId,
+  type GameInputMsg,
+  type RoomSnapshot,
+} from '@madpump/shared'
 import { prisma } from './db'
 import {
   SESSION_COOKIE,
@@ -242,6 +248,18 @@ function startMatchForRoom(room: Room) {
   runner.start()
 }
 
+// 설정값 검증: rounds는 1~9로 클램프, games는 유효 게임만(없으면 전체).
+function clampRounds(r?: number): number {
+  const n = Math.round(Number(r))
+  return Number.isFinite(n) ? Math.min(9, Math.max(1, n)) : 3
+}
+function sanitizeGames(games?: number[]): GameId[] {
+  const valid = Array.isArray(games)
+    ? (games.filter((g) => (ALL_GAME_IDS as number[]).includes(g)) as GameId[])
+    : []
+  return valid.length ? valid : [...ALL_GAME_IDS]
+}
+
 io.on('connection', (socket) => {
   const s: Session = socket.data.session
   const userId = s.userId.toString()
@@ -251,14 +269,15 @@ io.on('connection', (socket) => {
   })
 
   // ── 코드방 ──
-  socket.on(EV.roomCreate, (payload: { rounds?: number }, ack: (r: unknown) => void) => {
+  socket.on(EV.roomCreate, (payload: { rounds?: number; games?: number[] }, ack: (r: unknown) => void) => {
     if (findRoomByUser(userId)) return ack(ackErr('ALREADY_IN_ROOM', '이미 방에 있음'))
     const code = genRoomCode()
     const room: Room = {
       code,
       hostUserId: userId,
       status: 'waiting',
-      rounds: payload?.rounds ?? 3,
+      rounds: clampRounds(payload?.rounds),
+      games: sanitizeGames(payload?.games),
       members: [
         { userId, nickname: s.nickname, imageUrl: s.imageUrl, socketId: socket.id, role: 'P1', ready: false },
       ],
@@ -281,10 +300,11 @@ io.on('connection', (socket) => {
     io.to(room.code).emit(EV.roomState, roomSnapshot(room))
   })
 
-  socket.on(EV.roomConfigure, (payload: { rounds?: number }) => {
+  socket.on(EV.roomConfigure, (payload: { rounds?: number; games?: number[] }) => {
     const room = findRoomByUser(userId)
     if (!room || room.hostUserId !== userId) return
-    if (payload?.rounds) room.rounds = payload.rounds
+    if (payload?.rounds) room.rounds = clampRounds(payload.rounds)
+    if (payload?.games) room.games = sanitizeGames(payload.games)
     io.to(room.code).emit(EV.roomState, roomSnapshot(room))
   })
 
@@ -314,7 +334,7 @@ io.on('connection', (socket) => {
       const p2 = quickQueue.shift()!
       const code = genRoomCode()
       const room: Room = {
-        code, hostUserId: p1.userId, status: 'waiting', rounds: 3,
+        code, hostUserId: p1.userId, status: 'waiting', rounds: 3, games: [...ALL_GAME_IDS],
         members: [
           { ...p1, role: 'P1', ready: true },
           { ...p2, role: 'P2', ready: true },
