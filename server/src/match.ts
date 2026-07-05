@@ -25,12 +25,13 @@ import type { MatchRuntime } from './match-types'
 // 시뮬(계산)과 브로드캐스트(전송)를 분리한다.
 //  · SIM_HZ       = 게임 스텝 계산 주기(물리/판정 정밀도). 높을수록 정확.
 //  · BROADCAST_HZ = 상태 전송 주기(네트워크/클라 렌더 부하). 낮을수록 가벼움(렉↓).
-// 전송은 매 틱이 아니라 BROADCAST_EVERY 틱마다 1번만. (부드러움이 부족하면 클라 보간으로 보완)
+// 전송은 매 틱이 아니라 BROADCAST_EVERY 틱마다 1번만. (남은 gap·지터는 클라 보간(외삽)으로 보완)
+// 2명 매치라 대역폭 부담이 없어 60Hz 전송으로 상향 — 스냅샷 간격 33ms→16ms로 좁혀 끊김↓.
 const SIM_HZ = 60
-const BROADCAST_HZ = 30
+const BROADCAST_HZ = 60
 const TICK_MS = Math.round(1000 / SIM_HZ) // ≈16ms — 계산 틱 간격
 const DT = TICK_MS / 1000
-const BROADCAST_EVERY = Math.max(1, Math.round(SIM_HZ / BROADCAST_HZ)) // 2 → 2틱마다 전송 = 30Hz
+const BROADCAST_EVERY = Math.max(1, Math.round(SIM_HZ / BROADCAST_HZ)) // 1 → 매 틱 전송 = 60Hz
 const GAME_DURATION = 10
 const COUNTDOWN_MS = 3000
 const ROUND_GAP_MS = 2500 // round:end 후 다음 라운드까지

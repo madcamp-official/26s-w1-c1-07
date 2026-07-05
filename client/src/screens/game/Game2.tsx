@@ -473,6 +473,25 @@ function prewarmGame2(): () => void {
 }
 
 // ---------------------------------------------------------------------------
+// 스냅샷 사이 보간(외삽) — 서버 스냅샷을 dt초만큼 각 오브젝트 '자기 속도'로 전진시킨
+// 표시용 상태를 만든다. 스냅샷에 vx/vy·p2Speed·launcherDir이 이미 있어 ID 매칭이 불필요하고
+// 추가 지연도 0. 방향전환(바운스/반전) 순간만 미세 오차이며 다음 스냅샷이 즉시 교정한다.
+// 30/60Hz 스냅샷을 60fps 렌더로 부드럽게 잇는 게 목적(로켓 순간이동 제거).
+// ---------------------------------------------------------------------------
+
+const clampField = (v: number): number => Math.min(G2.W - G2.MARGIN, Math.max(G2.MARGIN, v));
+
+function extrapolate(s: Game2State, dt: number): Game2State {
+  const p2dir = (s.rightHeld ? 1 : 0) - (s.leftHeld ? 1 : 0);
+  return {
+    ...s,
+    p2X: clampField(s.p2X + p2dir * s.p2Speed * dt),
+    launcherX: clampField(s.launcherX + s.launcherDir * G2.SCAN_SPEED * dt),
+    rockets: s.rockets.map((r) => ({ ...r, x: r.x + r.vx * dt, y: r.y + r.vy * dt })),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 성능 계측 오버레이 (튜닝용) — 캔버스에 직접 그림(React 리렌더 없음).
 //  · ` (백틱) 키로 토글, ?fps 쿼리로도 켜짐, localStorage에 상태 유지.
 //  · FPS = 최근 0.5s 평균, max = 최근 1s 내 최악 프레임시간(spike 탐지), rockets = 현재 탄 수.
@@ -548,6 +567,8 @@ export default function Game2() {
   const reportedRef = useRef(false);
   const resultAtRef = useRef(0);
   const lastCloseRef = useRef(0);
+  /** 마지막 서버 스냅샷 수신 시각(performance.now) — 렌더 외삽 dt 계산용 */
+  const snapAtRef = useRef(0);
 
   /** HUD 표시용 남은 시간 (초 단위 양자화 — 리렌더 절약) */
   const [hudMs, setHudMs] = useState(GAME_DURATION * 1000);
@@ -573,6 +594,7 @@ export default function Game2() {
     if (!on || !on.state) return;
     const s = on.state as Game2State;
     stateRef.current = s;
+    snapAtRef.current = performance.now(); // 외삽 dt 기준점 갱신
     setDebugGame(s);
     setHp(s.hp);
     const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
@@ -670,8 +692,12 @@ export default function Game2() {
         if (ctx && s) {
           const p1IsYou = getPlayerDisplays(getFlow()).P1.isYou;
           fxRef.current = fxRef.current.filter((f) => now - f.t < 1200);
-          drawScene(ctx, s, fxRef.current, trailRef.current, now, p1IsYou);
-          drawPerfHud(ctx, now, (s as Game2State).rockets?.length ?? 0);
+          // 스냅샷 사이 프레임 보간: 마지막 스냅샷을 경과 dt만큼 외삽(최대 50ms 캡).
+          const gs = s as Game2State;
+          const dt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
+          const view = dt > 0 && gs.result === null ? extrapolate(gs, dt) : gs;
+          drawScene(ctx, view, fxRef.current, trailRef.current, now, p1IsYou);
+          drawPerfHud(ctx, now, view.rockets.length);
         }
       };
       raf = requestAnimationFrame(loop);
