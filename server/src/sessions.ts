@@ -8,6 +8,8 @@ export interface Session {
   userId: bigint
   nickname: string
   imageUrl: string | null
+  /** 분반 이름 (user_group.name) — 없으면 null */
+  groupName: string | null
 }
 
 const sessions = new Map<string, Session>()

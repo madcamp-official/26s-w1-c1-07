@@ -9,8 +9,11 @@ import { createRoot } from 'react-dom/client';
 import './theme.css';
 import App from './App';
 import { initDebugBridge } from './debug';
+import { restoreSession } from './state/session';
 
 initDebugBridge();
+// 쿠키 세션이 살아있으면 새로고침해도 로그인 유지 (GET /api/me)
+void restoreSession();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

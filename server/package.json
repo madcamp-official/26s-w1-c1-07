@@ -15,6 +15,7 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
+    "db:cleanup-groups": "tsx prisma/cleanup-groups.ts",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset"
   },
@@ -25,6 +26,7 @@
     "@madpump/shared": "*",
     "@prisma/client": "^6.2.1",
     "fastify": "^5.2.1",
+    "google-auth-library": "^10.9.0",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {

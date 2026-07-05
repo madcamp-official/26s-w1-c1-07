@@ -4,7 +4,7 @@
  *
  * ── 핵심 사용 시나리오 ────────────────────────────────────────────
  * [lobby] 온라인 버튼:  loggedIn ? openModal('online') : openModal('login-required')
- * [auth]  S3 로그인 성공: await mockGoogleLogin() → openModal('online')  (SPEC QA-S3-03)
+ * [auth]  S3 로그인 성공: await googleLogin(credential) → openModal('online')  (SPEC QA-S3-03)
  * [lobby] S6 빠른시작:   openModal('matching')  → MatchingModal이 connecting→waiting 연출
  * [lobby] S7 매칭 성사:  const gameId = matchFound(); navigate(`/game/${gameId}`)
  * [lobby] S7 취소:       cancelMatching()  (모달 'online'으로 복귀 — 타이머는 모달이 clear)

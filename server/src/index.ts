@@ -12,8 +12,9 @@ import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
 import fstatic from '@fastify/static'
 import { Server as IOServer } from 'socket.io'
+import { OAuth2Client } from 'google-auth-library'
 import { EV, type GameInputMsg, type RoomSnapshot } from '@madpump/shared'
-import { devUpsertUser } from './db'
+import { devUpsertUser, prisma } from './db'
 import {
   SESSION_COOKIE,
   createSession,
@@ -64,15 +65,184 @@ app.post('/api/dev/login', async (req, reply) => {
     return reply.code(400).send({ error: { code: 'VALIDATION', message: '닉네임 1~20자' } })
   }
   const user = await devUpsertUser(nickname)
-  const sid = createSession({ userId: user.id, nickname: user.nickname, imageUrl: user.imageUrl })
+  const sid = createSession({ userId: user.id, nickname: user.nickname, imageUrl: user.imageUrl, groupName: null })
   reply.setCookie(SESSION_COOKIE, sid, cookieOpts())
   return { status: 'USER', user: { id: user.id.toString(), nickname: user.nickname, imageUrl: user.imageUrl } }
+})
+
+// ── REST: 구글 OAuth 로그인 ─────────────────────────────────────
+// 클라(GIS 버튼)가 받은 credential(ID 토큰)을 서버가 검증한다.
+// 신규 유저면 NEEDS_NICKNAME을 돌려주고, 클라가 온보딩에서 credential+닉네임으로 /api/auth/signup 호출.
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? ''
+const googleOAuth = new OAuth2Client(GOOGLE_CLIENT_ID)
+
+/** 가입 시 선택 가능한 분반 (온보딩 드랍다운과 1:1 — prisma/seed.ts 로 시드됨) */
+const ALLOWED_GROUPS = ['1분반', '2분반', '3분반'] as const
+
+interface GoogleProfile {
+  sub: string
+  email: string
+  picture: string | null
+}
+
+async function verifyGoogleCredential(credential: string): Promise<GoogleProfile | null> {
+  try {
+    const ticket = await googleOAuth.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID })
+    const p = ticket.getPayload()
+    if (!p?.sub || !p.email) return null
+    return { sub: p.sub, email: p.email, picture: p.picture ?? null }
+  } catch {
+    return null
+  }
+}
+
+function userView(u: { id: bigint; nickname: string; googleImageUrl: string | null }, groupName: string | null) {
+  return { id: u.id.toString(), nickname: u.nickname, imageUrl: u.googleImageUrl, groupName }
+}
+
+app.post('/api/auth/google', async (req, reply) => {
+  const { credential } = (req.body ?? {}) as { credential?: string }
+  if (!credential) return reply.code(400).send({ error: { code: 'VALIDATION', message: 'credential 필요' } })
+  const g = await verifyGoogleCredential(credential)
+  if (!g) return reply.code(401).send({ error: { code: 'INVALID_CREDENTIAL', message: '구글 토큰 검증 실패' } })
+
+  const user = await prisma.appUser.findUnique({ where: { googleSub: g.sub }, include: { group: true } })
+  if (!user) return { status: 'NEEDS_NICKNAME' } // 신규 — 온보딩에서 /api/auth/signup
+
+  const groupName = user.group?.name ?? null
+  const sid = createSession({ userId: user.id, nickname: user.nickname, imageUrl: user.googleImageUrl, groupName })
+  reply.setCookie(SESSION_COOKIE, sid, cookieOpts())
+  return { status: 'USER', user: userView(user, groupName) }
+})
+
+app.post('/api/auth/signup', async (req, reply) => {
+  const body = (req.body ?? {}) as { credential?: string; nickname?: string; groupName?: string }
+  const nickname = (body.nickname ?? '').trim()
+  const groupName = (body.groupName ?? '').trim()
+  if (!body.credential || !nickname || nickname.length > 20) {
+    return reply.code(400).send({ error: { code: 'VALIDATION', message: '닉네임 1~20자' } })
+  }
+  if (!(ALLOWED_GROUPS as readonly string[]).includes(groupName)) {
+    return reply.code(400).send({ error: { code: 'VALIDATION', message: '분반을 선택해주세요' } })
+  }
+  const g = await verifyGoogleCredential(body.credential)
+  if (!g) return reply.code(401).send({ error: { code: 'INVALID_CREDENTIAL', message: '구글 토큰 검증 실패' } })
+
+  // 이미 가입된 계정이 signup을 다시 호출한 경우 → 그냥 로그인 처리
+  const existing = await prisma.appUser.findUnique({ where: { googleSub: g.sub }, include: { group: true } })
+  if (existing) {
+    const gn = existing.group?.name ?? null
+    const sid = createSession({ userId: existing.id, nickname: existing.nickname, imageUrl: existing.googleImageUrl, groupName: gn })
+    reply.setCookie(SESSION_COOKIE, sid, cookieOpts())
+    return { status: 'USER', user: userView(existing, gn) }
+  }
+
+  try {
+    const user = await prisma.appUser.create({
+      data: {
+        googleSub: g.sub,
+        email: g.email,
+        nickname,
+        googleImageUrl: g.picture,
+        ...(groupName
+          ? { group: { connectOrCreate: { where: { name: groupName }, create: { name: groupName } } } }
+          : {}),
+      },
+    })
+    const sid = createSession({ userId: user.id, nickname: user.nickname, imageUrl: user.googleImageUrl, groupName: groupName || null })
+    reply.setCookie(SESSION_COOKIE, sid, cookieOpts())
+    return { status: 'USER', user: userView(user, groupName || null) }
+  } catch (err) {
+    // nickname unique(uq_user_nickname) 충돌
+    if ((err as { code?: string })?.code === 'P2002') {
+      return reply.code(409).send({ error: { code: 'NICKNAME_TAKEN', message: '이미 사용하고 있는 이름입니다' } })
+    }
+    throw err
+  }
 })
 
 app.get('/api/me', async (req) => {
   const s = getSession(req.cookies[SESSION_COOKIE])
   if (!s) return { status: 'ANON', user: null }
-  return { status: 'USER', user: { id: s.userId.toString(), nickname: s.nickname, imageUrl: s.imageUrl } }
+  return {
+    status: 'USER',
+    user: { id: s.userId.toString(), nickname: s.nickname, imageUrl: s.imageUrl, groupName: s.groupName },
+  }
+})
+
+// ── REST: 분반 리더보드 ─────────────────────────────────────────
+// 내 분반 유저들의 온라인 매치 전적(game_match)을 score_config 점수로 집계.
+// 정렬: 점수↓ → 승수↓ → userId↑ / 동점은 같은 등수(competition ranking).
+app.get('/api/leaderboard', async (req, reply) => {
+  const s = getSession(req.cookies[SESSION_COOKIE])
+  if (!s) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: '로그인 필요' } })
+  const myUserId = s.userId.toString()
+  if (!s.groupName) return { status: 'OK', groupName: null, myUserId, entries: [] }
+
+  const group = await prisma.userGroup.findUnique({ where: { name: s.groupName } })
+  if (!group) return { status: 'OK', groupName: s.groupName, myUserId, entries: [] }
+
+  const users = await prisma.appUser.findMany({
+    where: { groupId: group.id, deletedAt: null },
+    select: { id: true, nickname: true, googleImageUrl: true },
+  })
+  const ids = users.map((u) => u.id)
+  const [matches, cfg] = await Promise.all([
+    prisma.gameMatch.findMany({
+      where: { deletedAt: null, OR: [{ playerAId: { in: ids } }, { playerBId: { in: ids } }] },
+      select: { playerAId: true, playerBId: true, result: true },
+    }),
+    prisma.scoreConfig.findUnique({ where: { id: 1 } }),
+  ])
+  const pt = { win: cfg?.winPoints ?? 3, draw: cfg?.drawPoints ?? 1, loss: cfg?.lossPoints ?? 0 }
+
+  const acc = new Map<string, { wins: number; draws: number; losses: number }>()
+  for (const u of users) acc.set(u.id.toString(), { wins: 0, draws: 0, losses: 0 })
+  for (const m of matches) {
+    const a = acc.get(m.playerAId.toString())
+    const b = acc.get(m.playerBId.toString())
+    if (m.result === 'A_WIN') {
+      if (a) a.wins += 1
+      if (b) b.losses += 1
+    } else if (m.result === 'B_WIN') {
+      if (a) a.losses += 1
+      if (b) b.wins += 1
+    } else {
+      if (a) a.draws += 1
+      if (b) b.draws += 1
+    }
+  }
+
+  const entries = users.map((u) => {
+    const x = acc.get(u.id.toString())!
+    return {
+      userId: u.id.toString(),
+      nickname: u.nickname,
+      imageUrl: u.googleImageUrl,
+      wins: x.wins,
+      draws: x.draws,
+      losses: x.losses,
+      score: x.wins * pt.win + x.draws * pt.draw + x.losses * pt.loss,
+      rank: 0, // 아래에서 채움
+    }
+  })
+  entries.sort((x, y) => {
+    if (y.score !== x.score) return y.score - x.score
+    if (y.wins !== x.wins) return y.wins - x.wins
+    return BigInt(x.userId) < BigInt(y.userId) ? -1 : 1
+  })
+  let prevScore: number | null = null
+  let prevRank = 0
+  entries.forEach((e, i) => {
+    if (prevScore !== null && e.score === prevScore) e.rank = prevRank
+    else {
+      e.rank = i + 1
+      prevRank = e.rank
+      prevScore = e.score
+    }
+  })
+
+  return { status: 'OK', groupName: s.groupName, myUserId, scoreConfig: pt, entries }
 })
 
 app.post('/api/auth/logout', async (req, reply) => {

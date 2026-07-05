@@ -4,22 +4,53 @@
  * PLAN §2-S2: 좌 로고 존 + 우 HI-SCORE 패널. "PLAYER 1: OOO" 겸용 네온 인사말(시안) +
  *   로그아웃(tertiary) + 설정 코인 버튼 + LeaderboardTable(lb-top3/lb-myrank 내장) +
  *   btn-online(옐로 primary, INSERT COIN ▶ 점멸 캡션)/btn-offline(시안 secondary).
- * SPEC QA-S2-01~09. 리더보드 = @/shell computeLeaderboard(내 분반 mock 유저 + 나, mockMatches, scoreConfig).
- *   분반에 mock 데이터가 없으면 빈 상태 정직 표기(§0.4) — LeaderboardTable의 NO RECORD.
+ * SPEC QA-S2-01~09. 리더보드 = GET /api/leaderboard (내 분반 유저들의 실제 game_match 집계).
+ *   분반에 기록이 없으면 빈 상태 정직 표기(§0.4) — LeaderboardTable의 NO RECORD.
  */
-import { useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { computeLeaderboard, mockGroups, mockMatches, mockUsers, scoreConfig } from '@/shell';
-import type { MockUser } from '@/shell';
+import type { GameId, LeaderboardEntry, PerGameStats } from '@/shell';
 import { Button, Card, CoinButton, LeaderboardTable } from '../components';
 import type { MyRankRow } from '../components';
 import { useDebugScreen } from '../debug';
 import { logout, useSession } from '../state/session';
 import { openModal } from '../state/flow';
+import { SERVER_URL } from '../net/config';
 import './main-in.css';
 
-/** mock 유저 목록에 없는 "나"를 리더보드 산식에 합류시키기 위한 임시 id */
-const ME_ID = '__me__';
+/** GET /api/leaderboard 응답의 엔트리 (서버에서 정렬·rank 계산 완료) */
+interface LbEntryDto {
+  userId: string;
+  nickname: string;
+  imageUrl: string | null;
+  wins: number;
+  draws: number;
+  losses: number;
+  score: number;
+  rank: number;
+}
+
+const GAME_IDS: GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+/** 서버 집계는 매치 단위(게임별 세분화 없음) — 테이블이 안 쓰는 perGame은 0으로 채운다 */
+function toEntry(d: LbEntryDto): LeaderboardEntry {
+  const plays = d.wins + d.draws + d.losses;
+  const perGame = Object.fromEntries(
+    GAME_IDS.map((g) => [g, { plays: 0, wins: 0, winRate: 0 }]),
+  ) as Record<GameId, PerGameStats>;
+  return {
+    userId: d.userId,
+    nickname: d.nickname,
+    score: d.score,
+    rank: d.rank,
+    totalPlays: plays,
+    wins: d.wins,
+    draws: d.draws,
+    losses: d.losses,
+    winRate: plays > 0 ? d.wins / plays : 0,
+    perGame,
+  };
+}
 
 export default function MainLoggedIn() {
   useDebugScreen('scr-main-in');
@@ -28,35 +59,41 @@ export default function MainLoggedIn() {
 
   const nickname = session.nickname ?? 'PLAYER';
   const groupName = session.groupName;
-  const avatarColorIndex = session.user?.avatarColorIndex ?? 0;
 
-  const { top3, myRank } = useMemo(() => {
-    const group = mockGroups.find((g) => g.name === groupName?.trim());
-    const groupUsers = group ? mockUsers.filter((u) => u.groupId === group.id) : [];
-    // 분반에 mock 데이터가 전혀 없으면 빈 상태를 정직하게 (SPEC §0.4 / QA-S2-09)
-    if (groupUsers.length === 0) {
-      return { top3: [], myRank: undefined as MyRankRow | undefined };
-    }
-    const me: MockUser = {
-      id: ME_ID,
-      nickname,
-      avatarColorIndex,
-      groupId: group!.id,
+  const [top3, setTop3] = useState<LeaderboardEntry[]>([]);
+  const [myRank, setMyRank] = useState<MyRankRow | undefined>(undefined);
+
+  // 마운트마다 서버에서 최신 랭킹 로드 — 매치 후 메인 복귀 시 자동 갱신
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`${SERVER_URL}/api/leaderboard`, { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!alive || data.status !== 'OK') return;
+        const entries = (data.entries ?? []) as LbEntryDto[];
+        setTop3(entries.slice(0, 3).map(toEntry));
+        const mine = entries.find((e) => e.userId === data.myUserId);
+        setMyRank(
+          mine
+            ? {
+                rank: mine.rank,
+                nickname: mine.nickname,
+                plays: mine.wins + mine.draws + mine.losses,
+                wins: mine.wins,
+                winRate: mine.wins + mine.draws + mine.losses > 0 ? mine.wins / (mine.wins + mine.draws + mine.losses) : 0,
+              }
+            : undefined,
+        );
+      } catch {
+        // 서버 미기동 등 — 빈 상태(NO RECORD) 유지
+      }
+    })();
+    return () => {
+      alive = false;
     };
-    // 나를 포함해 같은 산식으로 계산 — 내 기록(0플레이)도 지어내지 않고 그대로 노출
-    const lb = computeLeaderboard([...groupUsers, me], mockMatches, scoreConfig);
-    const mine = lb.entryOf(ME_ID);
-    const myRankRow: MyRankRow | undefined = mine
-      ? {
-          rank: mine.rank,
-          nickname: mine.nickname,
-          plays: mine.totalPlays,
-          wins: mine.wins,
-          winRate: mine.winRate,
-        }
-      : undefined;
-    return { top3: lb.top3, myRank: myRankRow };
-  }, [groupName, nickname, avatarColorIndex]);
+  }, []);
 
   return (
     <main data-testid="scr-main-in" className="s2-root">

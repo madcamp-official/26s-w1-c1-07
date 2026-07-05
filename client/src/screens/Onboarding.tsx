@@ -6,16 +6,19 @@
  *   터미널 입력(> 프롬프트 + 시안 caret), 우상단 "PLAYER: ___" 실시간 미리보기(비면 "???"),
  *   에러는 입력 라인 적색 점등 + 셰이크, 배경 워터마크 "READY?".
  * SPEC QA-S5-01~06:
- *   중복 검증 isNicknameTaken() ("test" + mock 유저명) → err-nickname-dup 표시, 수정 시 해제.
+ *   중복 검증은 서버(/api/auth/signup 409) → err-nickname-dup 표시, 수정 시 해제.
  *   빈 값 제출 방지. 성공 시 completeOnboarding() 후 navigate('/') → S2 (인사말에 이름 반영).
  */
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card } from '../components';
-import { completeOnboarding, isNicknameTaken } from '../state/session';
+import { completeOnboarding } from '../state/session';
 import { useDebugScreen } from '../debug';
 import './onboarding.css';
+
+/** 선택 가능한 분반 — 서버 검증(index.ts ALLOWED_GROUPS)·시드와 1:1 */
+const GROUP_OPTIONS = ['1분반', '2분반', '3분반'] as const;
 
 export default function Onboarding() {
   useDebugScreen('scr-onboarding');
@@ -23,6 +26,8 @@ export default function Onboarding() {
   const [name, setName] = useState('');
   const [group, setGroup] = useState('');
   const [dupError, setDupError] = useState(false);
+  const [serverError, setServerError] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   /** 빈 값 제출 시 해당 입력만 셰이크 피드백 ('name' | 'group') */
   const [shakeField, setShakeField] = useState<'name' | 'group' | null>(null);
 
@@ -32,8 +37,9 @@ export default function Onboarding() {
     requestAnimationFrame(() => setShakeField(field));
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     const trimmedName = name.trim();
     const trimmedGroup = group.trim();
     // 빈 값 제출 방지 (QA-S5-05)
@@ -45,13 +51,20 @@ export default function Onboarding() {
       triggerShake('group');
       return;
     }
-    // 이름 중복 검증 (QA-S5-03) — 입력값은 유지 (SPEC Q12)
-    if (isNicknameTaken(trimmedName)) {
+    // 서버 가입 — 닉네임 중복이면 409 (QA-S5-03, 입력값은 유지 — SPEC Q12)
+    setSubmitting(true);
+    setServerError(false);
+    const result = await completeOnboarding(trimmedName, trimmedGroup);
+    setSubmitting(false);
+    if (result === 'taken') {
       setDupError(true);
       triggerShake('name');
       return;
     }
-    completeOnboarding(trimmedName, trimmedGroup);
+    if (result === 'error') {
+      setServerError(true);
+      return;
+    }
     navigate('/');
   };
 
@@ -118,7 +131,7 @@ export default function Onboarding() {
             )}
           </div>
 
-          {/* 분반 */}
+          {/* 분반 — 드랍다운 선택 (1분반/2분반/3분반) */}
           <div className="s5-field">
             <label className="s5-label font-display" htmlFor="onboarding-group">
               분반 <span className="en">GROUP</span>
@@ -131,20 +144,33 @@ export default function Onboarding() {
               <span className="prompt" aria-hidden>
                 &gt;
               </span>
-              <input
+              <select
                 id="onboarding-group"
-                type="text"
+                data-testid="input-group"
                 value={group}
                 onChange={(e) => setGroup(e.target.value)}
-                placeholder="예: 1분반"
-                autoComplete="off"
-              />
+              >
+                <option value="" disabled>
+                  분반을 선택하세요
+                </option>
+                {GROUP_OPTIONS.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
+          {serverError && (
+            <p className="s5-err" role="alert">
+              가입에 실패했습니다 — 잠시 후 다시 시도하거나 처음부터 로그인해주세요
+            </p>
+          )}
+
           <div className="s5-submit-row">
-            <Button type="submit" variant="primary" block data-testid="btn-nickname-submit">
-              확인
+            <Button type="submit" variant="primary" block data-testid="btn-nickname-submit" disabled={submitting}>
+              {submitting ? '등록 중…' : '확인'}
             </Button>
           </div>
         </form>

@@ -23,12 +23,23 @@ const GAMES = [
   { id: 10, name: "라이트 사이클" },
 ] as const;
 
+// 표준 분반 — 온보딩 드랍다운/서버 검증(index.ts ALLOWED_GROUPS)과 1:1
+const GROUPS = ["1분반", "2분반", "3분반"] as const;
+
 async function main() {
   for (const g of GAMES) {
     await prisma.game.upsert({
       where: { id: g.id },
       update: { name: g.name }, // 이름만 동기화, is_active 는 운영 값 보존
       create: { id: g.id, name: g.name, isActive: true },
+    });
+  }
+
+  for (const name of GROUPS) {
+    await prisma.userGroup.upsert({
+      where: { name },
+      update: {},
+      create: { name, isPublic: true },
     });
   }
 
