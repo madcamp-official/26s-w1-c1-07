@@ -100,14 +100,16 @@
   width: 44px;
   height: 44px;
   flex: none;
-  border-radius: 50%;
-  background: var(--surface);
-  border: 2px solid var(--ring-color);
+  border-radius: 0;
+  background: transparent; /* 원 배경 제거 */
+  border: none; /* 바깥 동그라미(링) 제거 */
   color: var(--ring-color);
-  font-size: 18px;
-  box-shadow:
+  font-size: 30px; /* 톱니 글리프 확대 (18→30) */
+  line-height: 1;
+  text-shadow:
+    /* 링 대신 글리프 자체에 네온 글로우 */
     0 0 6px var(--ring-color),
-    0 0 20px color-mix(in srgb, var(--ring-color) 45%, transparent);
+    0 0 16px color-mix(in srgb, var(--ring-color) 55%, transparent);
 }
 
 .nc-coinbtn:hover:not(:disabled) {
@@ -116,8 +118,7 @@
 }
 
 .nc-coinbtn:active:not(:disabled) {
-  box-shadow: none;
-  background: var(--surface-deep);
+  filter: brightness(0.75);
 }
 
 @media (prefers-reduced-motion: reduce) {

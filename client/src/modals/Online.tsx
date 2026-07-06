@@ -62,9 +62,8 @@ export default function OnlineModal() {
   const session = useSession();
   const open = flow.modal === 'online';
 
-  /** 코인 베팅 (사이드 패널) — placedBet 확정 전에는 어떤 액션도 실행 불가 */
+  /** 코인 베팅 (사이드 패널) — 입력창의 값을 그대로 베팅액으로 사용 (별도 [베팅] 확정 불필요) */
   const [betInput, setBetInput] = useState('1');
-  const [placedBet, setPlacedBet] = useState<number | null>(null);
   const [betError, setBetError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -104,7 +103,6 @@ export default function OnlineModal() {
       setJoinCode('');
       setJoinError(null);
       setBetInput('1');
-      setPlacedBet(null);
       setBetError(null);
       setBusy(false);
     }
@@ -119,38 +117,23 @@ export default function OnlineModal() {
     [],
   );
 
-  /** [베팅] — 1 ~ 보유코인 정수만 확정 */
-  const onPlaceBet = () => {
-    const bet = Number(betInput.trim());
-    if (!Number.isInteger(bet) || bet < 1) {
-      setPlacedBet(null);
-      setBetError('반드시 1코인 이상 베팅해야 해요');
-      return;
-    }
-    if (bet > session.coins) {
-      setPlacedBet(null);
-      setBetError('보유 코인을 넘을 수 없어요');
-      return;
-    }
-    setBetError(null);
-    setPlacedBet(bet);
-  };
-
   /**
-   * 액션 공통 가드 — 베팅 미확정이면 안내 메시지, 확정액이 잔액을 넘으면 재베팅 요구.
-   * @returns 유효한 베팅액 또는 null(액션 중단)
+   * 액션 공통 가드 — 입력창의 값을 그대로 베팅액으로 검증·사용 (별도 [베팅] 확정 불필요).
+   * 빠른시작/코드생성/코드입력이 실행 직전 호출한다.
+   * @returns 유효한 베팅액(1~보유코인 정수) 또는 null(액션 중단 + 에러 표시)
    */
   const requireBet = (): number | null => {
-    if (placedBet === null) {
-      setBetError('코인 베팅을 먼저 해주세요');
+    const bet = Number(betInput.trim());
+    if (!Number.isInteger(bet) || bet < 1) {
+      setBetError('반드시 1코인 이상 베팅해야 해요');
       return null;
     }
-    if (placedBet > session.coins) {
-      setPlacedBet(null);
-      setBetError('보유 코인이 바뀌었어요 — 다시 베팅해주세요');
+    if (bet > session.coins) {
+      setBetError('보유 코인을 넘을 수 없어요');
       return null;
     }
-    return placedBet;
+    setBetError(null);
+    return bet;
   };
 
   const onQuickStart = async () => {
@@ -327,7 +310,7 @@ export default function OnlineModal() {
           </section>
         </NeonWindow>
 
-        {/* ── 창 2: 코인 베팅 (모든 액션의 선행 조건) ── */}
+        {/* ── 창 2: 코인 베팅 (입력값을 그대로 베팅액으로 사용) ── */}
         <NeonWindow
           marquee="코인 베팅"
           accent="var(--accent)"
@@ -351,19 +334,8 @@ export default function OnlineModal() {
                   setBetInput(e.target.value.replace(/[^\d]/g, ''));
                   if (betError) setBetError(null);
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') onPlaceBet();
-                }}
               />
             </label>
-            <Button variant="primary" block data-testid="btn-bet-place" onClick={onPlaceBet} disabled={busy}>
-              BETTING
-            </Button>
-            {placedBet !== null && (
-              <p className="s6-bet-placed font-arcade" data-testid="bet-placed" role="status">
-                {placedBet} COINS
-              </p>
-            )}
             {betError && (
               <p className="s6-join-error c-error" role="alert">
                 {betError}
