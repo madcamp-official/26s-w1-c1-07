@@ -1,0 +1,88 @@
+/* 분반 전체 랭킹 모달 — Ranking.tsx */
+
+.rk-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 2px 8px;
+}
+
+.rk-empty {
+  margin: 24px 0;
+  text-align: center;
+  font-size: 13px;
+}
+
+/* 행 그리드: RANK | NAME | COIN | PLAY | WIN | RATE */
+.rk-row,
+.rk-head {
+  display: grid;
+  grid-template-columns: 56px 1fr 84px 48px 42px 48px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.rk-head {
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  padding-bottom: 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent2) 30%, transparent);
+}
+
+.rk-row {
+  border-bottom: 1px solid color-mix(in srgb, var(--accent2) 12%, transparent);
+}
+
+/* 행 콘텐츠 글씨 크기는 RANK(11px)로 전부 통일 */
+.rk-rank {
+  font-size: 11px;
+  color: var(--accent); /* 4등부터 기본색 — 1~3등은 인라인 금/은/동(rankColor) */
+}
+
+.rk-name {
+  font-size: 11px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rk-you {
+  font-size: 9px;
+  color: var(--p1);
+  margin-left: 6px;
+}
+
+.rk-coin {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.rk-stat {
+  font-size: 11px;
+  text-align: right;
+}
+
+/* ① 내 정보 — 하이라이트 카드, 아래 목록과 간격 */
+.rk-me {
+  background: color-mix(in srgb, var(--p1) 10%, var(--surface-deep, #100c20));
+  border: 1px solid var(--p1);
+  box-shadow: 0 0 10px -4px var(--p1);
+  margin-bottom: 10px; /* ② 간격 */
+}
+.rk-me .rk-row {
+  border-bottom: none;
+}
+.rk-me .rk-rank {
+  color: var(--p1);
+}
+
+/* ③ 전체 목록 — 인원이 많으면 스크롤 */
+.rk-list {
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.rk-row--me:not(.rk-me .rk-row) {
+  background: color-mix(in srgb, var(--p1) 7%, transparent);
+}

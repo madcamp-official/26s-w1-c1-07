@@ -954,7 +954,7 @@ export default function Game4() {
         >
           ◀ 나가기
         </Button>
-        <span className="g4-title font-arcade c-muted">GAME 2 — 로켓 피하기</span>
+        <span className="g4-title font-arcade c-muted">게임4 · 미사일 매치</span>
       </div>
 
       <div className="g4-hudwrap">
@@ -969,7 +969,7 @@ export default function Game4() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g4-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g4-canvas" aria-label="게임2 스테이지 — 로켓 피하기" />
+        <canvas ref={canvasRef} className="g4-canvas" aria-label="게임4 스테이지 — 미사일 매치" />
 
         {/* 새 메커니즘 HP(3) — neon HP 셀. P2(회피자)의 잔여 체력 */}
         <div className="g4-hp" aria-label={`P2 체력 ${hp}/${G4.MAX_HP}`}>

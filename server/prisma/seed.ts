@@ -13,13 +13,13 @@ const prisma = new PrismaClient();
 // (id = 화면 순서, shared/coins.ts GAME_ORDER 와 일치)
 const GAMES = [
   { id: 1, name: "숫자 맞추기" },
-  { id: 2, name: "펜싱" },
+  { id: 2, name: "타이드 펜싱" },
   { id: 3, name: "펌프" },
-  { id: 4, name: "로켓 피하기" },
+  { id: 4, name: "미사일 매치" },
   { id: 5, name: "라이트 사이클" },
   { id: 6, name: "공룡 달리기" },
-  { id: 7, name: "마그마 총격 듀얼" },
-  { id: 8, name: "몬스터 포격전" },
+  { id: 7, name: "이카루스 매치" },
+  { id: 8, name: "뿌슝뿌슝" },
   { id: 9, name: "스피드 오목" },
   { id: 10, name: "줄다리기" },
 ] as const;

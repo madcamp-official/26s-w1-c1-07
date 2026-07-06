@@ -726,7 +726,7 @@ export default function Game10() {
         >
           ◀ 나가기
         </Button>
-        <span className="g10-title font-arcade c-muted">게임9 · 줄다리기</span>
+        <span className="g10-title font-arcade c-muted">게임10 · 줄다리기</span>
       </div>
 
       <div className="g10-hudwrap">
@@ -741,7 +741,7 @@ export default function Game10() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g10-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g10-canvas" aria-label="게임9 스테이지 — 줄다리기" />
+        <canvas ref={canvasRef} className="g10-canvas" aria-label="게임10 스테이지 — 줄다리기" />
       </div>
 
       {/* 온스크린 키캡. 온라인은 U/I 두 키만 쓰므로, 내 역할(색) 쪽 컨트롤만 표기·점등한다.

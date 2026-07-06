@@ -781,7 +781,7 @@ export default function Game7() {
         >
           ◀ 나가기
         </Button>
-        <span className="g7-title font-arcade c-muted">게임8 · 마그마 총격 듀얼</span>
+        <span className="g7-title font-arcade c-muted">게임7 · 이카루스 매치</span>
       </div>
 
       <div className="g7-hudwrap">
@@ -796,7 +796,7 @@ export default function Game7() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g7-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g7-canvas" aria-label="게임8 스테이지 — 마그마 총격 듀얼" />
+        <canvas ref={canvasRef} className="g7-canvas" aria-label="게임7 스테이지 — 이카루스 매치" />
 
         {/* 위험 안내 배지 — 마그마 상승/천장 가시 (좌상단, 무발광 캡션) */}
         <div className="g7-hazard" aria-hidden>

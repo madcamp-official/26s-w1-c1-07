@@ -21,15 +21,15 @@ import './settings.css';
 
 const GAME_NAMES: Record<GameId, string> = {
   1: '숫자 맞추기',
-  2: '로켓 피하기',
-  3: '펜싱',
-  4: '공룡 달리기',
-  5: '몬스터 포격전',
-  6: '펌프',
-  7: '스피드 오목',
-  8: '마그마 총격',
-  9: '줄다리기',
-  10: '라이트 사이클',
+  2: '타이드 펜싱',
+  3: '펌프',
+  4: '미사일 매치',
+  5: '라이트 사이클',
+  6: '공룡 달리기',
+  7: '이카루스 매치',
+  8: '뿌슝뿌슝',
+  9: '스피드 오목',
+  10: '줄다리기',
 };
 
 /** 입력 문자열 → 정수 (min 1 클램프). 파싱 불가면 fallback. */
@@ -134,7 +134,7 @@ export default function SettingsModal() {
     <Modal
       open={open}
       onClose={closeModal}
-      marquee="설정 — OPERATOR MENU"
+      marquee="SETTINGS"
       accentColor="var(--accent2)"
       testId="modal-settings"
       width={520}
@@ -154,7 +154,6 @@ export default function SettingsModal() {
       </div>
 
       <div className="s4-games">
-        <p className="s4-games-title font-arcade c-muted">플레이할 게임 (체크한 것만 나옴)</p>
         <div className="s4-games-grid">
           {ALL_GAME_IDS.map((id) => (
             <label key={id} className={`s4-game ${enabled.has(id) ? 'on' : ''}`}>
@@ -183,7 +182,7 @@ export default function SettingsModal() {
           확인
         </Button>
         <Button variant="secondary" onClick={resetToDefault}>
-          기본값
+          기본값으로 설정
         </Button>
       </div>
     </Modal>

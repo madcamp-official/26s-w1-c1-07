@@ -9,7 +9,7 @@
  *   성공 시 MainGate가 세션을 보고 S2로 스위치.
  */
 import { useNavigate } from 'react-router-dom';
-import { Button, CoinButton } from '../components';
+import { Button } from '../components';
 import { openModal } from '../state/flow';
 import { openLoginModal } from '../modals/Login';
 import { useDebugScreen } from '../debug';
@@ -25,14 +25,11 @@ export default function MainLoggedOut() {
     <main data-testid="scr-main-out" className="s1-root">
       <div className="vanish-grid" aria-hidden />
 
-      {/* 우상단: 로그인 + 설정 코인 버튼 */}
+      {/* 우상단: 로그인 (설정은 온라인 패널 안의 톱니로만 진입) */}
       <header className="s1-header">
         <Button variant="tertiary" data-testid="btn-login" onClick={() => openLoginModal()}>
           로그인
         </Button>
-        <CoinButton data-testid="btn-settings" label="설정" onClick={() => openModal('settings')}>
-          ⚙
-        </CoinButton>
       </header>
 
       {/* 중앙: attract mode 네온 로고 + CTA */}

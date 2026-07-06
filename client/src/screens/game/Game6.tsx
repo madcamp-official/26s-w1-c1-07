@@ -894,7 +894,7 @@ export default function Game6() {
         >
           ◀ 나가기
         </Button>
-        <span className="g6-title font-display c-muted">게임4 · 공룡 달리기</span>
+        <span className="g6-title font-display c-muted">게임6 · 공룡 달리기</span>
       </div>
 
       <div className="g6-hudwrap">
@@ -909,7 +909,7 @@ export default function Game6() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g6-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g6-canvas" aria-label="게임4 스테이지 — 공룡 달리기" />
+        <canvas ref={canvasRef} className="g6-canvas" aria-label="게임6 스테이지 — 공룡 달리기" />
       </div>
 
       {/* 온스크린 키캡 — 실제 배정 키 표기(SPEC Q2), 입력 순간 램프 점등. W는 홀드라 ducking 반영 */}

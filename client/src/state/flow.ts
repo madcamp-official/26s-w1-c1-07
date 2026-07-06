@@ -24,7 +24,14 @@ import { getOnline } from '../net/online';
 
 export type Mode = 'online' | 'offline';
 
-export type ModalId = 'login-required' | 'login' | 'settings' | 'online' | 'matching' | 'theme-shop';
+export type ModalId =
+  | 'login-required'
+  | 'login'
+  | 'settings'
+  | 'online'
+  | 'matching'
+  | 'theme-shop'
+  | 'ranking';
 
 /**
  * 매치 진행 단계.

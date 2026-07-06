@@ -898,7 +898,7 @@ export default function Game8() {
         >
           ◀ 나가기
         </Button>
-        <span className="g8-title font-arcade c-muted">게임5 · 몬스터 포격전</span>
+        <span className="g8-title font-arcade c-muted">게임8 · 뿌슝뿌슝</span>
       </div>
 
       <div className="g8-hudwrap">
@@ -913,7 +913,7 @@ export default function Game8() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g8-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g8-canvas" aria-label="게임5 스테이지 — 몬스터 포격전" />
+        <canvas ref={canvasRef} className="g8-canvas" aria-label="게임8 스테이지 — 뿌슝뿌슝" />
 
         {/* 새 메커니즘: 격추 점수 — neon 스코어 셀 (P1 좌상 / P2 우상) */}
         <div className={`g8-score ${p1KillCls}`} aria-label={`P1 격추 ${scores.p1}`}>

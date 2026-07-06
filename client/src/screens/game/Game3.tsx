@@ -733,7 +733,7 @@ export default function Game3() {
         >
           ◀ 나가기
         </Button>
-        <span className="g3-title font-arcade c-muted">게임6 · 펌프</span>
+        <span className="g3-title font-arcade c-muted">게임3 · 펌프</span>
       </div>
 
       <div className="g3-hudwrap">
@@ -748,7 +748,7 @@ export default function Game3() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g3-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g3-canvas" aria-label="게임6 스테이지 — 펌프 연타 대전" />
+        <canvas ref={canvasRef} className="g3-canvas" aria-label="게임3 스테이지 — 펌프" />
 
       </div>
 

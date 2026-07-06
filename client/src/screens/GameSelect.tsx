@@ -22,6 +22,7 @@ import { Button } from '../components';
 import { useDebugScreen } from '../debug';
 import { startOfflineGame } from '../state/flow';
 import { restoreSession, unlockGame, useSession } from '../state/session';
+import { openLoginModal } from '../modals/Login';
 import './game-select.css';
 import '../global-interaction.css';
 
@@ -37,13 +38,13 @@ interface CabinetSpec {
 const CAB_COLORS = ['var(--accent)', 'var(--p1)', 'var(--p2)', 'var(--accent2)', 'var(--win)'];
 const CAB_NAMES: Record<GameId, string> = {
   1: '숫자 맞추기',
-  2: '펜싱',
+  2: '타이드 펜싱',
   3: '펌프',
-  4: '로켓 피하기',
+  4: '미사일 매치',
   5: '라이트 사이클',
   6: '공룡 달리기',
-  7: '마그마 총격 듀얼',
-  8: '몬스터 포격전',
+  7: '이카루스 매치',
+  8: '뿌슝뿌슝',
   9: '스피드 오목',
   10: '줄다리기',
 };
@@ -235,15 +236,17 @@ export default function GameSelect() {
         </div>
       )}
 
-      {/* 코인 노가다 미니게임 (준비 중 — mock 버튼) */}
+      {/* COIN FARM — 솔로 펌프 미션으로 코인 벌기 (비로그인은 로그인 모달로) */}
       <button
         type="button"
-        className="s8-grind font-display"
+        className="s8-grind font-arcade"
         data-testid="btn-coin-grind"
-        disabled
-        title="준비 중"
+        onClick={() => {
+          if (session.loggedIn) navigate('/farm');
+          else openLoginModal();
+        }}
       >
-        ⛏ 코인 노가다하기 <span className="s8-grind-soon font-arcade">SOON</span>
+        GET FREE COIN
       </button>
     </main>
   );

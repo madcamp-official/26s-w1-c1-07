@@ -833,7 +833,7 @@ export default function Game9() {
         >
           ◀ 나가기
         </Button>
-        <span className="g9-title font-display c-muted">게임7 · 스피드 오목</span>
+        <span className="g9-title font-display c-muted">게임9 · 스피드 오목</span>
       </div>
 
       <div className="g9-hudwrap">
@@ -848,7 +848,7 @@ export default function Game9() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g9-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g9-canvas" aria-label="게임7 스테이지 — 스피드 오목" />
+        <canvas ref={canvasRef} className="g9-canvas" aria-label="게임9 스테이지 — 스피드 오목" />
 
       </div>
 

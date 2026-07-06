@@ -726,7 +726,7 @@ export default function Game5() {
         >
           ◀ 나가기
         </Button>
-        <span className="g5-title font-display c-muted">게임10 · 라이트 사이클</span>
+        <span className="g5-title font-display c-muted">게임5 · 라이트 사이클</span>
       </div>
 
       <div className="g5-hudwrap">
@@ -741,7 +741,7 @@ export default function Game5() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g5-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g5-canvas anim-sign-on" aria-label="게임10 스테이지 — 라이트 사이클" />
+        <canvas ref={canvasRef} className="g5-canvas anim-sign-on" aria-label="게임5 스테이지 — 라이트 사이클" />
 
         {/* 좌상단 라이더 표식 — 색=플레이어 종속(P1/P2 기능 엔티티의 실제 플레이어 색) */}
         <div className="g5-riders" aria-hidden>
