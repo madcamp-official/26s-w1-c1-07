@@ -35,6 +35,7 @@ import RankingModal from './modals/Ranking';
 import OnlineModal from './modals/Online';
 import MatchingModal from './modals/Matching';
 import OnlineController from './net/OnlineController';
+import OnlineGame from './net/OnlineGame';
 
 function MainGate() {
   const session = useSession();
@@ -58,6 +59,8 @@ export default function App() {
         <Route path="/game/8" element={<Game8 />} />
         <Route path="/game/9" element={<Game9 />} />
         <Route path="/game/10" element={<Game10 />} />
+        {/* 온라인 매치 전용 URL(오프라인 /game/N 과 구분) — 라이브 컨텍스트 없으면 메인으로 */}
+        <Route path="/online/game/:gameId" element={<OnlineGame />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {/* Global modal host */}

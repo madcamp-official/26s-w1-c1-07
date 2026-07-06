@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>MADPUMP · 선정 시안 v2 (이미지)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Gugi&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0d0221; --bg-raised:#1a0b2e; --surface:#241640; --surface-deep:#160a33;
+    --text:#f4f0ff; --muted:#9d8fbf;
+    --accent:#fdf500; --accent2:#d300c5; --p1:#05d9e8; --p2:#ff2a6d; --win:#39ff88;
+    --hairline:rgba(211,0,197,.35);
+    --arcade:'Press Start 2P',monospace; --gugi:'Gugi','Apple SD Gothic Neo','Noto Sans KR',sans-serif;
+    --sans:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  .crt{position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 1px,transparent 1px 3px)}
+  .crt::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.42) 100%)}
+  .grid-fx{position:fixed;left:-25%;right:-25%;bottom:0;height:36%;z-index:0;pointer-events:none;
+    background:repeating-conic-gradient(from 89deg at 50% 0,color-mix(in srgb,var(--accent2) 40%,transparent) 0deg .28deg,transparent .28deg 6deg);
+    -webkit-mask-image:linear-gradient(to bottom,black,transparent 88%);mask-image:linear-gradient(to bottom,black,transparent 88%)}
+  .wrap{position:relative;z-index:1;max-width:1360px;margin:0 auto;padding:40px 24px 120px}
+  header.top{text-align:center;margin-bottom:8px}
+  .eyebrow{font-family:var(--arcade);font-size:10px;letter-spacing:.3em;color:var(--accent2)}
+  h1{font-family:var(--arcade);font-size:clamp(14px,2.2vw,20px);line-height:1.5;margin:14px 0 8px}
+  h1 .m{color:var(--p2);text-shadow:0 0 4px currentColor,0 0 18px currentColor}
+  h1 .p{color:var(--p1);text-shadow:0 0 4px currentColor,0 0 18px currentColor}
+  .lede{max-width:60ch;margin:0 auto;color:var(--muted);font-size:13px}
+
+  .game-sec{margin-top:44px}
+  .game-head{display:flex;align-items:baseline;gap:12px;margin-bottom:8px}
+  .game-head .gtag{font-family:var(--arcade);font-size:12px;letter-spacing:.1em;color:var(--gc,var(--accent))}
+  .game-head .gname{font-family:var(--gugi);font-size:20px}
+  .game-head .gcount{color:var(--muted);font-size:12px}
+  .rule{height:1px;background:linear-gradient(90deg,var(--gc,var(--hairline)),transparent);opacity:.5;margin-bottom:20px}
+  .cab-grid{display:grid;gap:clamp(14px,1.8vw,22px);grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
+
+  .cab{--gc:var(--accent2);display:flex;flex-direction:column;background:var(--surface);
+    border:1px solid var(--hairline);transition:box-shadow .18s,border-color .18s;padding-bottom:12px}
+  .cab:hover{border-color:var(--gc);box-shadow:0 0 6px var(--gc),0 0 22px color-mix(in srgb,var(--gc) 40%,transparent)}
+  .marquee{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;background:var(--surface-deep);border-bottom:1px solid var(--hairline)}
+  .lamp{width:8px;height:8px;border-radius:50%;background:var(--surface);border:1px solid var(--hairline);flex:none}
+  .cab:hover .lamp{background:var(--gc);border-color:var(--gc);box-shadow:0 0 6px var(--gc)}
+  .mt{font-family:var(--arcade);font-size:10px;letter-spacing:.06em;color:color-mix(in srgb,var(--gc) 62%,var(--muted))}
+  .cab:hover .mt{color:var(--gc);text-shadow:0 0 4px currentColor,0 0 14px currentColor}
+  .screen{position:relative;height:158px;margin:12px;background:var(--bg-raised);border:6px solid #000;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .screen::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.30) 0 1px,transparent 1px 3px),radial-gradient(ellipse at center,transparent 58%,rgba(0,0,0,.5) 100%)}
+  .gpic{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+  .gpic svg{width:88%;height:88%;overflow:visible}
+  .clabel{font-family:var(--arcade);font-size:9px;color:var(--muted);text-align:center;margin-top:2px;letter-spacing:.08em}
+
+  .gp-cyan{color:var(--p1)} .gp-pink{color:var(--p2)} .gp-yellow{color:var(--accent)}
+  .gp-mag{color:var(--accent2)} .gp-green{color:var(--win)} .gp-dim{color:var(--muted)} .gp-white{color:var(--text)}
+  .gp-fill{fill:currentColor;stroke:none} .gp-stroke{fill:none;stroke:currentColor}
+  .gp-glow{filter:drop-shadow(0 0 1.5px currentColor) drop-shadow(0 0 5px currentColor)}
+  .gp-dim2{opacity:.4} .gp-grid{opacity:.28} .gp-faint{opacity:.6} .gp-magma{opacity:.22}
+  .seg{font-family:var(--arcade);fill:currentColor}
+  text.seg:not([font-size]){font-size:13px}
+
+  .status{text-align:center;color:var(--muted);font-family:var(--arcade);font-size:11px;padding:80px 0}
+  .status .blink{animation:bl 1s steps(1,end) infinite;color:var(--accent)}
+  @keyframes bl{0%,49%{opacity:1}50%,100%{opacity:0}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+  <div class="grid-fx" aria-hidden="true"></div>
+  <div class="wrap">
+    <header class="top">
+      <p class="eyebrow">MADPUMP · OFFLINE GAME SELECT</p>
+      <h1><span class="m">선정 시안</span> <span class="p">v2</span></h1>
+      <p class="lede">피드백 반영 — 게임별 지정 이미지만. (텍스트/QA 제거)</p>
+    </header>
+    <div id="root"><div class="status">생성 중… <span class="blink">▮</span></div></div>
+  </div>
+  <div class="crt" aria-hidden="true"></div>
+<script src="v2data.js" onerror="window.__NODATA=true"></script>
+<script>
+  const GC={4:'var(--accent2)',5:'var(--win)',6:'var(--accent)',7:'var(--p1)',8:'var(--p2)',9:'var(--accent2)',10:'var(--win)'};
+  const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  function card(gn,c){
+    return `<div class="cab" style="--gc:${GC[gn]}">
+      <div class="marquee"><span class="lamp"></span><span class="mt">GAME ${gn} · ${esc(c.label)}</span><span class="lamp"></span></div>
+      <div class="screen"><div class="gpic"><svg viewBox="0 0 120 108">${c.svg||''}</svg></div></div>
+    </div>`;
+  }
+  function render(){
+    const d=window.__V2; const root=document.getElementById('root');
+    if(!d||!d.sections){return;}
+    root.innerHTML=d.sections.map(s=>`<section class="game-sec" style="--gc:${GC[s.game]}">
+      <div class="game-head"><span class="gtag">GAME ${s.game}</span><span class="gname">${esc(s.name)}</span><span class="gcount">${s.cards.length}종</span></div>
+      <div class="rule"></div>
+      <div class="cab-grid">${s.cards.map(c=>card(s.game,c)).join('')}</div>
+    </section>`).join('');
+  }
+  render();
+</script>
+</body>
+</html>
