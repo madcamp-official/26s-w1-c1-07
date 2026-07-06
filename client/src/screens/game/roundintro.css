@@ -141,11 +141,51 @@
   to { text-shadow: 0 0 6px currentColor, 0 0 22px currentColor; }
 }
 
+/* ── 준비 카운트다운 "2 · 1 · START!" (가이드 3초 후) ── */
+.ri--count {
+  background: rgba(13, 2, 33, 0.7);
+}
+.ri-count__num {
+  font-size: clamp(72px, 18vw, 160px);
+  color: var(--accent);
+  text-shadow:
+    0 0 8px currentColor,
+    0 0 32px color-mix(in srgb, var(--accent) 70%, transparent);
+  /* 각 숫자가 팝인했다 살짝 커지며 사라지는 느낌 (key 교체로 매 단계 재생) */
+  animation: ri-count-pop 700ms ease-out both;
+}
+.ri-count__go {
+  font-size: clamp(48px, 12vw, 108px);
+  color: var(--win, #3dff8e);
+  text-shadow:
+    0 0 8px currentColor,
+    0 0 32px color-mix(in srgb, var(--win, #3dff8e) 70%, transparent);
+  animation: ri-count-go 600ms ease-out both;
+}
+
+@keyframes ri-count-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  25% { transform: scale(1.1); opacity: 1; }
+  70% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+@keyframes ri-count-go {
+  0% { transform: scale(0.6); opacity: 0; }
+  30% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1.4); opacity: 0.85; }
+}
+
 /* 정보는 오버레이가 아니라 HUD/게임에 있으므로, 모션 축소 시 애니메이션 전부 제거(정적 표시) */
 @media (prefers-reduced-motion: reduce) {
   .ri,
-  .ri.ri--out,
-  .ri__name {
+  .ri__name,
+  .ri-count__num,
+  .ri-count__go {
     animation: none;
+  }
+  /* 모션 축소 시엔 카운트다운 숫자를 정적으로 보이게(투명도 0으로 사라지지 않도록) */
+  .ri-count__num,
+  .ri-count__go {
+    opacity: 1;
   }
 }

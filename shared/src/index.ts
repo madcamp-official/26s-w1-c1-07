@@ -1,6 +1,6 @@
 export * from './games/types'
 
-// 게임 10종 코어 (id = 화면 순서, shared/coins.ts GAME_ORDER)
+// 게임 13종 코어 (id = 화면 순서, shared/coins.ts GAME_ORDER)
 export * as game1 from './games/game1/logic'
 export * as game2 from './games/game2/logic'
 export * as game3 from './games/game3/logic'
@@ -11,6 +11,9 @@ export * as game7 from './games/game7/logic'
 export * as game8 from './games/game8/logic'
 export * as game9 from './games/game9/logic'
 export * as game10 from './games/game10/logic'
+export * as game11 from './games/game11/logic'
+export * as game12 from './games/game12/logic'
+export * as game13 from './games/game13/logic'
 
 export { G1 } from './games/game1/logic' // 숫자 맞추기
 export { G2 } from './games/game2/logic' // 펜싱
@@ -22,6 +25,9 @@ export { G7, magmaSurfaceY } from './games/game7/logic' // 마그마 총격 듀�
 export { G8 } from './games/game8/logic' // 몬스터 포격전
 export { G9, maxRun, density, resolveTimeout } from './games/game9/logic' // 스피드 오목
 export { G10 } from './games/game10/logic' // 줄다리기
+export { G11 } from './games/game11/logic' // HOT POTATO (폭탄 돌리기)
+export { G12, isRed, isTelegraph } from './games/game12/logic' // RED LIGHT GREEN LIGHT (무궁화 꽃)
+export { G13 } from './games/game13/logic' // POT SHOT (박 터뜨리기)
 
 export type { Game1State } from './games/game1/logic'
 export type { Game3State } from './games/game3/logic'
@@ -32,6 +38,9 @@ export type { Game7State, Shot8 } from './games/game7/logic'
 export type { Game8State, Shot, Monster } from './games/game8/logic'
 export type { Game9State } from './games/game9/logic'
 export type { Game10State } from './games/game10/logic'
+export type { Game11State } from './games/game11/logic'
+export type { Game12State } from './games/game12/logic'
+export type { Game13State, Shot13 } from './games/game13/logic'
 
 // 펜싱(게임2) 엔진 타입(렌더러가 사용)은 core.ts
 export type { Game2Config, Game2State, FencerState, DodgeStyle } from './games/game2/core'

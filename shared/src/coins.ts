@@ -18,13 +18,17 @@ export const STARTING_COINS = 30
 
 /**
  * 오프라인 게임 선택 화면의 표시(=플레이) 순서.
- * 전면 재번호 이후 내부 id 자체가 화면 순서와 일치하므로 이 배열은 항등(1..10)이다.
+ * 내부 id 자체가 화면 순서와 일치하므로 이 배열은 항등(1..13)이다.
  * (화면 라벨 "GAME N" = 배열 위치 = 게임 id)
  */
-export const GAME_ORDER: readonly GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+export const GAME_ORDER: readonly GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 
-/** 잠긴 게임 = 표시 순서의 마지막 두 개(코인으로 해금). 그 외는 처음부터 오픈. */
-export const LOCKABLE_GAME_IDS: readonly GameId[] = [GAME_ORDER[GAME_ORDER.length - 2], GAME_ORDER[GAME_ORDER.length - 1]]
+/**
+ * 잠긴 게임(코인 해금 대상) = 게임 9·10 고정. 그 외(신규 11·12·13 포함)는 처음부터 오픈.
+ * (신규 게임 추가 시 잠금이 마지막 두 개로 밀려나지 않도록 명시 고정 — unlocked_count 비트마스크
+ *  의미도 bit0=9·bit1=10로 유지돼 기존 유저 해금 상태가 보존된다.)
+ */
+export const LOCKABLE_GAME_IDS: readonly GameId[] = [9, 10]
 
 /** 기본 오픈 게임 = 잠금 대상을 제외한 나머지 (비로그인 유저도 플레이 가능) */
 export const FREE_GAME_IDS: readonly GameId[] = GAME_ORDER.filter(

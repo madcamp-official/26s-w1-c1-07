@@ -1,0 +1,82 @@
+/**
+ * GAME 13 · POT SHOT — screen styles (NEON COIN-OP). Owner: game13 agent.
+ * Sits on shared theme.css utilities (.crt-bezel/.vanish-grid/.font-arcade/tokens);
+ * only layout/framing here. All labels are English.
+ */
+
+.g13-screen {
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px 18px;
+  overflow: hidden;
+}
+
+.g13-topbar {
+  width: min(1020px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 1;
+}
+
+.g13-title {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+.g13-hudwrap {
+  width: min(1020px, 100%);
+  z-index: 1;
+}
+
+/* CRT stage — bezel from theme.css; here only size.
+   Third term caps by viewport height so bottom keycaps never clip. */
+.g13-stage {
+  width: min(1020px, 100%, calc((100vh - 310px) * 16 / 9 + 28px));
+  z-index: 1;
+}
+
+.g13-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+/* Bottom keycap row — left P1 / right P2, real assigned keys. */
+.g13-keys {
+  width: min(1020px, 100%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  z-index: 1;
+}
+
+.g13-keys--online {
+  justify-content: center;
+  gap: 28px;
+}
+
+.g13-keys__group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.g13-keys__tag {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  opacity: 0.85;
+  padding: 0 6px;
+}
+
+.g13-keys__hint {
+  align-self: center;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-align: center;
+}

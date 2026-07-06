@@ -9,7 +9,7 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// 게임 종류 사전 — 코드의 게임 번호(1~10)와 고정 매핑. 이 테이블은 "코드 미러".
+// 게임 종류 사전 — 코드의 게임 번호(1~13)와 고정 매핑. 이 테이블은 "코드 미러".
 // (id = 화면 순서, shared/coins.ts GAME_ORDER 와 일치)
 const GAMES = [
   { id: 1, name: "숫자 맞추기" },
@@ -22,6 +22,9 @@ const GAMES = [
   { id: 8, name: "뿌슝뿌슝" },
   { id: 9, name: "스피드 오목" },
   { id: 10, name: "줄다리기" },
+  { id: 11, name: "HOT POTATO" },
+  { id: 12, name: "RED LIGHT, GREEN LIGHT" },
+  { id: 13, name: "POT SHOT" },
 ] as const;
 
 // 분반별 고정 멤버 로스터 — 로그인은 이 명단에서 선택 (docs/AUTH.md).
@@ -44,12 +47,19 @@ const ROSTER: Record<string, string[]> = {
 };
 
 async function main() {
+  // 게임 사전: name 에 unique 제약이 있어, 재번호로 이름이 자리를 바꾸면(예: 이전 DB의 id2="미사일 매치"
+  // → 새 id2="타이드 펜싱") 단순 upsert가 유니크 충돌한다. 2단계로 처리:
+  //   (1) 모든 행을 임시 유니크명("__tmp_{id}")으로 upsert → 기존 이름 해방
+  //   (2) 최종명으로 update (모두 서로 다른 이름 → 충돌 없음)
   for (const g of GAMES) {
     await prisma.game.upsert({
       where: { id: g.id },
-      update: { name: g.name }, // 이름만 동기화, is_active 는 운영 값 보존
-      create: { id: g.id, name: g.name, isActive: true },
+      update: { name: `__tmp_${g.id}` },
+      create: { id: g.id, name: `__tmp_${g.id}`, isActive: true },
     });
+  }
+  for (const g of GAMES) {
+    await prisma.game.update({ where: { id: g.id }, data: { name: g.name } });
   }
 
   // 분반 + 멤버 로스터

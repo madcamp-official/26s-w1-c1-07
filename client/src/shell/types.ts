@@ -11,7 +11,7 @@
  */
 
 /** 미니게임 식별자 (1, 2, 3) */
-export type GameId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+export type GameId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 
 /** 로컬 대전에서의 플레이어 역할 */
 export type PlayerRole = 'P1' | 'P2';

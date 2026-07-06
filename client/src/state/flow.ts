@@ -75,8 +75,8 @@ export interface FlowState {
 
 /** SPEC S4: 기본 3라운드 / 라운드당 60초 (Q1 판정) */
 export const DEFAULT_ROUND_CONFIG: RoundConfig = { roundCount: 3, timePerRoundSec: 60 };
-/** 기본 = 전체 10게임 */
-export const ALL_GAME_IDS: GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+/** 기본 = 전체 13게임 */
+export const ALL_GAME_IDS: GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 
 const INITIAL: FlowState = {
   mode: null,

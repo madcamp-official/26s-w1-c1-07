@@ -1,0 +1,84 @@
+/**
+ * Game12 · RED LIGHT, GREEN LIGHT — screen styles (NEON COIN-OP).
+ * Builds only layout/staging on top of shared theme.css utilities
+ * (.crt-bezel / .vanish-grid / .font-arcade / .c-* tokens). No new glow values.
+ */
+
+.g12-screen {
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px 18px;
+  overflow: hidden;
+}
+
+.g12-topbar {
+  width: min(1020px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 1;
+}
+
+.g12-title {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+.g12-hudwrap {
+  width: min(1020px, 100%);
+  z-index: 1;
+}
+
+/* CRT stage — bezel from theme.css .crt-bezel; sized here.
+   Third term caps by viewport height so bottom keycaps never clip:
+   fixed chrome (topbar + HUD + keys + gaps + padding) + 28px bezel,
+   canvas 16:9 → stage width ≤ (100vh − chrome) × 16/9 + 28px */
+.g12-stage {
+  width: min(1020px, 100%, calc((100vh - 310px) * 16 / 9 + 28px));
+  z-index: 1;
+}
+
+.g12-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+/* bottom keycap row — left P1 (cyan) / right P2 (pink), actual assigned keys */
+.g12-keys {
+  width: min(1020px, 100%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  z-index: 1;
+}
+
+.g12-keys--online {
+  justify-content: center;
+  gap: 24px;
+}
+
+.g12-keys__group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.g12-keys__tag {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  opacity: 0.85;
+  padding: 0 6px;
+}
+
+.g12-keys__hint {
+  align-self: center;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-align: center;
+}

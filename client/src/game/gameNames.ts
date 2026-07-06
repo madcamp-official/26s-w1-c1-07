@@ -15,4 +15,7 @@ export const GAME_NAMES: Record<GameId, string> = {
   8: '뿌슝뿌슝',
   9: '스피드 오목',
   10: '줄다리기',
+  11: 'HOT POTATO',
+  12: 'RED LIGHT, GREEN LIGHT',
+  13: 'POT SHOT',
 };

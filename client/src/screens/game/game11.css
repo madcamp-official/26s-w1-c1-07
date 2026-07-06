@@ -1,0 +1,102 @@
+/**
+ * 게임11 · HOT POTATO 전용 스타일 — game11 에이전트 소유 (NEON COIN-OP).
+ * 공용 theme.css 유틸(.crt-bezel/.vanish-grid/.font-arcade/.glow-text/토큰) 위에
+ * 레이아웃/연출만 얹는다. game10.css 구조를 따르되 g11 네임스페이스.
+ */
+
+.g11-screen {
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px 18px;
+  overflow: hidden;
+}
+
+.g11-topbar {
+  width: min(1020px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 1;
+}
+
+.g11-title {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+.g11-hudwrap {
+  width: min(1020px, 100%);
+  z-index: 1;
+}
+
+/* CRT 스테이지 — 베젤은 theme.css .crt-bezel, 여기서는 크기만.
+   상하 고정 크롬(topbar+HUD+키캡+gap+padding) + 베젤 테두리 28px,
+   캔버스 16:9 → 스테이지 폭 ≤ (100vh − 크롬) × 16/9 + 28px */
+.g11-stage {
+  width: min(1020px, 100%, calc((100vh - 310px) * 16 / 9 + 28px));
+  z-index: 1;
+  transition: box-shadow 140ms ease;
+}
+
+/* 막판(남은 3초 이하) — 위험 오렌지 글로우 펄스 */
+.g11-stage.urgent {
+  animation: g11-danger 700ms steps(2, end) infinite;
+}
+
+@keyframes g11-danger {
+  0% { box-shadow: 0 0 0 rgba(255, 123, 0, 0); }
+  50% { box-shadow: 0 0 26px rgba(255, 123, 0, 0.55); }
+  100% { box-shadow: 0 0 0 rgba(255, 123, 0, 0); }
+}
+
+.g11-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+/* 하단 키캡 열 — 좌 P1 / 우 P2, 실제 배정 키 표기 */
+.g11-keys {
+  width: min(1020px, 100%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  z-index: 1;
+}
+
+.g11-keys--online {
+  justify-content: center;
+  gap: 28px;
+}
+
+.g11-keys__group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.g11-keys__tag {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  opacity: 0.85;
+  padding: 0 6px;
+}
+
+.g11-keys__hint {
+  align-self: center;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .g11-stage.urgent {
+    animation: none;
+    box-shadow: 0 0 18px rgba(255, 123, 0, 0.4);
+  }
+}

@@ -20,7 +20,7 @@ const REEL_STOP_MS = [1200, 1500, 1800] as const
 const VS_AT_MS = 2500
 
 /** 스핀 중 릴에 흘러가는 장식용 게임 목록 (전 게임 순환) */
-const SPIN_STRIP: GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+const SPIN_STRIP: GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 
 export interface MatchIntroProps {
   slotGames: GameId[]

@@ -27,6 +27,9 @@ import Game7 from './screens/game/Game7';
 import Game8 from './screens/game/Game8';
 import Game9 from './screens/game/Game9';
 import Game10 from './screens/game/Game10';
+import Game11 from './screens/game/Game11';
+import Game12 from './screens/game/Game12';
+import Game13 from './screens/game/Game13';
 import LoginRequiredModal from './modals/LoginRequired';
 import LoginModal from './modals/Login';
 import SettingsModal from './modals/Settings';
@@ -58,6 +61,9 @@ export default function App() {
         <Route path="/game/8" element={<Game8 />} />
         <Route path="/game/9" element={<Game9 />} />
         <Route path="/game/10" element={<Game10 />} />
+        <Route path="/game/11" element={<Game11 />} />
+        <Route path="/game/12" element={<Game12 />} />
+        <Route path="/game/13" element={<Game13 />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {/* 전역 모달 호스트 */}
