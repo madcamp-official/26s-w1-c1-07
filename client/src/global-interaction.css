@@ -40,3 +40,19 @@ textarea,
   user-select: text;
   cursor: text;
 }
+
+/* ── 전역: 스크롤바 UI 숨김 (네온 아케이드 룩) ──────────────────
+ * 스크롤 "기능"(휠/터치/드래그)은 유지하되, 어떤 스크롤 컨테이너(랭킹 모달·
+ * 리더보드·모달 본문·페이지 등)에서도 스크롤바가 화면에 보이지 않게 한다.
+ * 화면 크기와 무관하게 흰 스크롤바가 절대 뜨지 않는다.
+ */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* 구 Edge/IE */
+}
+*::-webkit-scrollbar {
+  /* WebKit (Chrome/Safari/Electron) */
+  width: 0 !important;
+  height: 0 !important;
+  display: none;
+}
