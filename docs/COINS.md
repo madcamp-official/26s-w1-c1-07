@@ -51,8 +51,8 @@
 게임 선택(오프라인) 우하단 **"⛏ 코인 노가다하기"** → `/farm`. 로그인 필수(비로그인은 로그인 모달).
 기존 펌프(게임6)의 U/I 레인 문법을 1인용으로 축약한 미션 모드다. 상수 정본: `shared/src/coins.ts`.
 
-- **미션**: 제한시간 **10초**(`FARM_DURATION`) 안에 정답 **30타**(`FARM_TARGET`) 달성 → MISSION COMPLETE, 코인 지급.
-- **실패 조건**: ① 시간 안에 30점 미달 → MISSION FAILED ② **틀린 키 1회 = 그 즉시 FAILED** (보상 없음).
+- **미션**: 제한시간 **10초**(`FARM_DURATION`) 안에 정답 **25타**(`FARM_TARGET`) 달성 → MISSION COMPLETE, 코인 지급.
+- **실패 조건**: ① 시간 안에 25점 미달 → MISSION FAILED ② **틀린 키 1회 = 그 즉시 FAILED** (보상 없음).
 - **보상 분포** (`FARM_REWARD_TABLE`, 서버가 추첨 — `POST /api/farm/claim`):
 
 | 코인 | 1 | 2 | 3 | 5 | 10 | 20 | 50 | 100 |
