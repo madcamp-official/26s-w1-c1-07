@@ -1,0 +1,42 @@
+/**
+ * 전역 인터랙션 규칙 — 텍스트 드래그 선택 방지.
+ *
+ * 목적: UI 텍스트(마퀴/버튼/설명 등)를 드래그로 오선택하지 못하게 한다.
+ * 예외(선택 허용):
+ *   1) 폼 입력 필드(input/textarea/contenteditable) — 타이핑·편집·전체선택 정상 동작.
+ *   2) 온라인 "방 만들기 코드"(room-code-display) — 사용자가 드래그로 선택·복사해야 함.
+ *
+ * 배치: theme.css / main.tsx / App.tsx 는 아키텍트 소유(수정 금지)라 손대지 않고,
+ *   앱 정적 import 그래프에 항상 포함되는 화면 모듈(GameSelect·Online)에서 이 파일을
+ *   side-effect import → 부팅 시 <head>에 1회 주입되어 전역 적용된다.
+ *
+ * 특이성 메모: 기본 차단은 낮은 특이성(html)로 두고, 예외는 같거나 더 높은
+ *   특이성 + 뒤 순서로 이겨서 재활성화한다. user-select 는 상속되므로 html 에
+ *   none 을 걸면 하위가 상속, 예외 요소만 스스로 text 로 덮어쓴다.
+ */
+html {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* 예외 1) 폼 입력 — 편집/선택 가능해야 함 */
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* 예외 2) 온라인 방 코드 — 드래그 선택·복사 허용 */
+[data-testid="room-code-display"],
+[data-testid="room-code-display"] * {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  cursor: text;
+}

@@ -29,7 +29,7 @@ export interface SessionState {
   user: SessionUser | null;
   /** 보유 코인 (비로그인 시 0) — 서버 /api/me 가 정본, 여기는 미러 */
   coins: number;
-  /** 오프라인 게임 해금 수 (UNLOCK_ORDER 앞에서부터 n개 — shared/coins.ts) */
+  /** 오프라인 게임 해금 상태 (LOCKABLE_GAME_IDS 순서의 비트마스크 — shared/coins.ts) */
   unlockedCount: number;
 }
 
@@ -88,12 +88,18 @@ export function updateWallet(coins: number, unlockedCount?: number): void {
 }
 
 /**
- * 다음 게임 해금 (POST /api/unlock) — 성공 시 지갑 갱신.
+ * 게임 해금 (POST /api/unlock) — 잠긴 게임 id 를 지정, 성공 시 지갑 갱신.
+ * 잠긴 두 게임은 순서 무관하게 각각 해금할 수 있다 (shared/coins.ts).
  * @returns 성공: { unlockedGameId } / 실패: { error: 사용자 표시용 메시지 }
  */
-export async function unlockNextGame(): Promise<{ unlockedGameId?: number; error?: string }> {
+export async function unlockGame(gameId: number): Promise<{ unlockedGameId?: number; error?: string }> {
   try {
-    const res = await fetch(`${SERVER_URL}/api/unlock`, { method: 'POST', credentials: 'include' });
+    const res = await fetch(`${SERVER_URL}/api/unlock`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ gameId }),
+    });
     const data = await res.json();
     if (!res.ok) return { error: data?.error?.message ?? '해금 실패' };
     updateWallet(data.coins, data.unlockedCount);

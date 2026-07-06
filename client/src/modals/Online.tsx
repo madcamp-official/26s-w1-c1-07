@@ -7,7 +7,7 @@
  *   생성 후 옐로 대형 코드 + 복사 COPIED! + 톱니) / OR 칩 / 2행 코드 입력 + 확인.
  * SPEC QA-S6-01~09 + 코인 베팅:
  *   빠른 시작/코드 생성/코드 입력 각각 실행 전 "코인 베팅" 단계가 끼어든다 —
- *   보유 코인 한도 내 정수를 텍스트필드로 입력(0 허용). 서버가 보유량 재검증.
+ *   보유 코인 한도 내 정수를 텍스트필드로 입력(최소 1). 서버가 보유량 재검증.
  *   빠른 시작 → 베팅 → openModal('matching') / 코드 생성 → 베팅 → 코드 표시
  *   / 코드 확인 → 형식 검증(isValidRoomCode) → 베팅 → openModal('matching')
  *   / 톱니 → S4 열고 닫히면 이 패널로 복귀 / 배경 클릭 닫기(타이머 정리).
@@ -19,6 +19,7 @@ import { closeModal, isValidRoomCode, openModal, useFlow } from '../state/flow';
 import { useSession } from '../state/session';
 import { connectOnline, createRoom, joinQueue, joinRoom } from '../net/online';
 import './online.css';
+import '../global-interaction.css';
 
 /** 베팅 창이 실행할 대기 액션 */
 type BetFor = 'quick' | 'create' | 'join';
@@ -30,7 +31,7 @@ export default function OnlineModal() {
 
   /** 코인 베팅 단계 (null = 일반 패널) */
   const [betFor, setBetFor] = useState<BetFor | null>(null);
-  const [betInput, setBetInput] = useState('0');
+  const [betInput, setBetInput] = useState('1');
   const [betError, setBetError] = useState<string | null>(null);
   const [betBusy, setBetBusy] = useState(false);
 
@@ -70,7 +71,7 @@ export default function OnlineModal() {
       setJoinCode('');
       setJoinError(null);
       setBetFor(null);
-      setBetInput('0');
+      setBetInput('1');
       setBetError(null);
       setBetBusy(false);
     }
@@ -87,7 +88,7 @@ export default function OnlineModal() {
 
   /** 각 액션은 실행 전 "코인 베팅" 단계를 거친다 */
   const openBet = (target: BetFor) => {
-    setBetInput('0');
+    setBetInput('1');
     setBetError(null);
     setBetFor(target);
   };
@@ -106,8 +107,8 @@ export default function OnlineModal() {
   const onBetConfirm = async () => {
     if (betBusy || !betFor) return;
     const bet = Number(betInput.trim() === '' ? '0' : betInput.trim());
-    if (!Number.isInteger(bet) || bet < 0) {
-      setBetError('0 이상의 정수를 입력해주세요');
+    if (!Number.isInteger(bet) || bet < 1) {
+      setBetError('1 이상의 정수를 입력해주세요');
       return;
     }
     if (bet > session.coins) {
@@ -191,7 +192,7 @@ export default function OnlineModal() {
             보유 <span className="c-accent glow-text">{session.coins}</span> COIN
           </p>
           <p className="s6-bet-hint font-display c-muted">
-            이 매치에 걸 코인을 입력하세요 (0 ~ {session.coins})
+            이 매치에 걸 코인을 입력하세요 (1 ~ {session.coins})
           </p>
           <label className={`neon-input${betError ? ' error anim-shake' : ''}`}>
             <span className="prompt">&gt;</span>
