@@ -25,6 +25,9 @@ export const G1 = {
   RANGE_MAX: 1000,
   /** keydown 1회당 누적되는 게이지(%p) */
   PRESS_GAIN: 30,
+  /** 방향키 홀드 중 초당 충전(%p/s) — 홀드하면 게이지가 GAUGE_REF(=기준속도)까지 차오른다.
+   *  (없으면 홀드 시 감쇠로 0까지 떨어져 speed가 안 오르던 버그) equilibrium≈(HOLD_GAIN/DECAY_K)² */
+  HOLD_GAIN: 88,
   /** 게이지 상한(%) */
   GAUGE_MAX: 100,
   /** 이 게이지(%)에서 속도 = 플레이어 base rate  */
@@ -94,10 +97,13 @@ interface PlayerIO {
 
 /** 게이지 감쇠(항상) + 값 갱신 + 정지-유지 판정 */
 function advance(io: PlayerIO, target: number, dt: number) {
+  const dir = (io.up ? 1 : 0) - (io.down ? 1 : 0)
+  // 방향키를 누르고 있으면 게이지가 기준(GAUGE_REF)까지 차오른다 — 홀드=기준속도, 연타로 그 위 부스트.
+  //  (예전엔 keydown 순간에만 +PRESS_GAIN이라 홀드 시 감쇠로 0까지 떨어져 speed가 안 오르던 버그)
+  if (dir !== 0) io.gauge = Math.min(G1.GAUGE_MAX, io.gauge + G1.HOLD_GAIN * dt)
   // sqrt 양상 감쇠 — 누르든 안 누르든 항상 적용
   io.gauge = Math.max(0, io.gauge - G1.DECAY_K * Math.sqrt(io.gauge) * dt)
 
-  const dir = (io.up ? 1 : 0) - (io.down ? 1 : 0)
   const speed = io.rate * (io.gauge / G1.GAUGE_REF)
   const next = Math.min(G1.RANGE_MAX, Math.max(G1.RANGE_MIN, io.value + dir * speed * dt))
 
