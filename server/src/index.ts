@@ -15,7 +15,9 @@ import { Server as IOServer } from 'socket.io'
 import {
   ALL_GAME_IDS,
   EV,
-  nextUnlock,
+  isLockable,
+  unlockBit,
+  unlockCost,
   type BetPayload,
   type GameId,
   type GameInputMsg,
@@ -137,23 +139,31 @@ app.get('/api/me', async (req) => {
 })
 
 // ── REST: 오프라인 게임 해금 ────────────────────────────────────
-// 해금 순서는 UNLOCK_ORDER(2→7→4→8→5→9→10)로 강제 — 클라는 "다음 것"만 해금 요청 가능.
+// 잠긴 두 게임(LOCKABLE_GAME_IDS)을 순서 무관하게 개별 해금 — 클라가 gameId 를 지정.
+// unlocked_count 는 LOCKABLE_GAME_IDS 순서의 비트마스크로 저장(shared/coins.ts).
 app.post('/api/unlock', async (req, reply) => {
   const s = getSession(req.cookies[SESSION_COOKIE])
   if (!s) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: '로그인 필요' } })
   const u = await prisma.appUser.findFirst({ where: { id: s.userId, deletedAt: null } })
   if (!u) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: '로그인 필요' } })
 
-  const next = nextUnlock(u.unlockedCount)
-  if (!next) return reply.code(400).send({ error: { code: 'ALL_UNLOCKED', message: '모든 게임이 해금됨' } })
-  if (u.coins < next.cost) {
-    return reply.code(400).send({ error: { code: 'NOT_ENOUGH_COINS', message: `코인 부족 (필요: ${next.cost})` } })
+  const gameId = Number((req.body as { gameId?: unknown } | null)?.gameId)
+  if (!isLockable(gameId)) {
+    return reply.code(400).send({ error: { code: 'INVALID_GAME', message: '해금할 수 없는 게임이에요' } })
+  }
+  const bit = unlockBit(gameId)
+  if ((u.unlockedCount & bit) !== 0) {
+    return reply.code(400).send({ error: { code: 'ALREADY_UNLOCKED', message: '이미 해금된 게임이에요' } })
+  }
+  const cost = unlockCost(gameId)
+  if (u.coins < cost) {
+    return reply.code(400).send({ error: { code: 'NOT_ENOUGH_COINS', message: `코인 부족 (필요: ${cost})` } })
   }
 
-  // 조건부 갱신(코인·해금수 동시 검증)으로 중복 클릭/동시 요청에도 이중 차감 방지
+  // 조건부 갱신(코인·현재 마스크 동시 검증)으로 중복 클릭/동시 요청에도 이중 차감 방지
   const updated = await prisma.appUser.updateMany({
-    where: { id: u.id, unlockedCount: u.unlockedCount, coins: { gte: next.cost } },
-    data: { coins: { decrement: next.cost }, unlockedCount: { increment: 1 } },
+    where: { id: u.id, unlockedCount: u.unlockedCount, coins: { gte: cost } },
+    data: { coins: { decrement: cost }, unlockedCount: u.unlockedCount | bit },
   })
   if (updated.count === 0) {
     return reply.code(409).send({ error: { code: 'CONFLICT', message: '다시 시도해주세요' } })
@@ -161,7 +171,7 @@ app.post('/api/unlock', async (req, reply) => {
   const fresh = await prisma.appUser.findUniqueOrThrow({ where: { id: u.id } })
   return {
     status: 'OK',
-    unlockedGameId: next.gameId,
+    unlockedGameId: gameId,
     coins: fresh.coins,
     unlockedCount: fresh.unlockedCount,
   }
@@ -273,10 +283,10 @@ function ackErr(code: string, message: string) {
   return { ok: false as const, code, message }
 }
 
-/** 베팅액 검증 — 0 이상 정수 & 보유 코인 이하. 유효하면 그 값, 아니면 null */
+/** 베팅액 검증 — 1 이상 정수 & 보유 코인 이하. 유효하면 그 값, 아니면 null */
 async function validateBet(userId: bigint, raw: unknown): Promise<number | null> {
   const bet = Number(raw ?? 0)
-  if (!Number.isInteger(bet) || bet < 0) return null
+  if (!Number.isInteger(bet) || bet < 1) return null
   const u = await prisma.appUser.findFirst({ where: { id: userId, deletedAt: null }, select: { coins: true } })
   if (!u || bet > u.coins) return null
   return bet
@@ -337,7 +347,7 @@ io.on('connection', (socket) => {
     if (typeof ack !== 'function') return
     if (findRoomByUser(userId)) return ack(ackErr('ALREADY_IN_ROOM', '이미 방에 있음'))
     const bet = await validateBet(s.userId, payload?.bet)
-    if (bet === null) return ack(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (보유 코인 한도 내 정수)'))
+    if (bet === null) return ack(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (1 이상, 보유 코인 한도 내 정수)'))
     if (findRoomByUser(userId)) return ack(ackErr('ALREADY_IN_ROOM', '이미 방에 있음')) // await 사이 재검사
     const code = genRoomCode()
     const room: Room = {
@@ -359,7 +369,7 @@ io.on('connection', (socket) => {
   socket.on(EV.roomJoin, async (payload: { code: string } & Partial<BetPayload>, ack: (r: unknown) => void) => {
     if (typeof ack !== 'function') return
     const bet = await validateBet(s.userId, payload?.bet)
-    if (bet === null) return ack(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (보유 코인 한도 내 정수)'))
+    if (bet === null) return ack(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (1 이상, 보유 코인 한도 내 정수)'))
     const room = rooms.get(payload?.code)
     if (!room) return ack(ackErr('NOT_FOUND', '방 없음'))
     if (room.members.length >= 2) return ack(ackErr('ROOM_FULL', '정원 초과'))
@@ -403,7 +413,7 @@ io.on('connection', (socket) => {
       return ack?.(ackErr('ALREADY_IN_ROOM', '이미 방/큐에 있음'))
     }
     const bet = await validateBet(s.userId, payload?.bet)
-    if (bet === null) return ack?.(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (보유 코인 한도 내 정수)'))
+    if (bet === null) return ack?.(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (1 이상, 보유 코인 한도 내 정수)'))
     if (findRoomByUser(userId) || quickQueue.some((q) => q.userId === userId)) {
       return ack?.(ackErr('ALREADY_IN_ROOM', '이미 방/큐에 있음')) // await 사이 재검사
     }

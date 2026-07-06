@@ -1,37 +1,110 @@
-import { makeGame3, type Game3Config } from './core'
+import type { GameInputEvent, GameResult } from '../types'
+import { GAME_DURATION } from '../types'
 
 /**
- * 게임3 = "서지-넉백(SURGE)" 펜싱.
- * 핵심:
- *  · 극한 난타전 베이스(짧은 지속·좁은 창·빠른 쿨·넓은 시동 랜덤 = 페인트 심리전).
- *  · 밀물(TIDE)+템포 가속: 시간이 갈수록 낙사선이 조이고 쿨타임이 줄어 후반 밀도 폭발.
- *  · 리포스트-브레이크: 성공 패링 → 즉발 반격창 + 콤보 스노우볼.
- *  · 서지-넉백: esc=(t/10)^2 곡선으로 모든 넉백에 시간연동 배율(초반 ×0.75 댐핑 → 막판 ×2.1 폭발).
- *    위치(c)는 안 읽고 오직 t만 읽어 러버밴드 feel-bad 없이 "밀당 개막 → 막판 폭발" 아치를 만든다.
+ * 게임6 = 펌프(리듬 연타 대전).
+ *  · P1에게는 Q/W로 이루어진 긴 스트링, P2에게는 U/I로 이루어진 긴 스트링이 주어진다.
+ *  · "지금 눌러야 할 키"를 누르면 점수 +1, 다음 키로 진행한다.
+ *    틀린 키를 누르면 점수 −1(타일은 그대로, 진행하지 않는다).
+ *  · 제한시간이 끝나면 점수가 높은 쪽이 승리(동점은 무승부).
+ *  · 스트링 길이 = 제한시간(s) × 10.
+ *
+ * 키 인코딩: 0 = 첫 번째 키(Q / U), 1 = 두 번째 키(W / I).
  */
-export const G3: Game3Config = {
-  label: 'game3',
-  ATTACK_DURATION: 0.06,
-  DODGE_DURATION: 0.1,
-  ATTACK_COOLDOWN: 0.15,
-  DODGE_COOLDOWN: 0.17,
-  KNOCKBACK: 0.1,
-  HALF_GAP: 0.06,
-  EDGE: 1.0,
-  STARTUP_MIN: 0.04,
-  STARTUP_MAX: 0.18,
-  TIDE_MAX: 0.45,
-  TEMPO_MAX: 0.45,
-  ESCALATE_EXP: 2.0,
-  RIPOSTE_WINDOW: 0.35,
-  RIPOSTE_MULT: 1.6,
-  COMBO_STEP: 0.25,
-  COMBO_MAX: 3,
-  COUNTER_MULT: 1.4,
-  KB_SURGE_MIN: 0.75,
-  KB_SURGE_MAX: 2.1,
+export const G3 = {
+  /** 스트링 길이 = 제한시간(초) × 이 값 */
+  KEYS_PER_SECOND: 10,
+  /** 히트/미스 플래시 지속(초) */
+  FLASH: 0.12,
+} as const
+
+export const SEQ_LEN = GAME_DURATION * G3.KEYS_PER_SECOND
+
+export interface Game3State {
+  elapsed: number
+  result: GameResult
+  p1Seq: number[]
+  p2Seq: number[]
+  p1Idx: number
+  p2Idx: number
+  p1Score: number
+  p2Score: number
+  /** 정답 히트 플래시 잔여 시간 */
+  p1Flash: number
+  p2Flash: number
+  /** 오답 미스 플래시 잔여 시간 */
+  p1Wrong: number
+  p2Wrong: number
 }
 
-const core = makeGame3(G3)
-export const create = core.create
-export const step = core.step
+function makeSeq(rand: () => number, len: number): number[] {
+  const out: number[] = []
+  for (let i = 0; i < len; i++) out.push(rand() < 0.5 ? 0 : 1)
+  return out
+}
+
+export function create(rand: () => number): Game3State {
+  return {
+    elapsed: 0,
+    result: null,
+    p1Seq: makeSeq(rand, SEQ_LEN),
+    p2Seq: makeSeq(rand, SEQ_LEN),
+    p1Idx: 0,
+    p2Idx: 0,
+    p1Score: 0,
+    p2Score: 0,
+    p1Flash: 0,
+    p2Flash: 0,
+    p1Wrong: 0,
+    p2Wrong: 0,
+  }
+}
+
+export function step(state: Game3State, events: GameInputEvent[], dt: number): Game3State {
+  if (state.result) return state
+  state.elapsed += dt
+  state.p1Flash = Math.max(0, state.p1Flash - dt)
+  state.p2Flash = Math.max(0, state.p2Flash - dt)
+  state.p1Wrong = Math.max(0, state.p1Wrong - dt)
+  state.p2Wrong = Math.max(0, state.p2Wrong - dt)
+
+  for (const e of events) {
+    if (e.type !== 'down') continue
+    switch (e.code) {
+      case 'KeyQ':
+      case 'KeyW': {
+        if (state.p1Idx >= SEQ_LEN) break
+        const got = e.code === 'KeyQ' ? 0 : 1
+        if (got === state.p1Seq[state.p1Idx]) {
+          state.p1Score += 1
+          state.p1Idx += 1
+          state.p1Flash = G3.FLASH
+        } else {
+          state.p1Score -= 1
+          state.p1Wrong = G3.FLASH
+        }
+        break
+      }
+      case 'KeyU':
+      case 'KeyI': {
+        if (state.p2Idx >= SEQ_LEN) break
+        const got = e.code === 'KeyU' ? 0 : 1
+        if (got === state.p2Seq[state.p2Idx]) {
+          state.p2Score += 1
+          state.p2Idx += 1
+          state.p2Flash = G3.FLASH
+        } else {
+          state.p2Score -= 1
+          state.p2Wrong = G3.FLASH
+        }
+        break
+      }
+    }
+  }
+
+  if (state.elapsed >= GAME_DURATION) {
+    state.result =
+      state.p1Score > state.p2Score ? 'P1' : state.p2Score > state.p1Score ? 'P2' : 'DRAW'
+  }
+  return state
+}

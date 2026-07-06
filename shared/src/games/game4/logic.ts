@@ -2,118 +2,97 @@ import type { GameInputEvent, GameResult } from '../types'
 import { GAME_DURATION } from '../types'
 
 /**
- * 게임4 = 공룡 달리기 (Chrome Dino 차용).
- *  · P1(공룡)은 Q로 점프, W로 숙이기(홀드). 장애물을 피해 제한시간을 버틴다.
- *  · P2는 맵 오른쪽에서 장애물을 생성한다.
- *      - U: "점프 장애물"(선인장). 지면에 붙어 있어 점프로 넘어야 한다.
- *      - I: "숙이기 장애물"(새). 머리 높이로 날아와 숙여서 피해야 한다.
- *    생성에는 공용 쿨타임이 있어 무한정 벽을 쌓지 못한다.
- *  · 제한시간(10s)을 버티면 P1 승, 한 번이라도 부딪히면 즉시 P2 승.
- *
- * 판정 균형(px, s 단위):
- *   지면 상단 GROUND_Y=380. 서 있는 공룡은 y[330..380], 숙인 공룡은 y[352..380].
- *   선인장 y[334..380] → 서 있어도/숙여도 겹침 = 반드시 점프.
- *   새      y[310..338] → 서 있으면 겹치고 숙이면(352~) 안 겹침 = 반드시 숙이기.
+ * 게임2 = 로켓 피하기.
+ *  · P1은 좌우로 스캔하는 발사대에서 W로 3방향 부채꼴 탄을 발사한다.
+ *  · P2는 좌우로 이동해 피하며, 체력 HP 3(피격 시 무적 0.45s).
+ *  · 로켓이 적당히 느려 P2가 읽고 피할 여유가 있다.
  */
 export const G4 = {
   W: 800,
   H: 450,
-  GROUND_Y: 380,
-  // ── 공룡 ──
-  DINO_X: 120,
-  DINO_W: 44,
-  DINO_H: 50,
-  DINO_DUCK_H: 28,
-  GRAVITY: 2600,
-  JUMP_V: 880,
-  /** W를 누른 채 공중에 있으면 빠르게 낙하 */
-  FASTFALL_MULT: 2.2,
-  // ── 장애물 ──
-  OBST_SPEED: 360,
-  /** 시작 시(경과 0s) 장애물 생성 쿨타임 */
-  SPAWN_COOLDOWN: 0.7,
-  /** 쿨타임 하한 — 아무리 시간이 지나도 이 밑으로는 안 내려간다 */
-  MIN_COOLDOWN: 0.28,
-  /** 쿨타임 감소량 = COOLDOWN_K·√(경과초). √ 그래프처럼 시간이 지날수록 빨라진다 */
-  COOLDOWN_K: 0.13,
-  /** P2가 장애물을 던지는 모션 지속 시간 */
-  SPAWN_ANIM: 0.25,
-  CACTUS_W: 26,
-  CACTUS_H: 46,
-  BIRD_W: 42,
-  BIRD_H: 28,
-  BIRD_TOP: 310,
+  MARGIN: 40,
+  LAUNCHER_Y: 60,
+  SCAN_SPEED: 560,
+  ROCKET_W: 12,
+  ROCKET_H: 28,
+  /** 기본 대비 20% 낮춘 속도 */
+  ROCKET_SPEED_MIN: 600,
+  ROCKET_SPEED_MAX: 800,
+  P2_Y: 396,
+  // 수비수(아래에서 피하는 러너) 크기 0.6배 축소 — 히트박스·렌더 공용(둘 다 이 상수 사용)
+  P2_W: 27.6, // 0.6× (기존 46)
+  P2_H: 15.6, // 0.6× (기존 26)
+  P2_SPEED_MIN: 1380,
+  P2_SPEED_MAX: 1760,
+  // ── 발사대 3방향 부채꼴 ──
+  BULLET_COUNT: 3,
+  FIRE_COOLDOWN: 0.25,
+  SPREAD_DEG: 22,
+  SPEED_JITTER: 0.12,
+  MAX_BOUNCE: 1,
+  // ── HP 시스템 ──
+  MAX_HP: 3,
+  IFRAME_TIME: 0.45,
 } as const
 
-export type ObstacleType = 'jump' | 'duck'
-
-export interface Obstacle {
+export interface Bullet {
   x: number
-  type: ObstacleType
-  /** 새의 날갯짓 등 렌더 위상 */
-  phase: number
+  y: number
+  vx: number
+  vy: number
+  bounces: number
 }
 
 export interface Game4State {
   elapsed: number
   result: GameResult
-  /** 지면 위 높이(0=지면). 점프 중 y>0 */
-  y: number
-  vy: number
-  grounded: boolean
-  ducking: boolean
-  obstacles: Obstacle[]
+  launcherX: number
+  launcherDir: 1 | -1
+  p2Speed: number
+  p2X: number
+  leftHeld: boolean
+  rightHeld: boolean
+  rockets: Bullet[]
   cooldown: number
-  /** 이번 쿨타임을 걸 때 적용된 최댓값(게이지 바 정규화용) */
-  cooldownMax: number
-  /** P2 던지기 모션 잔여 시간(>0이면 던지는 중) */
-  spawnAnim: number
-  /** 달리기 애니메이션 위상 */
-  runPhase: number
+  seed: number
+  hp: number
+  iframes: number
 }
 
-/** 경과 시간에 따라 줄어드는 현재 쿨타임 = base − K·√elapsed (하한 clamp) */
-export function cooldownFor(elapsed: number): number {
-  return Math.max(G4.MIN_COOLDOWN, G4.SPAWN_COOLDOWN - G4.COOLDOWN_K * Math.sqrt(elapsed))
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+const DEG = Math.PI / 180
+
+function nextRand(seed: number): { u: number; seed: number } {
+  const s = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+  return { u: s / 4294967296, seed: s }
 }
 
-interface Box {
-  x0: number
-  x1: number
-  top: number
-  bottom: number
+/** N방향 부채꼴 각(도). [-SPREAD..+SPREAD] 균등 분배 */
+function fanAngles(): number[] {
+  const n = G4.BULLET_COUNT
+  const s = G4.SPREAD_DEG
+  if (n <= 1) return [0]
+  const out: number[] = []
+  for (let i = 0; i < n; i++) out.push(-s + (2 * s * i) / (n - 1))
+  return out
 }
 
-function obstacleBox(o: Obstacle): Box {
-  if (o.type === 'jump') {
-    return {
-      x0: o.x,
-      x1: o.x + G4.CACTUS_W,
-      top: G4.GROUND_Y - G4.CACTUS_H,
-      bottom: G4.GROUND_Y,
-    }
-  }
-  return {
-    x0: o.x,
-    x1: o.x + G4.BIRD_W,
-    top: G4.BIRD_TOP,
-    bottom: G4.BIRD_TOP + G4.BIRD_H,
-  }
-}
-
-export function create(_rand: () => number): Game4State {
+export function create(rand: () => number): Game4State {
   return {
     elapsed: 0,
     result: null,
-    y: 0,
-    vy: 0,
-    grounded: true,
-    ducking: false,
-    obstacles: [],
+    launcherX: G4.W / 2,
+    launcherDir: rand() < 0.5 ? -1 : 1,
+    p2Speed: lerp(G4.P2_SPEED_MIN, G4.P2_SPEED_MAX, rand()),
+    p2X: G4.W / 2,
+    leftHeld: false,
+    rightHeld: false,
+    rockets: [],
     cooldown: 0,
-    cooldownMax: G4.SPAWN_COOLDOWN,
-    spawnAnim: 0,
-    runPhase: 0,
+    seed: Math.floor(rand() * 4294967296) >>> 0,
+    hp: G4.MAX_HP,
+    iframes: 0,
   }
 }
 
@@ -121,81 +100,88 @@ export function step(state: Game4State, events: GameInputEvent[], dt: number): G
   if (state.result) return state
   state.elapsed += dt
   state.cooldown = Math.max(0, state.cooldown - dt)
-  state.spawnAnim = Math.max(0, state.spawnAnim - dt)
-  state.runPhase += dt
+  state.iframes = Math.max(0, state.iframes - dt)
 
-  // 1) 입력
+  // 1) 입력 — W: 발사대에서 N방향 부채꼴 발사
   for (const e of events) {
-    const down = e.type === 'down'
-    switch (e.code) {
-      case 'KeyQ': // P1 점프 — 지면에 있을 때만
-        if (down && state.grounded) {
-          state.vy = G4.JUMP_V
-          state.grounded = false
-        }
-        break
-      case 'KeyW': // P1 숙이기(홀드)
-        state.ducking = down
-        break
-      case 'KeyU': // P2 점프 장애물 생성
-        if (down && state.cooldown === 0) {
-          state.obstacles.push({ x: G4.W, type: 'jump', phase: 0 })
-          state.cooldownMax = cooldownFor(state.elapsed)
-          state.cooldown = state.cooldownMax
-          state.spawnAnim = G4.SPAWN_ANIM
-        }
-        break
-      case 'KeyI': // P2 숙이기 장애물 생성
-        if (down && state.cooldown === 0) {
-          state.obstacles.push({ x: G4.W, type: 'duck', phase: 0 })
-          state.cooldownMax = cooldownFor(state.elapsed)
-          state.cooldown = state.cooldownMax
-          state.spawnAnim = G4.SPAWN_ANIM
-        }
-        break
+    if (e.code === 'KeyU') state.leftHeld = e.type === 'down'
+    else if (e.code === 'KeyI') state.rightHeld = e.type === 'down'
+    else if (e.type === 'down' && e.code === 'KeyQ') {
+      state.launcherDir = state.launcherDir === 1 ? -1 : 1
+    } else if (e.type === 'down' && e.code === 'KeyW' && state.cooldown === 0) {
+      const b = nextRand(state.seed)
+      state.seed = b.seed
+      const baseSpeed = lerp(G4.ROCKET_SPEED_MIN, G4.ROCKET_SPEED_MAX, b.u)
+      for (const deg of fanAngles()) {
+        const j = nextRand(state.seed)
+        state.seed = j.seed
+        const speed = baseSpeed * (1 - G4.SPEED_JITTER / 2 + G4.SPEED_JITTER * j.u)
+        const rad = deg * DEG
+        state.rockets.push({
+          x: state.launcherX,
+          y: G4.LAUNCHER_Y,
+          vx: speed * Math.sin(rad),
+          vy: speed * Math.cos(rad),
+          bounces: 0,
+        })
+      }
+      state.cooldown = G4.FIRE_COOLDOWN
     }
   }
 
-  // 2) 공룡 물리(점프/낙하)
-  if (!state.grounded) {
-    const g = G4.GRAVITY * (state.ducking ? G4.FASTFALL_MULT : 1)
-    state.vy -= g * dt
-    state.y += state.vy * dt
-    if (state.y <= 0) {
-      state.y = 0
-      state.vy = 0
-      state.grounded = true
+  // 2) 발사대 이동
+  state.launcherX += state.launcherDir * G4.SCAN_SPEED * dt
+  if (state.launcherX < G4.MARGIN) {
+    state.launcherX = G4.MARGIN
+    state.launcherDir = 1
+  } else if (state.launcherX > G4.W - G4.MARGIN) {
+    state.launcherX = G4.W - G4.MARGIN
+    state.launcherDir = -1
+  }
+
+  // 3) P2 이동
+  const dir = (state.rightHeld ? 1 : 0) - (state.leftHeld ? 1 : 0)
+  state.p2X = clamp(state.p2X + dir * state.p2Speed * dt, G4.MARGIN, G4.W - G4.MARGIN)
+
+  // 4) 탄 이동(직선) + 측벽 반사
+  const survivors: Bullet[] = []
+  for (const r of state.rockets) {
+    r.x += r.vx * dt
+    r.y += r.vy * dt
+    if (r.x < G4.MARGIN && r.vx < 0 && r.bounces < G4.MAX_BOUNCE) {
+      r.x = G4.MARGIN
+      r.vx = -r.vx
+      r.bounces++
+    } else if (r.x > G4.W - G4.MARGIN && r.vx > 0 && r.bounces < G4.MAX_BOUNCE) {
+      r.x = G4.W - G4.MARGIN
+      r.vx = -r.vx
+      r.bounces++
+    }
+    if (r.y < G4.H + G4.ROCKET_H) survivors.push(r)
+  }
+  state.rockets = survivors
+
+  // 5) 피격 판정 — 무적이 아닐 때만 1대 맞고 HP-1, 무적 부여, 맞은 탄 소멸
+  if (state.iframes <= 0) {
+    const px0 = state.p2X - G4.P2_W / 2
+    const px1 = state.p2X + G4.P2_W / 2
+    for (let idx = 0; idx < state.rockets.length; idx++) {
+      const r = state.rockets[idx]
+      const rx0 = r.x - G4.ROCKET_W / 2
+      const rx1 = r.x + G4.ROCKET_W / 2
+      if (rx0 < px1 && rx1 > px0 && r.y < G4.P2_Y + G4.P2_H && r.y + G4.ROCKET_H > G4.P2_Y) {
+        state.hp -= 1
+        state.iframes = G4.IFRAME_TIME
+        state.rockets.splice(idx, 1)
+        if (state.hp <= 0) {
+          state.result = 'P1'
+          return state
+        }
+        break
+      }
     }
   }
 
-  // 3) 장애물 이동 + 화면 밖 제거
-  const survivors: Obstacle[] = []
-  for (const o of state.obstacles) {
-    o.x -= G4.OBST_SPEED * dt
-    o.phase += dt
-    const w = o.type === 'jump' ? G4.CACTUS_W : G4.BIRD_W
-    if (o.x + w > 0) survivors.push(o)
-  }
-  state.obstacles = survivors
-
-  // 4) 충돌 판정 — 숙이기는 지면에 있을 때만 히트박스를 낮춘다
-  const curH = state.ducking && state.grounded ? G4.DINO_DUCK_H : G4.DINO_H
-  const dinoBottom = G4.GROUND_Y - state.y
-  const dino: Box = {
-    x0: G4.DINO_X,
-    x1: G4.DINO_X + G4.DINO_W,
-    top: dinoBottom - curH,
-    bottom: dinoBottom,
-  }
-  for (const o of state.obstacles) {
-    const b = obstacleBox(o)
-    if (dino.x0 < b.x1 && dino.x1 > b.x0 && dino.top < b.bottom && dino.bottom > b.top) {
-      state.result = 'P2'
-      return state
-    }
-  }
-
-  // 5) 제한시간을 버티면 P1 승
-  if (state.elapsed >= GAME_DURATION) state.result = 'P1'
+  if (state.elapsed >= GAME_DURATION) state.result = 'P2'
   return state
 }
