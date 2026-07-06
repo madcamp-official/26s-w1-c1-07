@@ -1,6 +1,6 @@
 /**
- * 서버측 게임 코어 어댑터 — gameId로 create/step dispatch,
- * 입력 code를 role의 물리키로 재기입(안티치트), 상태 투영(seed 등 비전송).
+ * Server-side game core adapter — dispatches create/step by gameId,
+ * rewrites the input code to the role's physical key (anti-cheat), projects state (non-transmitted fields like seed).
  */
 import { GAME_CORES, type GameId, type Role } from '@madpump/shared'
 import type { GameInputEvent, GameResult } from '@madpump/shared'
@@ -22,9 +22,9 @@ export function stepState(
 }
 
 /**
- * 클라가 보낸 code(슬롯)를 그 플레이어 role의 물리키로 덮어쓴다.
- * 슬롯A = KeyQ|KeyU → P1이면 KeyQ, P2면 KeyU / 슬롯B = KeyW|KeyI → P1이면 KeyW, P2면 KeyI.
- * 클라 code를 신뢰하지 않고 서버 세션의 role로만 결정(스푸핑 방지).
+ * Overwrites the code (slot) sent by the client with the physical key of that player's role.
+ * Slot A = KeyQ|KeyU → KeyQ for P1, KeyU for P2 / Slot B = KeyW|KeyI → KeyW for P1, KeyI for P2.
+ * Does not trust the client code and decides purely from the server session's role (anti-spoofing).
  */
 export function rewriteCodeForRole(
   code: GameInputEvent['code'],
@@ -36,8 +36,8 @@ export function rewriteCodeForRole(
 }
 
 /**
- * 렌더 투영 — 클라로 보낼 상태에서 비전송 필드(seed 등) 제거.
- * game-lab 상태는 전부 직렬화 가능(seed:number). seed는 치팅 방지 위해 제거.
+ * Render projection — removes non-transmitted fields (like seed) from the state sent to the client.
+ * game-lab state is fully serializable (seed:number). seed is removed to prevent cheating.
  */
 export function projectState(state: State): unknown {
   const { seed, rng, ...view } = state as Record<string, unknown>

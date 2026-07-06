@@ -1,7 +1,7 @@
 /**
- * S? 게임4 — 공룡 달리기 전용 스타일 (game6 에이전트 소유).
- * 공용 theme.css 유틸(글로우/베젤/그리드/폰트) 위에 레이아웃만 얹는다 — 토큰·글로우 공식은 PLAN §1 준수.
- * 스캔라인은 App의 .crt-overlay가 전역 1장 렌더 — 여기서 중복 금지.
+ * S? Game 4 — Dino Run-specific styles (owned by the game6 agent).
+ * Layers only layout on top of the shared theme.css utils (glow/bezel/grid/font) — follows the token/glow formula in PLAN §1.
+ * The App's .crt-overlay renders a single global scanline layer — do not duplicate it here.
  */
 
 .g6-screen {
@@ -31,10 +31,10 @@
   width: min(1020px, 100%);
 }
 
-/* CRT 스테이지 — 베젤은 theme.css .crt-bezel, 여기서는 크기만.
-   세 번째 항: 뷰포트 높이 기반 캡(하단 키캡 잘림 방지).
-   상하 고정 크롬(topbar+HUD+키캡+gap+padding) + 베젤 테두리 28px,
-   캔버스 16:9 → 스테이지 폭 ≤ (100vh − 크롬) × 16/9 + 28px */
+/* CRT stage — the bezel is theme.css .crt-bezel; here we only set the size.
+   Third term: viewport-height-based cap (prevents the bottom keycaps from being clipped).
+   Fixed top/bottom chrome (topbar+HUD+keycaps+gap+padding) + bezel border 28px,
+   canvas 16:9 → stage width ≤ (100vh − chrome) × 16/9 + 28px */
 .g6-stage {
   width: min(1020px, 100%, calc((100vh - 310px) * 16 / 9 + 28px));
 }
@@ -45,7 +45,7 @@
   aspect-ratio: 16 / 9;
 }
 
-/* 라운드 인트로 — sign-on 플리커 후 소등(steps, 부드러운 fade 금지 §1.4) */
+/* Round intro — sign-on flicker then blackout (steps, no smooth fade §1.4) */
 .g6-round-intro {
   position: absolute;
   inset: 0;
@@ -83,11 +83,11 @@
 @media (prefers-reduced-motion: reduce) {
   .g6-round-intro {
     animation: none;
-    opacity: 0; /* HUD의 ROUND n/m 캡션이 정보 정본 — 인트로는 장식이라 생략 */
+    opacity: 0; /* The HUD's ROUND n/m caption is the source of truth — the intro is decorative, so skip it */
   }
 }
 
-/* 하단 키캡 열 — 좌 P1(시안) / 우 P2(핑크), 실제 배정 키 표기(SPEC Q2) */
+/* Bottom keycap row — left P1 (cyan) / right P2 (pink), showing the actually assigned keys (SPEC Q2) */
 .g6-keys {
   width: min(1020px, 100%);
   display: flex;

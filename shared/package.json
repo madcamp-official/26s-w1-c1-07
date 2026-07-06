@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "게임 코어 로직 + 소켓 이벤트 타입 (client/server 공유). game-lab에서 vendor-in한 튜닝 코어.",
+  "description": "Game core logic + socket event types (shared by client/server). Tuning core vendored-in from game-lab.",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "exports": {

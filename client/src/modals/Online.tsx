@@ -1,17 +1,17 @@
 /**
- * S6 온라인 게임하기 패널 (lobby 에이전트 소유).
- * 본체 testid: modal-online / 부품: btn-quickstart, btn-code-create, room-code-display,
- *   input-code, btn-code-join, input-bet, btn-bet-place (+ 복사, 톱니→S4 재사용)
- * PLAN §2-S6: "온라인 게임하기 — VS MODE" 마퀴 + [빠른 시작](옐로 히어로, INSERT COIN ▶ 점멸)
- *   + surface-deep 서브 섹션 "게임 만들기 / 참가하기" — 1행 코드 생성(생성 전 점멸 슬롯 →
- *   생성 후 옐로 대형 코드 + 복사 COPIED! + 톱니) / OR 칩 / 2행 코드 입력 + 확인.
- * SPEC QA-S6-01~09 + 코인 베팅(분리 창 방식):
- *   하나의 오버레이 안에 "온라인 게임하기"(modal-online)와 "코인 베팅"(modal-bet)
- *   두 창이 나란히 뜬다. 베팅 창에서 1 ~ 보유코인 정수 입력 후 [베팅]으로 확정 —
- *   확정 전에 빠른 시작/코드 생성/코드 입력을 누르면 "코인 베팅을 먼저 해주세요".
- *   확정된 베팅액이 각 액션의 bet 페이로드로 전달된다(서버가 보유량 재검증).
- *   톱니 → S4 열고 닫히면 이 패널로 복귀 / 배경 클릭·ESC 닫기(타이머 정리).
- * 열림 조건: flow.modal === 'online'.
+ * S6 Play Online panel (owned by the lobby agent).
+ * root testid: modal-online / parts: btn-quickstart, btn-code-create, room-code-display,
+ *   input-code, btn-code-join, input-bet, btn-bet-place (+ copy, gear→S4 reuse)
+ * PLAN §2-S6: "Play Online — VS MODE" marquee + [Quick Start] (yellow hero, INSERT COIN ▶ blinking)
+ *   + surface-deep sub-section "Create / Join Game" — row 1 code create (blinking slot before creation →
+ *   large yellow code after creation + copy COPIED! + gear) / OR chip / row 2 code input + confirm.
+ * SPEC QA-S6-01~09 + coin bet (separate-window style):
+ *   Within a single overlay, two windows appear side by side: "Play Online" (modal-online) and "Coin Bet" (modal-bet).
+ *   In the bet window, enter an integer from 1 to your coin balance and confirm with [Bet] —
+ *   if you press Quick Start / code create / code input before confirming, "Place your coin bet first".
+ *   The confirmed bet amount is passed as the bet payload of each action (the server re-validates the balance).
+ *   gear → opens S4; when it closes, returns to this panel / background click·ESC closes (clears timers).
+ * Open condition: flow.modal === 'online'.
  */
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
@@ -22,7 +22,7 @@ import { connectOnline, createRoom, joinQueue, joinRoom } from '../net/online';
 import './online.css';
 import '../global-interaction.css';
 
-/** 오버레이 안의 네온 창 1장 — components/Modal의 본체 마크업(modal.css 전역 클래스) 재사용 */
+/** A single neon window inside the overlay — reuses the root markup of components/Modal (modal.css global classes) */
 function NeonWindow({
   marquee,
   accent,
@@ -62,21 +62,21 @@ export default function OnlineModal() {
   const session = useSession();
   const open = flow.modal === 'online';
 
-  /** 코인 베팅 (사이드 패널) — 입력창의 값을 그대로 베팅액으로 사용 (별도 [베팅] 확정 불필요) */
+  /** Coin bet (side panel) — uses the input field's value directly as the bet amount (no separate [Bet] confirm needed) */
   const [betInput, setBetInput] = useState('1');
   const [betError, setBetError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  /** 생성된 코드 (이번 패널 세션 로컬 표시용 — 닫으면 리셋) */
+  /** Generated code (local display for this panel session — reset on close) */
   const [createdCode, setCreatedCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [joinError, setJoinError] = useState<string | null>(null);
 
-  /** mock 상대 입장 타이머 (코드 생성 후) */
+  /** mock opponent-join timer (after code creation) */
   const joinTimerRef = useRef<number | null>(null);
   const copiedTimerRef = useRef<number | null>(null);
-  /** 톱니로 S4를 열었을 때, S4가 닫히면 이 패널로 복귀하기 위한 플래그 */
+  /** Flag to return to this panel when S4, opened via the gear, closes */
   const returnFromSettingsRef = useRef(false);
 
   const clearJoinTimer = () => {
@@ -86,16 +86,16 @@ export default function OnlineModal() {
     }
   };
 
-  // 모달 상태 감시: S4에서 돌아오기 / 패널 완전 이탈 시 정리
+  // Watch modal state: return from S4 / clean up when fully leaving the panel
   useEffect(() => {
     if (flow.modal === null && returnFromSettingsRef.current) {
-      // 톱니로 연 설정이 닫힘 → 온라인 패널로 복귀 (SPEC S6-5 방 설정 재사용)
+      // Settings opened via the gear closed → return to the online panel (SPEC S6-5 room-settings reuse)
       returnFromSettingsRef.current = false;
       openModal('online');
       return;
     }
     if (flow.modal !== 'online' && flow.modal !== 'settings') {
-      // 패널을 떠남(닫기/매칭 진입) — mock 입장 타이머와 로컬 상태 정리
+      // Leaving the panel (close/enter matchmaking) — clear the mock join timer and local state
       clearJoinTimer();
       returnFromSettingsRef.current = false;
       setCreatedCode(null);
@@ -108,7 +108,7 @@ export default function OnlineModal() {
     }
   }, [flow.modal]);
 
-  // 언마운트 시 타이머 정리
+  // Clear timers on unmount
   useEffect(
     () => () => {
       clearJoinTimer();
@@ -118,18 +118,18 @@ export default function OnlineModal() {
   );
 
   /**
-   * 액션 공통 가드 — 입력창의 값을 그대로 베팅액으로 검증·사용 (별도 [베팅] 확정 불필요).
-   * 빠른시작/코드생성/코드입력이 실행 직전 호출한다.
-   * @returns 유효한 베팅액(1~보유코인 정수) 또는 null(액션 중단 + 에러 표시)
+   * Shared action guard — validates and uses the input field's value directly as the bet amount (no separate [Bet] confirm needed).
+   * Quick Start / code create / code input call this right before running.
+   * @returns a valid bet amount (integer 1 to coin balance) or null (abort action + show error)
    */
   const requireBet = (): number | null => {
     const bet = Number(betInput.trim());
     if (!Number.isInteger(bet) || bet < 1) {
-      setBetError('반드시 1코인 이상 베팅해야 해요');
+      setBetError('You must bet at least 1 coin');
       return null;
     }
     if (bet > session.coins) {
-      setBetError('보유 코인을 넘을 수 없어요');
+      setBetError('Cannot exceed your coin balance');
       return null;
     }
     setBetError(null);
@@ -142,11 +142,11 @@ export default function OnlineModal() {
     if (bet === null) return;
     clearJoinTimer();
     setBusy(true);
-    await connectOnline(); // 세션 확인 + 소켓
-    const r = await joinQueue(bet); // 글로벌 FIFO 큐 (2명 모이면 서버가 자동 매칭·시작)
+    await connectOnline(); // session check + socket
+    const r = await joinQueue(bet); // global FIFO queue (once 2 players gather, the server auto-matches and starts)
     setBusy(false);
-    if (!r.ok) return setBetError(r.message ?? '큐 진입 실패');
-    openModal('matching'); // 대기 연출 — 매칭되면 OnlineController가 게임으로 이동
+    if (!r.ok) return setBetError(r.message ?? 'Failed to join queue');
+    openModal('matching'); // waiting animation — once matched, OnlineController moves to the game
   };
 
   const onCreateCode = async () => {
@@ -156,16 +156,16 @@ export default function OnlineModal() {
     setCopied(false);
     setBusy(true);
     await connectOnline();
-    const r = await createRoom(flow.enabledGames, bet); // 설정(게임 체크박스)+베팅 — 라운드는 항상 9
+    const r = await createRoom(flow.enabledGames, bet); // settings (game checkboxes) + bet — rounds are always 9
     setBusy(false);
-    if (!r.room) return setBetError(r.message ?? '코드 생성 실패');
-    setCreatedCode(r.room.code); // 상대 입장 시 서버가 자동 시작 → 자동 이동
+    if (!r.room) return setBetError(r.message ?? 'Failed to create code');
+    setCreatedCode(r.room.code); // when the opponent joins, the server auto-starts → auto-navigates
   };
 
   const onJoin = async () => {
     if (busy) return;
     if (!isValidRoomCode(joinCode)) {
-      setJoinError('숫자 코드를 입력해 주세요');
+      setJoinError('Please enter a numeric code');
       return;
     }
     setJoinError(null);
@@ -176,8 +176,8 @@ export default function OnlineModal() {
     await connectOnline();
     const r = await joinRoom(joinCode.trim(), bet);
     setBusy(false);
-    if (!r.ok) return setJoinError(r.message ?? '방을 찾을 수 없어요');
-    openModal('matching'); // 입장 성공 → 대기(자동 시작 시 이동)
+    if (!r.ok) return setJoinError(r.message ?? 'Could not find the room');
+    openModal('matching'); // join success → wait (navigates on auto-start)
   };
 
   const onCopy = async () => {
@@ -185,7 +185,7 @@ export default function OnlineModal() {
     try {
       await navigator.clipboard.writeText(createdCode);
     } catch {
-      // clipboard API 불가 환경 fallback
+      // fallback for environments where the clipboard API is unavailable
       const ta = document.createElement('textarea');
       ta.value = createdCode;
       document.body.appendChild(ta);
@@ -203,7 +203,7 @@ export default function OnlineModal() {
     openModal('settings');
   };
 
-  // ESC로 닫기 (Modal 컴포넌트 대신 커스텀 오버레이라 직접 처리)
+  // Close with ESC (handled directly since this is a custom overlay instead of the Modal component)
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -228,26 +228,26 @@ export default function OnlineModal() {
           if (e.target === e.currentTarget) closeModal();
         }}
       >
-        {/* ── 창 1: 온라인 게임하기 (제목은 마퀴가 대신 — 본문 중복 제목 없음) ── */}
-        <NeonWindow marquee="온라인 게임하기" accent="var(--accent)" testId="modal-online" width={620}>
-          {/* 히어로 CTA — 빠른 시작 */}
+        {/* ── Window 1: Play Online (the marquee serves as the title — no duplicate title in the body) ── */}
+        <NeonWindow marquee="Play Online" accent="var(--accent)" testId="modal-online" width={620}>
+          {/* Hero CTA — Quick Start */}
           <div className="s6-hero">
             <p className="font-arcade c-accent anim-blink s6-insert" aria-hidden>
               INSERT COIN ▶
             </p>
             <Button variant="primary" coin block data-testid="btn-quickstart" onClick={onQuickStart} disabled={busy}>
-              빠른 시작
+              Quick Start
             </Button>
           </div>
 
-          {/* 서브 섹션: 게임 만들기 / 참가하기 */}
+          {/* Sub-section: Create / Join Game */}
           <section className="s6-sub">
-            <h3 className="font-display s6-sub-title">게임 만들기 / 참가하기</h3>
+            <h3 className="font-display s6-sub-title">Create / Join Game</h3>
 
-            {/* 1행: 코드 생성 */}
+            {/* Row 1: code create */}
             <div className="s6-row">
               <Button variant="secondary" data-testid="btn-code-create" onClick={onCreateCode} disabled={busy}>
-                코드 생성하기
+                Create code
               </Button>
               <div className="s6-code-slot" data-testid="room-code-display">
                 {createdCode ? (
@@ -267,22 +267,22 @@ export default function OnlineModal() {
                   </span>
                 )}
                 <Button variant="tertiary" onClick={onCopy} disabled={!createdCode}>
-                  복사
+                  Copy
                 </Button>
-                <CoinButton label="방 설정" color="var(--accent2)" onClick={onGear}>
+                <CoinButton label="Room Settings" color="var(--accent2)" onClick={onGear}>
                   ⚙
                 </CoinButton>
               </div>
             </div>
 
-            {/* OR 구분선 */}
+            {/* OR divider */}
             <div className="s6-or" aria-hidden>
               <span className="s6-or-chip font-arcade c-accent2">OR</span>
             </div>
 
-            {/* 2행: 코드 입력 */}
+            {/* Row 2: code input */}
             <div className="s6-row s6-row--join">
-              <span className="font-display s6-join-label">코드 입력하기</span>
+              <span className="font-display s6-join-label">Enter code</span>
               <div className="s6-join-field">
                 <label className={`neon-input${joinError ? ' error anim-shake' : ''}`}>
                   <span className="prompt">&gt;</span>
@@ -290,8 +290,8 @@ export default function OnlineModal() {
                     data-testid="input-code"
                     value={joinCode}
                     inputMode="numeric"
-                    placeholder="상대의 방 코드"
-                    aria-label="코드 입력하기"
+                    placeholder="Opponent's room code"
+                    aria-label="Enter code"
                     onChange={(e) => {
                       setJoinCode(e.target.value);
                       if (joinError) setJoinError(null);
@@ -304,15 +304,15 @@ export default function OnlineModal() {
                 {joinError && <p className="s6-join-error c-error">{joinError}</p>}
               </div>
               <Button variant="primary" data-testid="btn-code-join" onClick={onJoin} disabled={busy}>
-                확인
+                Confirm
               </Button>
             </div>
           </section>
         </NeonWindow>
 
-        {/* ── 창 2: 코인 베팅 (입력값을 그대로 베팅액으로 사용) ── */}
+        {/* ── Window 2: Coin Bet (uses the input value directly as the bet amount) ── */}
         <NeonWindow
-          marquee="코인 베팅"
+          marquee="Coin Bet"
           accent="var(--accent)"
           testId="modal-bet"
           width={250}
@@ -320,7 +320,7 @@ export default function OnlineModal() {
         >
           <div className="s6-bet-win" data-testid="bet-panel">
             <p className="s6-bet-balance font-arcade">
-              보유 <span className="c-accent glow-text">{session.coins}</span> COIN
+              Balance <span className="c-accent glow-text">{session.coins}</span> COIN
             </p>
             <label className={`neon-input s6-bet-input${betError ? ' error' : ''}`}>
               <span className="prompt">&gt;</span>
@@ -328,9 +328,9 @@ export default function OnlineModal() {
                 data-testid="input-bet"
                 value={betInput}
                 inputMode="numeric"
-                aria-label="베팅할 코인"
+                aria-label="Coins to bet"
                 onChange={(e) => {
-                  // 숫자 외 키는 입력 자체가 안 되도록 필터
+                  // Filter out non-numeric keys so they can't be entered at all
                   setBetInput(e.target.value.replace(/[^\d]/g, ''));
                   if (betError) setBetError(null);
                 }}
@@ -343,7 +343,7 @@ export default function OnlineModal() {
             )}
             {session.coins < 1 && (
               <p className="s6-bet-broke font-display c-muted">
-                코인이 없어요 — 오프라인의 "코인 노가다"로 벌 수 있어요
+                No coins — you can earn some with the offline "Coin Grind"
               </p>
             )}
           </div>

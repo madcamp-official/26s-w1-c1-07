@@ -3,9 +3,9 @@ import type { GameInputEvent, KeyCode } from '@madpump/shared'
 const KEYS: ReadonlySet<string> = new Set(['KeyQ', 'KeyW', 'KeyU', 'KeyI'])
 
 /**
- * 로컬 2인 키보드 입력 소스.
- * e.code 기준 판정이라 한글 IME 상태와 무관하게 동작한다.
- * OS 키 반복(e.repeat)은 무시 — 연타만 인정. (게임2 이동은 down/up 상태로 처리되므로 무관)
+ * Local 2-player keyboard input source.
+ * Decisions are based on e.code, so it works regardless of the Korean IME state.
+ * OS key repeat (e.repeat) is ignored — only real presses count. (Game 2 movement is handled via down/up state, so it's unaffected)
  */
 export function attachLocalKeyboard(
   now: () => number,
@@ -15,7 +15,7 @@ export function attachLocalKeyboard(
 
   const onKey = (e: KeyboardEvent) => {
     if (!KEYS.has(e.code)) return
-    // Cmd+W(탭 닫기) 등 단축키는 게임 입력으로 흡수하지 않는다
+    // Don't absorb shortcuts like Cmd+W (close tab) as game input
     if (e.metaKey || e.ctrlKey || e.altKey) return
     e.preventDefault()
     if (e.repeat) return
@@ -26,7 +26,7 @@ export function attachLocalKeyboard(
     push({ code, type, t: now() })
   }
 
-  // 포커스를 잃으면 keyup이 유실되므로, 눌려 있던 키를 전부 뗀 것으로 처리
+  // When focus is lost, keyup events are dropped, so treat all held keys as released
   const onBlur = () => {
     for (const code of held) push({ code, type: 'up', t: now() })
     held.clear()

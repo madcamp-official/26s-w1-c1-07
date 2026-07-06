@@ -1,6 +1,6 @@
 /**
- * S10·S11 게임2 전용 스타일 (game4 에이전트 소유).
- * 공용 theme.css 유틸 위에 레이아웃/연출만 얹는다 — 토큰·글로우 공식은 PLAN §1 준수.
+ * S10·S11 Game 2-specific styles (owned by the game4 agent).
+ * Layers only layout/presentation on top of the shared theme.css utils — follows the token/glow formula in PLAN §1.
  */
 
 .g4-screen {
@@ -30,10 +30,10 @@
   width: min(1020px, 100%);
 }
 
-/* CRT 스테이지 — 베젤은 theme.css .crt-bezel, 여기서는 크기만.
-   세 번째 항: 뷰포트 높이 기반 캡 (QA V-2 — 1280×832에서 하단 키캡 잘림 방지).
-   상하 고정 크롬(topbar+HUD+키캡+gap+padding) ≈ 270px, 베젤 테두리 28px,
-   캔버스 16:9 → 스테이지 폭 ≤ (100vh − 크롬 − 여유) × 16/9 + 28px */
+/* CRT stage — the bezel is theme.css .crt-bezel; here we only set the size.
+   Third term: viewport-height-based cap (QA V-2 — prevents the bottom keycaps from being clipped at 1280×832).
+   Fixed top/bottom chrome (topbar+HUD+keycaps+gap+padding) ≈ 270px, bezel border 28px,
+   canvas 16:9 → stage width ≤ (100vh − chrome − slack) × 16/9 + 28px */
 .g4-stage {
   width: min(1020px, 100%, calc((100vh - 310px) * 16 / 9 + 28px));
 }
@@ -44,7 +44,7 @@
   aspect-ratio: 16 / 9;
 }
 
-/* 라운드 인트로 — sign-on 플리커 후 소등 (steps, 부드러운 fade 금지 §1.4) */
+/* Round intro — sign-on flicker then blackout (steps, no smooth fade §1.4) */
 .g4-round-intro {
   position: absolute;
   inset: 0;
@@ -82,11 +82,11 @@
 @media (prefers-reduced-motion: reduce) {
   .g4-round-intro {
     animation: none;
-    opacity: 0; /* HUD의 ROUND n/m 캡션이 정보 정본 — 인트로는 장식이라 생략 */
+    opacity: 0; /* The HUD's ROUND n/m caption is the source of truth — the intro is decorative, so skip it */
   }
 }
 
-/* 하단 키캡 열 — 좌 P1(시안) / 우 P2(핑크), 실제 배정 키 표기 (SPEC Q2) */
+/* Bottom keycap row — left P1 (cyan) / right P2 (pink), showing the actually assigned keys (SPEC Q2) */
 .g4-keys {
   width: min(1020px, 100%);
   display: flex;
@@ -109,8 +109,8 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   새 메커니즘: P2 HP(3) 표시 — neon HP 셀 (기존 화면엔 없던 요소).
-   스테이지(.crt-bezel, position:relative, overflow:hidden) 좌상단에 배치.
+   New mechanic: P2 HP(3) display — neon HP cells (an element the existing screens didn't have).
+   Placed at the top-left of the stage (.crt-bezel, position:relative, overflow:hidden).
    ───────────────────────────────────────────────────────────── */
 .g4-hp {
   position: absolute;
@@ -158,11 +158,11 @@
 }
 
 
-/* ── 새 메커니즘 UI (로직 포팅) ── */
+/* ── New mechanic UI (logic port) ── */
 
 /* ─────────────────────────────────────────────────────────────
-   새 메커니즘: P2 HP(3) 표시 — neon HP 셀 (기존 화면엔 없던 요소).
-   스테이지(.crt-bezel, position:relative, overflow:hidden) 좌상단에 배치.
+   New mechanic: P2 HP(3) display — neon HP cells (an element the existing screens didn't have).
+   Placed at the top-left of the stage (.crt-bezel, position:relative, overflow:hidden).
    ───────────────────────────────────────────────────────────── */
 .g4-hp {
   position: absolute;

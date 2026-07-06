@@ -1,19 +1,19 @@
 /**
- * S10·S11 게임2 — 로켓 피하기 (neon-coinop 화면 유지 · 로직만 새 코어로 교체).
- * 컨테이너 testid: scr-game4 / 부품: game-stage, hud-*(HudFrame 내장), btn-exit
+ * S10·S11 Game 2 — dodge the rockets (keep the neon-coinop screen · swap only the logic for the new core).
+ * Container testid: scr-game4 / parts: game-stage, hud-*(built into HudFrame), btn-exit
  *
- * ── 이번 교체의 원칙 ─────────────────────────────────────────────
- *  · UI·컴포넌트·CSS 클래스·캔버스 연출은 100% 그대로.
- *  · 게임 상태/판정만 @madpump/shared game4 코어(create/step)로 구동.
- *  · 새 메커니즘 HP(3) → 기존 화면에 없던 요소이므로 neon HP 셀 3개를 추가(--p2 색).
+ * ── Principles of this swap ─────────────────────────────────────────────
+ *  · UI · components · CSS classes · canvas effects stay 100% as-is.
+ *  · Only game state/judgement is driven by the @madpump/shared game4 core (create/step).
+ *  · New mechanic HP(3) → an element the existing screen lacked, so add 3 neon HP cells (--p2 color).
  *
- * 배선:
- *   mount → idle이면 startOfflineGame(4) (direct-URL 복구)
- *   라운드마다 game4.create(Math.random)
- *   rAF 루프 → game4.step(state, events, dtSec) → setDebugGame(state) 매 틱
- *   입력은 attachLocalKeyboard(GameInputEvent 큐) → step에 그대로 전달(엣지/홀드는 코어가 처리)
- *   result('P1'|'P2') 확정 → (RESULT_FX_MS 연출 후) reportRoundEnd(매핑) 1회 → <ResultOverlay />
- *   online 모드 → P2(회피자)는 봇 휴리스틱(KeyU/KeyI down/up 이벤트 합성), 사람은 P1(q/w)
+ * Wiring:
+ *   mount → if idle, startOfflineGame(4) (direct-URL recovery)
+ *   each round game4.create(Math.random)
+ *   rAF loop → game4.step(state, events, dtSec) → setDebugGame(state) every tick
+ *   input via attachLocalKeyboard(GameInputEvent queue) → passed straight to step (edge/hold handled by the core)
+ *   result('P1'|'P2') settled → (after RESULT_FX_MS effect) reportRoundEnd(mapping) once → <ResultOverlay />
+ *   online mode → P2 (dodger) is a bot heuristic (synthesizes KeyU/KeyI down/up events), the human is P1 (q/w)
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -41,8 +41,8 @@ import { sfx } from '@/audio';
 import './game4.css';
 
 // ---------------------------------------------------------------------------
-// 캔버스 상수 (논리 해상도 — CSS로 반응형 스케일). 필드 논리크기는 코어 G4.W/H(800×450).
-// 캔버스는 그 1.2배(960×540)로 16:9 유지 — X/Y 스케일 균일.
+// Canvas constants (logical resolution — responsive scaling via CSS). Field logical size is the core G4.W/H (800×450).
+// The canvas is 1.2× that (960×540) to keep 16:9 — uniform X/Y scale.
 // ---------------------------------------------------------------------------
 
 const CW = 960;
@@ -62,19 +62,19 @@ const COL0 = {
 
 const ARCADE_FONT = '"Press Start 2P", monospace';
 
-/** 발사대 몸통 반폭(렌더 전용 — 코어엔 발사대 히트박스가 없음) */
+/** Launcher body half-width (render only — the core has no launcher hitbox) */
 const LAUNCHER_HALF = 24;
 
-/** 판정 → 결과 오버레이 전환 사이 인게임 연출 시간 (피격 파편/생존 러쉬) */
+/** In-game effect time between judgement → result overlay transition (hit shards / survival rush) */
 const RESULT_FX_MS = 650;
 
-/** 코어 result('P1'|'P2'|'DRAW') → 셸 MatchResult 매핑 */
+/** Map core result('P1'|'P2'|'DRAW') → shell MatchResult */
 function toMatchResult(r: 'P1' | 'P2' | 'DRAW'): MatchResult {
   return r === 'P1' ? 'P1_WIN' : r === 'P2' ? 'P2_WIN' : 'DRAW';
 }
 
 // ---------------------------------------------------------------------------
-// 이펙트 (렌더 전용 — 로직 비침범)
+// Effects (render only — does not touch logic)
 // ---------------------------------------------------------------------------
 
 type Fx =
@@ -91,8 +91,8 @@ interface Trail {
 }
 
 // ---------------------------------------------------------------------------
-// 온라인 mock 봇 — P2(회피자) 휴리스틱. 판정 로직은 여전히 코어(game4.step).
-// 반환: 이동 방향 (-1 왼쪽 / 0 정지 / 1 오른쪽)
+// Online mock bot — P2 (dodger) heuristic. Judgement logic is still the core (game4.step).
+// Returns: movement direction (-1 left / 0 stop / 1 right)
 // ---------------------------------------------------------------------------
 
 function computeBotDir(s: Game4State): -1 | 0 | 1 {
@@ -104,23 +104,23 @@ function computeBotDir(s: Game4State): -1 | 0 | 1 {
     if (r.vy <= 0) continue;
     if (r.y > G4.P2_Y) continue;
     const eta = (G4.P2_Y - r.y) / r.vy; // sec
-    if (eta > 0.55) continue; // 아직 여유 — 반응 지연으로 봇 난이도 완화
-    const bx = r.x + r.vx * eta; // 도달 예상 x
+    if (eta > 0.55) continue; // still room — reaction delay eases bot difficulty
+    const bx = r.x + r.vx * eta; // predicted arrival x
     if (Math.abs(bx - x) < danger * 2.2 && eta < bestEta) {
       bestEta = eta;
       threatX = bx;
     }
   }
   if (threatX !== null) {
-    let dir: 1 | -1 = x <= threatX ? -1 : 1; // 총알 반대쪽으로
+    let dir: 1 | -1 = x <= threatX ? -1 : 1; // away from the bullet
     const margin = G4.MARGIN + G4.P2_W / 2;
     const reach = s.p2Speed * Math.min(bestEta, 0.4);
-    // 벽에 몰리면 반대쪽으로 가로지른다
+    // if cornered against a wall, cross to the other side
     if (dir === -1 && x - reach < margin) dir = 1;
     if (dir === 1 && x + reach > G4.W - margin) dir = -1;
     return dir;
   }
-  // 위협 없음 — 중앙 복귀 (데드존 ±12)
+  // no threat — return to center (deadzone ±12)
   const center = G4.W / 2;
   if (x < center - 12) return 1;
   if (x > center + 12) return -1;
@@ -128,17 +128,17 @@ function computeBotDir(s: Game4State): -1 | 0 | 1 {
 }
 
 // ---------------------------------------------------------------------------
-// 로켓 스프라이트 (한 번만 구움) — 매 프레임 shadowBlur+gradient 대신 blit.
-//  · head: 코어+글로우를 radial gradient로 구운 고정 스프라이트(shadowBlur 대체).
-//  · tracer: 세로 그라디언트 스트립(머리 밝음→꼬리 투명). 로켓마다 속도방향으로
-//    회전 + 꼬리길이만큼 stretch해서 그린다(속도비례 잔광 유지).
-// 로켓 N개여도 gradient 할당/ shadowBlur = 0 → 발사체 많아도 프레임 비용 일정.
+// Rocket sprites (baked once) — blit instead of shadowBlur+gradient every frame.
+//  · head: a fixed sprite baking core+glow into a radial gradient (replaces shadowBlur).
+//  · tracer: a vertical gradient strip (head bright → tail transparent). Each rocket is
+//    rotated to its velocity direction + stretched by tail length when drawn (keeps velocity-proportional afterglow).
+// Even with N rockets there's no gradient allocation / shadowBlur = 0 → frame cost stays flat no matter how many projectiles.
 // ---------------------------------------------------------------------------
 
 let rocketSprites: { head: HTMLCanvasElement; tracer: HTMLCanvasElement } | null = null;
 function getRocketSprites(): { head: HTMLCanvasElement; tracer: HTMLCanvasElement } {
   if (rocketSprites) return rocketSprites;
-  const HR = 18; // head 스프라이트 반경(코어+글로우 여유)
+  const HR = 18; // head sprite radius (core+glow margin)
   const head = document.createElement('canvas');
   head.width = HR * 2;
   head.height = HR * 2;
@@ -150,7 +150,7 @@ function getRocketSprites(): { head: HTMLCanvasElement; tracer: HTMLCanvasElemen
   const hc = head.getContext('2d');
   const tc = tracer.getContext('2d');
   if (hc && tc) {
-    // head: 중심 밝은 코어 → 바깥 글로우 페이드 (shadowBlur=12 룩을 구움)
+    // head: bright center core → outer glow fade (bakes the shadowBlur=12 look)
     const hg = hc.createRadialGradient(HR, HR, 0, HR, HR, HR);
     hg.addColorStop(0, 'rgba(253,245,0,1)');
     hg.addColorStop(0.22, 'rgba(253,245,0,0.95)');
@@ -160,7 +160,7 @@ function getRocketSprites(): { head: HTMLCanvasElement; tracer: HTMLCanvasElemen
     hc.beginPath();
     hc.arc(HR, HR, HR, 0, Math.PI * 2);
     hc.fill();
-    // tracer: y=0(머리, 밝음) → y=TH(꼬리, 투명). 폭 3 중앙.
+    // tracer: y=0 (head, bright) → y=TH (tail, transparent). Width 3, centered.
     const tg = tc.createLinearGradient(0, 0, 0, TH);
     tg.addColorStop(0, 'rgba(253,245,0,0.75)');
     tg.addColorStop(1, 'rgba(253,245,0,0)');
@@ -172,7 +172,7 @@ function getRocketSprites(): { head: HTMLCanvasElement; tracer: HTMLCanvasElemen
 }
 
 // ---------------------------------------------------------------------------
-// 캔버스 렌더러 (순수 그리기 — state는 읽기만)
+// Canvas renderer (pure drawing — state is read-only)
 // ---------------------------------------------------------------------------
 
 function drawScene(
@@ -183,8 +183,8 @@ function drawScene(
   now: number,
   p1IsYou: boolean,
 ): void {
-  // 색은 플레이어 종속(역할 아님) — P1/P2 기능 엔티티의 실제 플레이어 색으로 칠한다.
-  //  P1엔티티 색이 파랑이면 COL0 그대로, 빨강이면 p1/p2 색 스왑. 로컬 COL을 shadow → 아래 COL.p1/p2 자동 반영.
+  // Color depends on the player (not the role) — paint the P1/P2 functional entities with their actual player color.
+  //  If the P1 entity color is blue, keep COL0 as-is; if red, swap the p1/p2 colors. Shadow the local COL → the COL.p1/p2 below reflect it automatically.
   const fc = functionColors();
   const COL =
     fc.p1 === 'red'
@@ -196,16 +196,16 @@ function drawScene(
   const railP2 = Y(G4.P2_Y);
   const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
   const urgent = remainingMs <= 5000 && s.result === null;
-  const hit = s.result === 'P1'; // 발사자 승 = P2 피격사
+  const hit = s.result === 'P1'; // shooter wins = P2 killed by a hit
   const resultFx = fx.find((f) => f.kind === 'chroma' || f.kind === 'rush');
   const resultAge = resultFx ? now - resultFx.t : Infinity;
 
-  // --- 필드 (딥퍼플 낙하 공간) ---
+  // --- Field (deep-purple drop space) ---
   ctx.clearRect(0, 0, CW, CH);
   ctx.fillStyle = COL.field;
   ctx.fillRect(0, 0, CW, CH);
 
-  // 옅은 세로 그리드 — 임박 시 핑크 톤 + 상승 스캔
+  // faint vertical grid — pink tone + rising scan when time is nearly up
   ctx.save();
   ctx.strokeStyle = urgent ? 'rgba(255,42,109,0.14)' : 'rgba(211,0,197,0.09)';
   ctx.lineWidth = 1;
@@ -216,7 +216,7 @@ function drawScene(
     ctx.stroke();
   }
   if (urgent) {
-    const off = 36 - ((now / 9) % 36); // 위로 흐르는 가로줄
+    const off = 36 - ((now / 9) % 36); // horizontal lines flowing upward
     ctx.strokeStyle = 'rgba(255,42,109,0.10)';
     for (let gy = railP1 + 20 + off; gy < railP2 - 8; gy += 36) {
       ctx.beginPath();
@@ -227,7 +227,7 @@ function drawScene(
   }
   ctx.restore();
 
-  // --- P1 레일 (시안) ---
+  // --- P1 rail (cyan) ---
   ctx.save();
   ctx.strokeStyle = COL.p1;
   ctx.globalAlpha = 0.75;
@@ -240,7 +240,7 @@ function drawScene(
   ctx.stroke();
   ctx.restore();
 
-  // --- P2 레일 (핑크 = 피격 라인) — 생존 승리 시 러쉬 점등 ---
+  // --- P2 rail (pink = hit line) — rush glow on a survival win ---
   const rush = fx.find((f) => f.kind === 'rush');
   ctx.save();
   ctx.strokeStyle = COL.p2;
@@ -266,29 +266,29 @@ function drawScene(
   ctx.stroke();
   ctx.restore();
 
-  // --- 로켓: 옐로 네온 트레이서 (스프라이트 blit — shadowBlur/gradient 할당 없음) ---
+  // --- Rockets: yellow neon tracer (sprite blit — no shadowBlur/gradient allocation) ---
   const { head: headSprite, tracer: tracerSprite } = getRocketSprites();
-  const uToCanvas = CW / G4.W; // 논리→캔버스 스케일(꼬리 길이 환산)
+  const uToCanvas = CW / G4.W; // logical→canvas scale (converts tail length)
   for (const r of s.rockets) {
     const bx = X(r.x);
     const by = Y(r.y);
     if (by < railP1 - 20) continue;
     const speed = Math.hypot(r.vx, r.vy);
-    // 꼬리 = 0.28초 이동거리(캔버스px). 로컬 +Y(머리→꼬리)를 -속도 방향에 맞춤: θ=atan2(vx,-vy)
+    // tail = 0.28s of travel distance (canvas px). Align local +Y (head→tail) to the -velocity direction: θ=atan2(vx,-vy)
     const tailLen = Math.max(6, speed * 0.28 * uToCanvas);
     ctx.save();
     ctx.translate(bx, by);
     ctx.rotate(Math.atan2(r.vx, -r.vy));
     ctx.drawImage(tracerSprite, -tracerSprite.width / 2, 0, tracerSprite.width, tailLen);
     ctx.restore();
-    // 머리 글로우(고정 크기, 회전 무관) — shadowBlur 대체 스프라이트
+    // head glow (fixed size, rotation-independent) — sprite replacing shadowBlur
     ctx.drawImage(headSprite, bx - headSprite.width / 2, by - headSprite.height / 2);
   }
 
-  // --- P1 발사대 (시안, 자동 왕복 + 방향 즉독) ---
+  // --- P1 launcher (cyan, auto-sweeps + direction read at a glance) ---
   const ax = X(s.launcherX);
   const muzzle = fx.find((f) => f.kind === 'muzzle');
-  const recoil = muzzle && now - muzzle.t < 90 ? -3 : 0; // 발사 1프레임 반동
+  const recoil = muzzle && now - muzzle.t < 90 ? -3 : 0; // 1-frame recoil on fire
   const tw = X(LAUNCHER_HALF);
   ctx.save();
   ctx.translate(ax, railP1 + recoil);
@@ -299,15 +299,15 @@ function drawScene(
   ctx.lineWidth = 2;
   ctx.fillRect(-tw, -8, tw * 2, 14);
   ctx.strokeRect(-tw, -8, tw * 2, 14);
-  ctx.fillRect(-4, 6, 8, 9); // 총구 (아래로)
+  ctx.fillRect(-4, 6, 8, 9); // muzzle (pointing down)
   ctx.strokeRect(-4, 6, 8, 9);
-  // 이동 방향 셰브런
+  // movement-direction chevron
   ctx.shadowBlur = 0;
   ctx.fillStyle = COL.p1;
   ctx.font = `9px ${ARCADE_FONT}`;
   ctx.textAlign = 'center';
   ctx.fillText(s.launcherDir === 1 ? '▶' : '◀', s.launcherDir === 1 ? tw + 14 : -tw - 14, 2);
-  // P1 배지 (+ 온라인이면 YOU 점멸)
+  // P1 badge (+ YOU blink when online)
   ctx.font = `10px ${ARCADE_FONT}`;
   ctx.fillText('P1', 0, -18);
   if (p1IsYou && Math.floor(now / 500) % 2 === 0) {
@@ -316,7 +316,7 @@ function drawScene(
   }
   ctx.restore();
 
-  // --- 탄약 램프 3개 (쿨다운 → 장전 표시) ---
+  // --- 3 ammo lamps (cooldown → reload indicator) ---
   const readyRatio = 1 - Math.min(1, Math.max(0, s.cooldown / G4.FIRE_COOLDOWN));
   const reload = fx.find((f) => f.kind === 'reload');
   const flicker = reload && now - reload.t < 160 && Math.floor(now / 40) % 2 === 0;
@@ -342,7 +342,7 @@ function drawScene(
     ctx.restore();
   }
 
-  // --- P2 러너 (핑크) + 이동 잔상. 무적(iframes) 중엔 점멸. 피격사 직후엔 파편으로 대체 ---
+  // --- P2 runner (pink) + movement afterimage. Blinks during invulnerability (iframes). Right after a fatal hit, replaced with shards ---
   const dx = X(s.p2X);
   const rw = X(G4.P2_W / 2);
   const invulnBlink = s.iframes > 0 && Math.floor(now / 60) % 2 === 0;
@@ -351,7 +351,7 @@ function drawScene(
     for (const tr of trail) {
       const age = now - tr.t;
       if (age > 240) continue;
-      ctx.globalAlpha = age < 120 ? 0.22 : 0.1; // 투명도 계단 잔상
+      ctx.globalAlpha = age < 120 ? 0.22 : 0.1; // stepped-opacity afterimage
       ctx.fillStyle = COL.p2;
       ctx.fillRect(X(tr.x) - rw, railP2 - 7, rw * 2, 12);
     }
@@ -377,11 +377,11 @@ function drawScene(
     ctx.restore();
   }
 
-  // --- 이펙트: 머즐 스파크 / 파편 / 캡션 ---
+  // --- Effects: muzzle spark / shards / caption ---
   for (const f of fx) {
     const age = now - f.t;
     if (f.kind === 'muzzle' && age < 90) {
-      // 시안 머즐 스파크 (십자 광점)
+      // cyan muzzle spark (cross-shaped glint)
       ctx.save();
       ctx.strokeStyle = COL.p1;
       ctx.shadowColor = COL.p1;
@@ -397,7 +397,7 @@ function drawScene(
       ctx.stroke();
       ctx.restore();
     } else if (f.kind === 'shards' && age < 620) {
-      // 픽셀 파편 6개 방사 (피격)
+      // 6 pixel shards radiating out (hit)
       ctx.save();
       ctx.fillStyle = COL.p2;
       ctx.globalAlpha = Math.max(0, 1 - age / 620);
@@ -410,7 +410,7 @@ function drawScene(
       }
       ctx.restore();
     } else if (f.kind === 'caption' && age < f.life) {
-      const blinkOn = Math.floor(age / 120) % 2 === 0 || age > 240; // steps 점멸 후 유지
+      const blinkOn = Math.floor(age / 120) % 2 === 0 || age > 240; // blinks in steps then stays on
       if (blinkOn) {
         ctx.save();
         ctx.font = `13px ${ARCADE_FONT}`;
@@ -424,13 +424,13 @@ function drawScene(
     }
   }
 
-  // --- 피격 순간 크로마틱 어버레이션 (승패 순간에만) ---
+  // --- Chromatic aberration at the moment of a hit (only at the win/loss instant) ---
   const chroma = fx.find((f) => f.kind === 'chroma');
   if (chroma && now - chroma.t < 90) {
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
     ctx.globalAlpha = 0.3;
-    ctx.drawImage(ctx.canvas, -4, 0, CW, CH); // 시안/핑크 오프셋 잔상 (자기 복제)
+    ctx.drawImage(ctx.canvas, -4, 0, CW, CH); // cyan/pink offset ghost (self-copy)
     ctx.globalAlpha = 0.22;
     ctx.drawImage(ctx.canvas, 4, 0, CW, CH);
     ctx.restore();
@@ -438,15 +438,15 @@ function drawScene(
 }
 
 // ---------------------------------------------------------------------------
-// JIT/페인트 프리워밍 — 라운드 시작 전에 step·drawScene를 최적화 티어까지 올린다.
-// (초반 콜드스타트 렉 완화. V8은 강제 컴파일 API가 없어 '미리 여러 번 실행'이 유일한 방법.)
+// JIT/paint prewarming — bring step·drawScene up to the optimized tier before the round starts.
+// (Eases early cold-start lag. V8 has no force-compile API, so 'running it many times up front' is the only way.)
 //
-// shape 일치가 생명 — 워밍과 실제 플레이의 객체 구조가 다르면 deopt로 워밍이 무효가 된다.
-// 그래서 손으로 상태를 짓지 않고 '진짜' 경로만 쓴다: game4.create로 state 생성,
-// game4.step에 실제 KeyW 이벤트를 먹여 로켓을 진짜 스폰(vx/vy가 Double로 실전과 동일),
-// drawScene도 실제 시그니처로 호출. 오프스크린 캔버스라 화면 깜빡임 없음.
-// 청크(프레임당 소량)로 나눠 워밍 자체가 spike가 되지 않게 한다.
-// 반환값 = 취소 함수(언마운트 시 rAF 정리).
+// Shape consistency is critical — if warmup and real play have different object structures, a deopt invalidates the warmup.
+// So we don't hand-build state; we use only the 'real' path: create state with game4.create,
+// feed game4.step actual KeyW events to genuinely spawn rockets (vx/vy as Double, identical to live play),
+// and call drawScene with its real signature too. It's an offscreen canvas, so no on-screen flicker.
+// Split into chunks (a little per frame) so the warmup itself doesn't become a spike.
+// Return value = cancel function (cleans up rAF on unmount).
 // ---------------------------------------------------------------------------
 
 function prewarmGame2(): () => void {
@@ -459,8 +459,8 @@ function prewarmGame2(): () => void {
   let s = game4.create(Math.random);
   const fire: GameInputEvent[] = [{ code: 'KeyW', type: 'down', t: 0 }];
   const noEvents: GameInputEvent[] = [];
-  const TOTAL = 300; // step·drawScene 300회면 최적화 티어 진입에 충분
-  const PER_FRAME = 6; // 청크: 프레임당 6회(≈50프레임/0.8s, 카운트다운 3s 안에 넉넉)
+  const TOTAL = 300; // 300 iterations of step·drawScene is enough to enter the optimized tier
+  const PER_FRAME = 6; // chunk: 6 per frame (≈50 frames/0.8s, comfortably within the 3s countdown)
 
   let i = 0;
   let raf = 0;
@@ -468,9 +468,9 @@ function prewarmGame2(): () => void {
   const tick = () => {
     if (cancelled) return;
     for (let k = 0; k < PER_FRAME && i < TOTAL; k++, i += 1) {
-      // 주기적 KeyW → step이 로켓을 실제 방식으로 스폰(쿨다운은 코어가 처리)
+      // periodic KeyW → step spawns rockets the real way (cooldown handled by the core)
       s = game4.step(s, i % 8 === 0 ? fire : noEvents, 1 / 60);
-      if (s.result) s = game4.create(Math.random); // 라운드 끝나면 리셋
+      if (s.result) s = game4.create(Math.random); // reset when the round ends
       drawScene(sctx, s, [], [], i * 16, true);
     }
     if (i < TOTAL) raf = requestAnimationFrame(tick);
@@ -484,10 +484,10 @@ function prewarmGame2(): () => void {
 }
 
 // ---------------------------------------------------------------------------
-// 스냅샷 사이 보간(외삽) — 서버 스냅샷을 dt초만큼 각 오브젝트 '자기 속도'로 전진시킨
-// 표시용 상태를 만든다. 스냅샷에 vx/vy·p2Speed·launcherDir이 이미 있어 ID 매칭이 불필요하고
-// 추가 지연도 0. 방향전환(바운스/반전) 순간만 미세 오차이며 다음 스냅샷이 즉시 교정한다.
-// 30/60Hz 스냅샷을 60fps 렌더로 부드럽게 잇는 게 목적(로켓 순간이동 제거).
+// Between-snapshot interpolation (extrapolation) — build a display state by advancing the server
+// snapshot by dt seconds at each object's 'own velocity'. The snapshot already has vx/vy·p2Speed·launcherDir,
+// so no ID matching is needed and zero extra latency. Only direction-change (bounce/reverse) moments have a tiny error, which the next snapshot corrects immediately.
+// The goal is to smoothly bridge 30/60Hz snapshots into a 60fps render (removes rocket teleporting).
 // ---------------------------------------------------------------------------
 
 const clampField = (v: number): number => Math.min(G4.W - G4.MARGIN, Math.max(G4.MARGIN, v));
@@ -503,11 +503,11 @@ function extrapolate(s: Game4State, dt: number): Game4State {
 }
 
 // ---------------------------------------------------------------------------
-// 성능 계측 오버레이 (튜닝용) — 캔버스에 직접 그림(React 리렌더 없음).
-//  · ` (백틱) 키로 토글, ?fps 쿼리로도 켜짐, localStorage에 상태 유지.
-//  · FPS = 최근 0.5s 평균, max = 최근 1s 내 최악 프레임시간(spike 탐지), rockets = 현재 탄 수.
-//  · 판독법: 초반 max가 한 번만 크게 튀면 마운트/콜드 spike, FPS가 계속 ~30이면 보간 문제,
-//    로켓 수 늘수록 max 상승이면 렌더(shadowBlur/gradient) 비용.
+// Performance-metrics overlay (for tuning) — drawn directly on the canvas (no React re-render).
+//  · Toggle with the ` (backtick) key, also turned on via the ?fps query, state kept in localStorage.
+//  · FPS = last-0.5s average, max = worst frame time in the last 1s (spike detection), rockets = current bullet count.
+//  · How to read: if max spikes big only once early, it's a mount/cold spike; if FPS stays ~30, it's an interpolation problem;
+//    if max rises as rocket count grows, it's render (shadowBlur/gradient) cost.
 // ---------------------------------------------------------------------------
 
 const perf = {
@@ -534,7 +534,7 @@ function drawPerfHud(ctx: CanvasRenderingContext2D, now: number, rocketCount: nu
     if (ms > perf.maxMs || now - perf.maxAt > 1000) {
       perf.maxMs = ms;
       perf.maxAt = now;
-    } // 1초 롤링 최대(오래된 피크는 교체)
+    } // 1-second rolling max (old peaks get replaced)
     if (perf.accum >= 500) {
       perf.fps = Math.round((perf.frames / perf.accum) * 1000);
       perf.frames = 0;
@@ -554,7 +554,7 @@ function drawPerfHud(ctx: CanvasRenderingContext2D, now: number, rocketCount: nu
 }
 
 // ---------------------------------------------------------------------------
-// 컴포넌트
+// Component
 // ---------------------------------------------------------------------------
 
 export default function Game4() {
@@ -562,9 +562,9 @@ export default function Game4() {
   const flow = useFlow();
   const navigate = useNavigate();
 
-  // 온라인 활성/역할만 '선택 구독' — 스냅샷(60Hz)마다가 아니라 이 값이 바뀌는
-  // 라운드 경계에서만 리렌더. (기존 useOnlineGame은 스토어 전체 구독이라 60Hz 리렌더 유발했음)
-  //  · sig = 원시 문자열 → useSyncExternalStore가 값(Object.is)으로 비교 → 안 바뀌면 리렌더 안 함
+  // 'Selective subscription' to only online-active/role — re-render only at round boundaries
+  // where this value changes, not on every (60Hz) snapshot. (The old useOnlineGame subscribed to the whole store, causing 60Hz re-renders.)
+  //  · sig = primitive string → useSyncExternalStore compares by value (Object.is) → no re-render if unchanged
   const readOnlineSig = () => {
     const o = onlineStore.get();
     const active =
@@ -577,9 +577,9 @@ export default function Game4() {
   const isOnline = onlineSig !== '0';
   const sigParts = onlineSig.split(':'); // ['1', role, color] | ['0']
   const myRole: Role | null = isOnline ? (sigParts[1] as Role) : null;
-  // 색은 플레이어 종속(역할과 독립). 키캡/표시는 이 색으로.
+  // Color depends on the player (independent of role). Key caps/display use this color.
   const myColor: PlayerColor = isOnline ? (sigParts[2] as PlayerColor) : 'blue';
-  // 키보드 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref.
+  // ref that lets the keyboard handler (stable closure) see the latest 'online active?' value.
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
 
@@ -589,23 +589,23 @@ export default function Game4() {
   const botHeldRef = useRef<{ left: boolean; right: boolean }>({ left: false, right: false });
   const fxRef = useRef<Fx[]>([]);
   const trailRef = useRef<Trail[]>([]);
-  // 종료 연출: result가 null→승패로 바뀌는 순간을 추적해 기본 플래시를 그린다.
+  // End effect: track the moment result changes from null → win/loss and draw the default flash.
   const endRef = useRef<EndTracker>(createEndTracker());
   const reportedRef = useRef(false);
   const resultAtRef = useRef(0);
   const lastCloseRef = useRef(0);
-  /** 마지막 서버 스냅샷 수신 시각(performance.now) — 렌더 외삽 dt 계산용 */
+  /** Time the last server snapshot was received (performance.now) — for computing render extrapolation dt */
   const snapAtRef = useRef(0);
-  /** 온라인 로컬 예측용: 내 닷지 키 홀드(U=왼쪽/I=오른쪽) */
+  /** For online local prediction: my dodge key holds (U=left/I=right) */
   const localHeldRef = useRef<{ left: boolean; right: boolean }>({ left: false, right: false });
-  /** 온라인 로컬 예측된 내 패들 x (null=아직 스냅샷 전) */
+  /** Online locally-predicted my paddle x (null=before first snapshot) */
   const predP2XRef = useRef<number | null>(null);
-  /** 예측 적분용 직전 렌더 프레임 시각(performance.now) */
+  /** Previous render frame time for prediction integration (performance.now) */
   const lastFrameRef = useRef(0);
 
-  /** HUD 표시용 남은 시간 (초 단위 양자화 — 리렌더 절약) */
+  /** Remaining time for HUD display (quantized to seconds — saves re-renders) */
   const [hudMs, setHudMs] = useState(GAME_DURATION * 1000);
-  /** P2 HP (새 메커니즘 — neon HP 셀에 반영) */
+  /** P2 HP (new mechanic — reflected in neon HP cells) */
   const [hp, setHp] = useState<number>(G4.MAX_HP);
 
   const [qLit, flashQ] = useKeyLamp();
@@ -613,15 +613,15 @@ export default function Game4() {
   const [uLit, flashU] = useKeyLamp();
   const [iLit, flashI] = useKeyLamp();
 
-  // direct-URL 복구 + 이탈 시 디버그 브리지 정리
+  // direct-URL recovery + clean up the debug bridge on leave
   useEffect(() => {
     const f = getFlow();
     if (f.phase === 'idle' || f.gameId !== 4) startOfflineGame(4);
     return () => setDebugGame(null);
   }, []);
 
-  // 서버 스냅샷 → ref 미러링을 '직접 스토어 구독'으로 처리(리렌더 없이).
-  // 스냅샷마다 refs만 갱신하고, hp/남은시간은 '실제로 바뀔 때만' setState → 60Hz 리렌더 제거.
+  // Server snapshot → ref mirroring handled via 'direct store subscription' (no re-render).
+  // Update only refs on each snapshot, and setState hp/remaining-time 'only when they actually change' → removes 60Hz re-renders.
   useEffect(() => {
     const sync = () => {
       const o = onlineStore.get();
@@ -631,24 +631,24 @@ export default function Game4() {
         (o.phase === 'countdown' || o.phase === 'playing' || o.phase === 'round-result');
       if (!activeNow || !o.serverState) return;
       const s = o.serverState as Game4State;
-      const prevSnap = stateRef.current; // 덮어쓰기 전 직전 서버 스냅샷(전이 가드용)
+      const prevSnap = stateRef.current; // the previous server snapshot before overwrite (for the transition guard)
       stateRef.current = s;
-      snapAtRef.current = performance.now(); // 외삽 dt 기준점
+      snapAtRef.current = performance.now(); // reference point for extrapolation dt
       setDebugGame(s);
-      // 러너 HP가 이번 스냅샷에 처음 감소한 순간에만 피격/KO음(중복 억제는 엔진+이 가드).
+      // Play the hit/KO sound only at the moment the runner's HP first drops in this snapshot (dedup is the engine + this guard).
       if (prevSnap && s.hp < prevSnap.hp) {
         if (s.hp > 0) sfx('g4-hit');
         else sfx('g4-ko');
       }
-      setHp(s.hp); // 값 동일하면 React가 리렌더 생략
+      setHp(s.hp); // if the value is the same, React skips the re-render
       const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
-      setHudMs(Math.ceil(remainingMs / 1000) * 1000); // 초 양자화 → ~1/s만 리렌더
+      setHudMs(Math.ceil(remainingMs / 1000) * 1000); // quantize to seconds → re-render only ~1/s
     };
-    sync(); // 초기 1회
-    return onlineStore.subscribe(sync); // 스냅샷마다 호출되지만 리렌더는 유발 안 함
+    sync(); // once initially
+    return onlineStore.subscribe(sync); // called on every snapshot but triggers no re-render
   }, []);
 
-  // 캔버스 해상도 초기화 (dpr 스케일)
+  // Initialize canvas resolution (dpr scale)
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
@@ -658,11 +658,11 @@ export default function Game4() {
     c.getContext('2d')?.scale(dpr, dpr);
   }, []);
 
-  // JIT/페인트 프리워밍 — 마운트 직후 1회. 카운트다운(3s) 유휴시간에 겹쳐 돌아
-  // step·drawScene가 실제 첫 프레임 전에 최적화된 기계어로 준비된다. 반환=언마운트 정리.
+  // JIT/paint prewarming — once right after mount. It overlaps the countdown (3s) idle time
+  // so step·drawScene are ready as optimized machine code before the real first frame. Return = unmount cleanup.
   useEffect(() => prewarmGame2(), []);
 
-  // 성능 오버레이 토글 — ` (백틱). 상태는 localStorage 유지.
+  // Performance overlay toggle — ` (backtick). State kept in localStorage.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== 'Backquote') return;
@@ -670,31 +670,31 @@ export default function Game4() {
       try {
         localStorage.setItem('mp_fps', perf.show ? '1' : '0');
       } catch {
-        /* localStorage 불가 — 무시 */
+        /* localStorage unavailable — ignore */
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // 키보드 — 로컬 어댑터. GameInputEvent를 큐에 쌓고, 램프 점등.
-  // (playerL Q/W = P1, playerR U/I = P2 — 코어가 엣지/홀드 판정)
+  // Keyboard — local adapter. Queue GameInputEvents and light the lamps.
+  // (playerL Q/W = P1, playerR U/I = P2 — the core judges edge/hold)
   useEffect(() => {
     const detach = attachLocalKeyboard(
       () => performance.now() / 1000,
       (e) => {
-        // 진짜 서버 온라인: 로컬 큐/봇을 쓰지 않고 서버로만 전송.
-        // (KeyQ·KeyU=슬롯A, KeyW·KeyI=슬롯B. 서버가 내 role로 재기입하므로 4키 아무거나 내 슬롯으로 간다.)
+        // Real server online: don't use the local queue/bot, send only to the server.
+        // (KeyQ·KeyU=slot A, KeyW·KeyI=slot B. The server rewrites by my role, so any of the 4 keys goes to my slot.)
         if (isOnlineRef.current) {
-          // 온라인은 U/I 두 키만(요구사항). U=주키(slotA=왼쪽), I=보조키(slotB=오른쪽). Q/W는 무시.
+          // Online uses only the U/I keys (requirement). U=primary key (slotA=left), I=secondary key (slotB=right). Q/W ignored.
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
-          // 로컬 예측용 홀드 상태(내가 닷지 P2일 때 p2X 예측에 사용). 어태커면 세팅돼도 안 읽음.
+          // Hold state for local prediction (used to predict p2X when I'm the dodger P2). If attacker, it's set but never read.
           if (e.code === 'KeyU') localHeldRef.current.left = e.type === 'down';
           else localHeldRef.current.right = e.type === 'down';
           if (e.type === 'down') {
             if (e.code === 'KeyU') flashU();
             else flashI();
-            // 온라인 U/I는 역할 종속: 러너(P2)면 좌우 닷지, 어태커(P1)면 I=발사(U=방향전환)
+            // Online U/I is role-dependent: runner (P2) → left/right dodge; attacker (P1) → I=fire (U=change direction)
             if (myRole === 'P2') sfx('g4-dodge');
             else if (myRole === 'P1' && e.code === 'KeyI') sfx('g4-rocket-fire');
           }
@@ -705,25 +705,25 @@ export default function Game4() {
 
         const f = getFlow();
         const online = f.mode === 'online';
-        // 램프 점등 (down 순간) + P2 online 키는 봇이 대행하므로 흡수하지 않음
+        // Light the lamp (on down) + don't absorb the P2 online key since the bot handles it
         if (e.code === 'KeyQ') {
           if (e.type === 'down') flashQ();
         } else if (e.code === 'KeyW') {
           if (e.type === 'down') {
             flashW();
-            sfx('g4-rocket-fire'); // 발사(공격수 P1) 입력
+            sfx('g4-rocket-fire'); // fire (attacker P1) input
           }
         } else if (e.code === 'KeyU') {
-          if (online) return; // 온라인 mock: P2(회피자)는 봇
+          if (online) return; // online mock: P2 (dodger) is a bot
           if (e.type === 'down') {
             flashU();
-            sfx('g4-dodge'); // 러너 좌 이동 입력
+            sfx('g4-dodge'); // runner move-left input
           }
         } else if (e.code === 'KeyI') {
           if (online) return;
           if (e.type === 'down') {
             flashI();
-            sfx('g4-dodge'); // 러너 우 이동 입력
+            sfx('g4-dodge'); // runner move-right input
           }
         }
         if (f.phase === 'playing') actionsRef.current.push(e);
@@ -732,11 +732,11 @@ export default function Game4() {
     return detach;
   }, [flashQ, flashW, flashU, flashI]);
 
-  // 라운드 수명주기: state 생성 → rAF 루프(step+draw) → 결과 보고
+  // Round lifecycle: create state → rAF loop (step+draw) → report result
   useEffect(() => {
-    // ── 온라인(서버 권위): 로컬 시뮬/봇/결과보고 없이 서버 state만 그린다(draw-only) ──
+    // ── Online (server-authoritative): no local sim/bot/result-report, just draw the server state (draw-only) ──
     if (isOnline) {
-      // 첫 스냅샷 전이면 초기 create 상태를 렌더용으로만 세팅(판정 아님 — 미러 effect가 곧 덮어씀).
+      // Before the first snapshot, set the initial create state for rendering only (not a judgement — the mirror effect overwrites it soon).
       if (!stateRef.current) {
         const seed = game4.create(Math.random);
         stateRef.current = seed;
@@ -753,11 +753,11 @@ export default function Game4() {
           const p1IsYou = getPlayerDisplays(getFlow()).P1.isYou;
           fxRef.current = fxRef.current.filter((f) => now - f.t < 1200);
           const gs = s as Game4State;
-          // (남의 것) 스냅샷 사이 외삽: 마지막 스냅샷을 경과 dt만큼 속도로 전진(최대 50ms 캡).
+          // (others') between-snapshot extrapolation: advance the last snapshot by elapsed dt at velocity (capped at 50ms).
           const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
           let view = extraDt > 0 && gs.result === null ? extrapolate(gs, extraDt) : gs;
-          // (내 캐릭터) 닷지(P2)면 내 패들은 live 입력으로 로컬 예측 → 즉각 반응·롤백 제거.
-          //  화해: 정지 시 서버값으로 부드럽게 수렴 + 큰 어긋남(라운드리셋 등)만 스냅.
+          // (my character) if dodger (P2), predict my paddle locally from live input → instant response, no rollback.
+          //  reconciliation: when stopped, smoothly converge to the server value + snap only on large mismatches (round reset, etc.).
           if (myRole === 'P2' && gs.result === null) {
             const frameDt = lastFrameRef.current
               ? Math.min(0.05, (now - lastFrameRef.current) / 1000)
@@ -765,9 +765,9 @@ export default function Game4() {
             const held = localHeldRef.current;
             const dir = (held.right ? 1 : 0) - (held.left ? 1 : 0);
             let px = predP2XRef.current;
-            if (px === null || Math.abs(gs.p2X - px) > 150) px = gs.p2X; // 초기/라운드리셋/큰 desync 스냅
-            px = clampField(px + dir * gs.p2Speed * frameDt); // 예측 전진(서버와 동일 공식)
-            if (dir === 0) px += (gs.p2X - px) * 0.15; // 정지 시 서버로 수렴
+            if (px === null || Math.abs(gs.p2X - px) > 150) px = gs.p2X; // snap on initial/round-reset/large desync
+            px = clampField(px + dir * gs.p2Speed * frameDt); // predictive advance (same formula as the server)
+            if (dir === 0) px += (gs.p2X - px) * 0.15; // converge to the server when stopped
             predP2XRef.current = px;
             view = { ...view, p2X: px };
           }
@@ -803,13 +803,13 @@ export default function Game4() {
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       if (isRoundIntroActive()) { last = now; return; }
-      const dt = Math.min(0.1, (now - last) / 1000); // 초 단위, 100ms 클램프
+      const dt = Math.min(0.1, (now - last) / 1000); // seconds, clamped at 100ms
       last = now;
       let s = stateRef.current;
       if (!s) return;
 
       if (s.result === null) {
-        // 이번 프레임 입력 = 드레인한 키 이벤트 + (온라인) 봇 이벤트
+        // this frame's input = drained key events + (online) bot events
         const events = actionsRef.current;
         actionsRef.current = [];
         if (getFlow().mode === 'online') {
@@ -828,35 +828,35 @@ export default function Game4() {
           }
         }
 
-        // game4.step은 원본 state를 in-place mutate 후 동일 참조를 반환한다.
-        // 따라서 이전값 비교는 step 호출 "전에" 스칼라를 값으로 스냅샷해야 한다(참조 alias 금지).
+        // game4.step mutates the original state in-place and returns the same reference.
+        // So previous-value comparisons must snapshot the scalars by value "before" the step call (no reference aliasing).
         const prevHp = s.hp;
         const prevCooldown = s.cooldown;
         const prevP2X = s.p2X;
         s = game4.step(s, events, dt);
         stateRef.current = s;
-        setDebugGame(s); // 디버그 브리지 — 매 틱 갱신
+        setDebugGame(s); // debug bridge — update every tick
         const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
-        setHudMs(Math.ceil(remainingMs / 1000) * 1000); // 초 단위 양자화
+        setHudMs(Math.ceil(remainingMs / 1000) * 1000); // quantize to seconds
         if (s.hp !== prevHp) setHp(s.hp);
 
-        // ---- 렌더 전용 이펙트 파생 (로직 비침범) ----
-        // 발사: 쿨다운이 0→FIRE_COOLDOWN으로 오른 순간
+        // ---- Derive render-only effects (does not touch logic) ----
+        // fire: the moment cooldown rose from 0→FIRE_COOLDOWN
         if (s.cooldown > prevCooldown) {
           fxRef.current.push({ kind: 'muzzle', x: s.launcherX, y: G4.LAUNCHER_Y, t: now });
         }
-        // 장전 완료 순간 짧은 플리커 (쿨다운이 0으로 소진된 프레임)
+        // brief flicker at reload-complete (the frame cooldown drained to 0)
         if (prevCooldown > 0 && s.cooldown === 0) {
           fxRef.current.push({ kind: 'reload', t: now });
         }
-        // 러너 잔상
+        // runner afterimage
         if (s.p2X !== prevP2X) {
           trailRef.current.push({ x: prevP2X, t: now });
         }
         trailRef.current = trailRef.current.filter((tr) => now - tr.t < 260);
-        // 비치명 피격(HP 감소, 아직 생존) — 파편 + 짧은 캡션
+        // non-fatal hit (HP drops, still alive) — shards + short caption
         if (s.hp < prevHp && s.hp > 0) {
-          sfx('g4-hit'); // 러너 피격(HP 감소)
+          sfx('g4-hit'); // runner hit (HP drop)
           fxRef.current.push(
             { kind: 'shards', x: s.p2X, y: G4.P2_Y, t: now },
             {
@@ -870,7 +870,7 @@ export default function Game4() {
             },
           );
         }
-        // 근접 회피 "CLOSE!" — 피격 라인을 갓 지난 로켓이 러너 근처(빗맞음)일 때 (throttle)
+        // near-miss "CLOSE!" — when a rocket that just passed the hit line is near the runner (a miss) (throttled)
         if (s.result === null) {
           const danger = G4.P2_W / 2 + G4.ROCKET_W / 2;
           let nearX: number | null = null;
@@ -898,12 +898,12 @@ export default function Game4() {
             });
           }
         }
-        // 판정 순간 이펙트 (글리치는 승패 순간에만)
+        // effect at the judgement moment (glitch only at the win/loss instant)
         if (s.result !== null && resultAtRef.current === 0) {
           resultAtRef.current = now;
           if (s.result === 'P1') {
-            // 발사자 승 = P2 피격사
-            sfx('g4-ko'); // HP 0 — 러너 격추(죽는 소리, 승리 징글은 전역 레이어)
+            // shooter wins = P2 killed by a hit
+            sfx('g4-ko'); // HP 0 — runner shot down (death sound, victory jingle is the global layer)
             fxRef.current.push(
               { kind: 'chroma', t: now },
               { kind: 'shards', x: s.p2X, y: G4.P2_Y, t: now },
@@ -918,7 +918,7 @@ export default function Game4() {
               },
             );
           } else {
-            // 회피자 생존 승
+            // dodger survives and wins
             fxRef.current.push(
               { kind: 'rush', t: now },
               {
@@ -934,9 +934,9 @@ export default function Game4() {
           }
         }
       } else if (!reportedRef.current && now - resultAtRef.current >= RESULT_FX_MS) {
-        // 온라인은 라운드/매치 전환을 서버(round:end)와 OnlineController가 구동 — 화면은 보고하지 않는다.
+        // Online drives round/match transitions via the server (round:end) and OnlineController — the screen does not report.
         if (isOnline) return;
-        // 피격/생존 연출을 짧게 보여준 뒤 라운드 종료 1회 보고 → ResultOverlay
+        // After briefly showing the hit/survival effect, report round end once → ResultOverlay
         reportedRef.current = true;
         if (s.result) reportRoundEnd(toMatchResult(s.result));
       }
@@ -944,7 +944,7 @@ export default function Game4() {
       const ctx = canvasRef.current?.getContext('2d');
       if (ctx) {
         const p1IsYou = getPlayerDisplays(getFlow()).P1.isYou;
-        fxRef.current = fxRef.current.filter((f) => now - f.t < 1200); // 만료 이펙트 정리
+        fxRef.current = fxRef.current.filter((f) => now - f.t < 1200); // clean up expired effects
         drawScene(ctx, s, fxRef.current, trailRef.current, now, p1IsYou);
         endRef.current.update(s.result, now);
         drawEndFlash(ctx, CW, CH, endRef.current.age(now));
@@ -973,9 +973,9 @@ export default function Game4() {
             navigate('/');
           }}
         >
-          ◀ 나가기
+          ◀ Exit
         </Button>
-        <span className="g4-title font-arcade c-muted">게임4 · 미사일 매치</span>
+        <span className="g4-title font-arcade c-muted">Game 4 · Missile Match</span>
       </div>
 
       <div className="g4-hudwrap">
@@ -990,10 +990,10 @@ export default function Game4() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g4-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g4-canvas" aria-label="게임4 스테이지 — 미사일 매치" />
+        <canvas ref={canvasRef} className="g4-canvas" aria-label="Game 4 stage — Missile Match" />
 
-        {/* 새 메커니즘 HP(3) — neon HP 셀. P2(회피자)의 잔여 체력 */}
-        <div className="g4-hp" aria-label={`P2 체력 ${hp}/${G4.MAX_HP}`}>
+        {/* New mechanic HP(3) — neon HP cells. P2 (dodger) remaining health */}
+        <div className="g4-hp" aria-label={`P2 health ${hp}/${G4.MAX_HP}`}>
           <span className="g4-hp__label font-arcade">P2 HP</span>
           <div className="g4-hp__cells">
             {Array.from({ length: G4.MAX_HP }, (_, i) => (
@@ -1003,41 +1003,41 @@ export default function Game4() {
         </div>
       </div>
 
-      {/* 온스크린 키캡 — 실제 배정 키 표기 (SPEC Q2), 입력 순간 램프 점등 */}
+      {/* On-screen key caps — show the actually-assigned keys (SPEC Q2), lamp lights on input */}
       {isOnline ? (
-        // 온라인: U/I 두 키만 사용. 내 역할의 동작을 내 색으로만 표시(비대칭 게임 — 역할 조건부).
+        // Online: use only the U/I keys. Show my role's action in my color only (asymmetric game — role-conditional).
         <div className="g4-keys g4-keys--online">
           <div className="g4-keys__group">
             <span className={`g4-keys__tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {myColor === 'blue' ? '파랑' : '빨강'} · {myRole === 'P1' ? 'ATTACK' : 'DODGE'}
+              YOU · {myColor === 'blue' ? 'BLUE' : 'RED'} · {myRole === 'P1' ? 'ATTACK' : 'DODGE'}
             </span>
             <KeyCap
               role={myColor === 'blue' ? 'P1' : 'P2'}
               keyChar="U"
               icon={myRole === 'P1' ? '⇄' : '◀'}
               lit={uLit}
-              label={myRole === 'P1' ? '방향전환' : '왼쪽'}
+              label={myRole === 'P1' ? 'Change direction' : 'Left'}
             />
             <KeyCap
               role={myColor === 'blue' ? 'P1' : 'P2'}
               keyChar="I"
               icon={myRole === 'P1' ? '◉' : '▶'}
               lit={iLit}
-              label={myRole === 'P1' ? '발사' : '오른쪽'}
+              label={myRole === 'P1' ? 'Fire' : 'Right'}
             />
           </div>
         </div>
       ) : (
         <div className="g4-keys">
           <div className="g4-keys__group">
-            <KeyCap role="P1" keyChar="Q" icon="⇄" lit={qLit} label="방향전환" />
-            <KeyCap role="P1" keyChar="W" icon="◉" lit={wLit} label="발사" />
+            <KeyCap role="P1" keyChar="Q" icon="⇄" lit={qLit} label="Change direction" />
+            <KeyCap role="P1" keyChar="W" icon="◉" lit={wLit} label="Fire" />
             <span className="g4-keys__tag font-arcade c-p1">P1 · ATTACK</span>
           </div>
           <div className="g4-keys__group">
             <span className="g4-keys__tag font-arcade c-p2">P2 · DODGE</span>
-            <KeyCap role="P2" keyChar="U" icon="◀" lit={uLit} label="왼쪽" />
-            <KeyCap role="P2" keyChar="I" icon="▶" lit={iLit} label="오른쪽" />
+            <KeyCap role="P2" keyChar="U" icon="◀" lit={uLit} label="Left" />
+            <KeyCap role="P2" keyChar="I" icon="▶" lit={iLit} label="Right" />
           </div>
         </div>
       )}

@@ -1,7 +1,7 @@
-# 로컬 개발용 MySQL (선택) — 팀원이 자기 PC에서 DB 띄울 때 사용.
-# 배포(prod) DB는 KAIST VM 안에 직접 설치돼 있으며 이 compose 와 무관하다.
-# 사용:  docker compose up -d   → 로컬 127.0.0.1:3307 에 MySQL 8
-#        server/.env 의 DATABASE_URL 을 3307 로 바꿔 마이그레이션/시드
+# Local dev MySQL (optional) — for teammates running a DB on their own PC.
+# The production (prod) DB is installed directly inside the KAIST VM and is unrelated to this compose.
+# Usage:  docker compose up -d   → MySQL 8 at local 127.0.0.1:3307
+#         change DATABASE_URL in server/.env to 3307, then migrate/seed
 services:
   mysql:
     image: mysql:8.0

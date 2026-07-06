@@ -1,13 +1,13 @@
 import { makeGame3, type Game2Config } from './core'
 
 /**
- * 게임3 = "서지-넉백(SURGE)" 펜싱.
- * 핵심:
- *  · 극한 난타전 베이스(짧은 지속·좁은 창·빠른 쿨·넓은 시동 랜덤 = 페인트 심리전).
- *  · 밀물(TIDE)+템포 가속: 시간이 갈수록 낙사선이 조이고 쿨타임이 줄어 후반 밀도 폭발.
- *  · 리포스트-브레이크: 성공 패링 → 즉발 반격창 + 콤보 스노우볼.
- *  · 서지-넉백: esc=(t/10)^2 곡선으로 모든 넉백에 시간연동 배율(초반 ×0.75 댐핑 → 막판 ×2.1 폭발).
- *    위치(c)는 안 읽고 오직 t만 읽어 러버밴드 feel-bad 없이 "밀당 개막 → 막판 폭발" 아치를 만든다.
+ * Game 3 = "surge knockback (SURGE)" fencing.
+ * Core:
+ *  · Extreme brawl base (short duration · narrow window · fast cooldown · wide startup randomness = feint mind games).
+ *  · Tide (TIDE) + tempo acceleration: as time passes the fall line tightens and cooldowns shrink, exploding density late.
+ *  · Riposte-break: successful parry → instant counter window + combo snowball.
+ *  · Surge knockback: an esc=(t/10)^2 curve applies a time-linked multiplier to every knockback (×0.75 damping early → ×2.1 explosion late).
+ *    It never reads position (c), only t, so it builds a "push-pull opening → late explosion" arc without rubber-band feel-bad.
  */
 export const G2: Game2Config = {
   label: 'game2',

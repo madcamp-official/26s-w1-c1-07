@@ -1,17 +1,17 @@
 /**
- * ResultOverlay — 라운드/매치 결과 오버레이. 담당: game1 에이전트 (전 게임 S9~S12 공용).
- * 부품 testid: result-overlay, result-text, btn-next-round, btn-back-main
+ * ResultOverlay — round/match result overlay. Owner: game1 agent (shared across all games S9~S12).
+ * parts testid: result-overlay, result-text, btn-next-round, btn-back-main
  *
- * PLAN 인게임 공통: WINNER 네온 사인 sign-on 플리커(P1 승=시안 / P2 승=핑크,
- *   매치 최종 승자=--win 그린), DRAW=퍼플. "CONTINUE? ▶" 점멸 캡션.
- *   판정 순간 글리치(크로마틱 어버레이션) 1회. 매치 종료는 하이스코어 등록 화면 무드
- *   (순위표 프레임에 라운드별 결과 + 최종 스코어 정렬).
+ * PLAN in-game shared: WINNER neon sign sign-on flicker (P1 win=cyan / P2 win=pink,
+ *   match final winner=--win green), DRAW=purple. "CONTINUE? ▶" blinking caption.
+ *   Glitch (chromatic aberration) once at the moment of decision. Match end has the high-score
+ *   registration screen mood (per-round results + final score ordered in the ranking-table frame).
  *
- * 계약 (ARCHITECTURE §3.4 — 모든 게임 화면이 <ResultOverlay />를 넣기만 하면 됨):
- *   flow.phase === 'round-result' → 표시 + [다음 라운드](btn-next-round) → nextRound()
- *     (게임 화면이 flow.currentRound 변화를 감지해 새 게임 state 생성)
- *   flow.phase === 'match-result' → 표시 + [메인으로](btn-back-main) → exitMatch(); navigate('/')
- *   그 외 phase → null 렌더. props 없음 — flow store만 읽는 범용 컴포넌트.
+ * Contract (ARCHITECTURE §3.4 — every game screen only needs to drop in <ResultOverlay />):
+ *   flow.phase === 'round-result' → show + [Next round](btn-next-round) → nextRound()
+ *     (the game screen detects the flow.currentRound change and creates new game state)
+ *   flow.phase === 'match-result' → show + [To main](btn-back-main) → exitMatch(); navigate('/')
+ *   any other phase → render null. No props — a generic component that only reads the flow store.
  */
 import type { CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -34,7 +34,7 @@ export default function ResultOverlay() {
         ? 'P2_WIN'
         : 'DRAW';
   const text = winner === 'P1_WIN' ? 'P1 WINNER' : winner === 'P2_WIN' ? 'P2 WINNER' : 'DRAW';
-  // 색: 라운드 승자=플레이어색 / 매치 최종 승자=--win 그린 / 무승부=퍼플 (PLAN)
+  // color: round winner=player color / match final winner=--win green / draw=purple (PLAN)
   const color = isMatchEnd
     ? winner === 'DRAW'
       ? 'var(--accent2)'
@@ -69,19 +69,19 @@ export default function ResultOverlay() {
 
         {winnerName && (
           <span className="rov__winner-name font-display">
-            {winnerName} {isMatchEnd ? '매치 승리!' : '라운드 승리!'}
+            {winnerName} {isMatchEnd ? 'wins the match!' : 'wins the round!'}
           </span>
         )}
-        {winner === 'DRAW' && <span className="rov__winner-name font-display">무승부</span>}
+        {winner === 'DRAW' && <span className="rov__winner-name font-display">Draw</span>}
 
-        {/* 스코어 라인 — P1 시안 / P2 핑크 고정 */}
+        {/* score line — P1 cyan / P2 pink fixed */}
         <div className="rov__score font-arcade">
           <span className="c-p1">P1 {wins.P1}</span>
           <span className="rov__score-sep">:</span>
           <span className="c-p2">{wins.P2} P2</span>
         </div>
 
-        {/* 매치 최종: 하이스코어 등록 화면 무드 — 라운드별 결과 순위표 프레임 */}
+        {/* match final: high-score registration screen mood — per-round results ranking-table frame */}
         {isMatchEnd && (
           <table className="rov__table font-arcade">
             <thead>
@@ -107,7 +107,7 @@ export default function ResultOverlay() {
           <>
             <span className="rov__continue font-arcade c-accent anim-blink">CONTINUE? ▶</span>
             <Button variant="primary" data-testid="btn-next-round" onClick={() => nextRound()}>
-              다음 라운드
+              Next round
             </Button>
           </>
         )}
@@ -120,7 +120,7 @@ export default function ResultOverlay() {
               navigate('/');
             }}
           >
-            메인으로
+            To main
           </Button>
         )}
       </div>

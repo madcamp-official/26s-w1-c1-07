@@ -1,13 +1,13 @@
 /**
- * 초소형 외부 스토어 헬퍼 — React context 없이 모듈 상태 + useSyncExternalStore.
- * session.ts / flow.ts 가 사용한다. (아키텍트 소유 — 구현 에이전트 수정 금지)
+ * Tiny external-store helper — module state + useSyncExternalStore, no React context.
+ * Used by session.ts / flow.ts. (Owned by the architect — implementation agents must not modify)
  */
 import { useSyncExternalStore } from 'react';
 
 export interface Store<T> {
-  /** 현재 스냅샷 (불변 객체) */
+  /** Current snapshot (immutable object) */
   get(): T;
-  /** 부분 패치 또는 updater 함수로 상태 교체 + 구독자 통지 */
+  /** Replace state via partial patch or updater function + notify subscribers */
   set(patch: Partial<T> | ((prev: T) => T)): void;
   subscribe(listener: () => void): () => void;
 }
@@ -29,7 +29,7 @@ export function createStore<T extends object>(initial: T): Store<T> {
   };
 }
 
-/** React 훅 — 스토어 전체 스냅샷 구독 */
+/** React hook — subscribe to the store's full snapshot */
 export function useStore<T extends object>(store: Store<T>): T {
   return useSyncExternalStore(store.subscribe, store.get, store.get);
 }

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Vite + React SPA. design-02(neon-coinop) 셸 + game-lab 게임 코어.",
+  "description": "Vite + React SPA. design-02(neon-coinop) shell + game-lab game core.",
   "scripts": {
     "dev": "vite --port 5173 --strictPort",
     "build": "tsc --noEmit && vite build",

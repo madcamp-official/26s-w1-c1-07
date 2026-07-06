@@ -1,4 +1,4 @@
-/* S3 로그인 요구 모달 (auth 에이전트 소유) — "CREDIT REQUIRED" (PLAN §2-S3) */
+/* S3 login-required modal (owned by the auth agent) — "CREDIT REQUIRED" (PLAN §2-S3) */
 
 .s3-body {
   display: flex;
@@ -8,7 +8,7 @@
   padding: 6px 4px 2px;
 }
 
-/* 코인 슬롯 픽토그램 — 옐로 원 + 세로 슬릿 */
+/* Coin slot pictogram — yellow circle + vertical slit */
 .s3-coinslot {
   align-self: center;
   width: 56px;

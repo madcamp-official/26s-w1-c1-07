@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""MADPUMP ERD 라이브 뷰어.
+"""MADPUMP ERD live viewer.
 
-docs/ERD.md 의 첫 ```mermaid 블록을 추출해 서빙.
-브라우저가 1초마다 폴링해 내용이 바뀌면 자동으로 다시 렌더링한다.
-고정 주소: http://127.0.0.1:8766/
-실행: python3 tools/erd-live/server.py
+Extracts and serves the first ```mermaid block from docs/ERD.md.
+The browser polls every second and automatically re-renders when the content changes.
+Fixed address: http://127.0.0.1:8766/
+Run: python3 tools/erd-live/server.py
 """
 import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -32,7 +32,7 @@ PAGE = """<!doctype html>
 </head>
 <body>
 <div id="bar"><b>MADPUMP ERD</b><span id="status" class="ok">live</span>
-<span style="opacity:.6">docs/ERD.md 저장 시 자동 갱신 (1s 폴링)</span></div>
+<span style="opacity:.6">Auto-refresh on docs/ERD.md save (1s polling)</span></div>
 <div id="err"></div>
 <div id="view"></div>
 <script type="module">
@@ -57,7 +57,7 @@ async function tick() {
     status.textContent = 'live';
   } catch (e) {
     status.className = 'err';
-    status.textContent = 'render error (마지막 정상본 유지)';
+    status.textContent = 'render error (keeping last good version)';
     err.textContent = String(e && e.message || e);
   }
   setTimeout(tick, 1000);
@@ -73,9 +73,9 @@ def extract_mermaid() -> str:
     try:
         text = DOC.read_text(encoding="utf-8")
     except OSError as e:
-        return f'erDiagram\n    %% 문서를 읽을 수 없음: {e}'
+        return f'erDiagram\n    %% could not read document: {e}'
     m = re.search(r"```mermaid\n(.*?)```", text, re.DOTALL)
-    return m.group(1) if m else "erDiagram\n    %% mermaid 블록 없음"
+    return m.group(1) if m else "erDiagram\n    %% no mermaid block"
 
 
 class Handler(BaseHTTPRequestHandler):

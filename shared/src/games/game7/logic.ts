@@ -2,20 +2,20 @@ import type { GameInputEvent, GameResult } from '../types'
 import { GAME_DURATION } from '../types'
 
 /**
- * 게임8 = 마그마 총격 듀얼.
- *  · P1(왼쪽)·P2(오른쪽)이 서로 마주 보고, 먼저 상대를 맞히는 쪽이 승리한다.
- *  · 두 플레이어는 화면 맨 위에서 스폰돼 중력으로 낙하한다. x 위치는 고정.
- *      Q/U: 살짝 점프(위로 작은 임펄스, 공중에서도 가능) — 플래피 방식으로 높이 조절.
- *      W/I: 그 시점의 높이에서 상대를 향해 수평으로 총알 발사(쿨 FIRE_COOLDOWN).
- *  · 바닥은 마그마. 시작 시 화면 맨 아래에서 출발해 10초 동안 선형으로 상승,
- *      제한시간에 화면 50% 높이(H/2)까지 올라온다. 플레이어가 마그마에 닿으면 즉시 패배.
- *  · 천장에는 가시가 박혀 있어 너무 높이 뛰어 닿으면 그 플레이어도 즉시 패배.
- *      → 아래로도 위로도 죽으므로 좁은 안전대 안에서 높이를 조절해야 한다.
- *  · 총알은 상대 위치까지 정확히 0.5초에 도달하는 속도로 수평 비행한다
- *      → 발사 후 0.5초 안에 상대가 높이를 바꿔 피할 수 있다.
- *  · 승패: 명중 즉시 쏜 쪽 승 / 마그마에 닿은 쪽 패 / 10초까지 둘 다 생존하면 DRAW.
+ * Game 8 = magma shootout duel.
+ *  · P1 (left) and P2 (right) face each other; the first to hit the opponent wins.
+ *  · Both players spawn at the top of the screen and fall under gravity. Their x positions are fixed.
+ *      Q/U: small jump (a small upward impulse, also usable mid-air) — flappy-style height control.
+ *      W/I: fire a bullet horizontally toward the opponent from the current height (cooldown FIRE_COOLDOWN).
+ *  · The floor is magma. It starts at the bottom of the screen and rises linearly over 10 seconds,
+ *      reaching 50% of the screen height (H/2) at the time limit. A player who touches the magma loses instantly.
+ *  · Spikes stud the ceiling, so jumping too high and touching them also makes that player lose instantly.
+ *      → You die both below and above, so you must control your height within a narrow safe band.
+ *  · The bullet flies horizontally at a speed that reaches the opponent's position in exactly 0.5 seconds
+ *      → within 0.5 seconds after firing, the opponent can change height to dodge it.
+ *  · Win/loss: whoever lands a hit wins instantly / whoever touches the magma loses / if both survive to 10s it's a DRAW.
  *
- * 좌표: y 는 플레이어의 세로 중심(캔버스 y 아래로 증가).
+ * Coordinates: y is the player's vertical center (increasing downward in canvas y).
  */
 export const G7 = {
   W: 800,
@@ -25,24 +25,24 @@ export const G7 = {
   PW: 26,
   PH: 30,
   SPAWN_Y: 90,
-  /** 천장 가시 영역의 높이(0~SPIKE_H). 플레이어 머리가 이 아래로 들어오면 사망 */
+  /** Height of the ceiling spike zone (0~SPIKE_H). A player dies if their head goes below this line */
   SPIKE_H: 14,
-  // ── 이동 (플래피 방식: 부드럽게 떠서 호버 타이밍에 여유를 준다) ──
+  // ── Movement (flappy style: floats smoothly to give slack on hover timing) ──
   GRAVITY: 900,
-  /** 점프 1회 위쪽 임펄스(살짝) — 상승 폭 ≈ JUMP_V²/(2·GRAVITY) ≈ 27px, 호버 케이던스 ≈ 0.49s */
+  /** Upward impulse per jump (small) — rise height ≈ JUMP_V²/(2·GRAVITY) ≈ 27px, hover cadence ≈ 0.49s */
   JUMP_V: 220,
   MAX_FALL: 480,
-  // ── 발사 ──
+  // ── Firing ──
   FIRE_COOLDOWN: 0.35,
   BULLET_R: 5,
-  /** 상대까지 도달하는 데 걸리는 시간(초) → 속도를 역산 */
+  /** Time (seconds) it takes to reach the opponent → speed is back-computed from it */
   BULLET_TRAVEL_TIME: 0.5,
-  // ── 마그마 ──
-  /** 제한시간에 도달하는 마그마 표면 높이 비율(화면의 50%) */
+  // ── Magma ──
+  /** Ratio of the magma surface height reached at the time limit (50% of the screen) */
   MAGMA_END_FRAC: 0.5,
 } as const
 
-/** P1→P2 거리를 0.5초에 주파하는 총알 속도(px/s) */
+/** Bullet speed (px/s) that covers the P1→P2 distance in 0.5 seconds */
 const BULLET_SPEED = (G7.P2_X - G7.P1_X) / G7.BULLET_TRAVEL_TIME
 
 export interface Shot8 {
@@ -69,7 +69,7 @@ export interface Game7State {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
-/** 경과 시간 기준 마그마 표면의 y 좌표(작을수록 높이 올라온 것). t=0 → H, t=10 → H/2 */
+/** y coordinate of the magma surface as a function of elapsed time (smaller = risen higher). t=0 → H, t=10 → H/2 */
 export function magmaSurfaceY(elapsed: number): number {
   const t = clamp(elapsed / GAME_DURATION, 0, 1)
   return G7.H - G7.MAGMA_END_FRAC * G7.H * t
@@ -89,7 +89,7 @@ export function create(_rand: () => number): Game7State {
   }
 }
 
-/** 총알 owner 가 상대 플레이어 사각형과 겹치는지 */
+/** Whether the bullet's owner overlaps the opponent player's rectangle */
 function hitsOpponent(b: Shot8, oppX: number, oppY: number): boolean {
   const left = oppX - G7.PW / 2
   const right = oppX + G7.PW / 2
@@ -109,17 +109,17 @@ export function step(state: Game7State, events: GameInputEvent[], dt: number): G
   state.p1Cd = Math.max(0, state.p1Cd - dt)
   state.p2Cd = Math.max(0, state.p2Cd - dt)
 
-  // 1) 입력
+  // 1) Input
   for (const e of events) {
     if (e.type !== 'down') continue
     switch (e.code) {
-      case 'KeyQ': // P1 살짝 점프
+      case 'KeyQ': // P1 small jump
         state.p1Vy = -G7.JUMP_V
         break
-      case 'KeyU': // P2 살짝 점프
+      case 'KeyU': // P2 small jump
         state.p2Vy = -G7.JUMP_V
         break
-      case 'KeyW': // P1 발사(오른쪽으로)
+      case 'KeyW': // P1 fire (to the right)
         if (state.p1Cd === 0) {
           state.bullets.push({
             x: G7.P1_X + G7.PW / 2 + G7.BULLET_R,
@@ -130,7 +130,7 @@ export function step(state: Game7State, events: GameInputEvent[], dt: number): G
           state.p1Cd = G7.FIRE_COOLDOWN
         }
         break
-      case 'KeyI': // P2 발사(왼쪽으로)
+      case 'KeyI': // P2 fire (to the left)
         if (state.p2Cd === 0) {
           state.bullets.push({
             x: G7.P2_X - G7.PW / 2 - G7.BULLET_R,
@@ -144,13 +144,13 @@ export function step(state: Game7State, events: GameInputEvent[], dt: number): G
     }
   }
 
-  // 2) 플레이어 물리(중력 낙하) — 천장 클램프 없음. 위로 넘으면 가시에 죽는다.
+  // 2) Player physics (gravity fall) — no ceiling clamp. Go too high and you die on the spikes.
   state.p1Vy = Math.min(G7.MAX_FALL, state.p1Vy + G7.GRAVITY * dt)
   state.p1Y += state.p1Vy * dt
   state.p2Vy = Math.min(G7.MAX_FALL, state.p2Vy + G7.GRAVITY * dt)
   state.p2Y += state.p2Vy * dt
 
-  // 3) 총알 이동 + 화면 밖 제거
+  // 3) Move bullets + remove off-screen ones
   const live: Shot8[] = []
   for (const b of state.bullets) {
     b.x += b.vx * dt
@@ -158,7 +158,7 @@ export function step(state: Game7State, events: GameInputEvent[], dt: number): G
   }
   state.bullets = live
 
-  // 4) 명중 판정 — 먼저 맞힌 쪽 즉시 승리
+  // 4) Hit detection — whoever lands a hit first wins instantly
   for (const b of state.bullets) {
     if (b.owner === 1 && hitsOpponent(b, G7.P2_X, state.p2Y)) {
       state.result = 'P1'
@@ -170,7 +170,7 @@ export function step(state: Game7State, events: GameInputEvent[], dt: number): G
     }
   }
 
-  // 5) 사망 판정 — 발끝(중심+PH/2)이 마그마에 닿거나 머리(중심−PH/2)가 천장 가시에 닿으면 패배
+  // 5) Death detection — you lose if your feet (center+PH/2) touch the magma or your head (center−PH/2) touches the ceiling spikes
   const surf = magmaSurfaceY(state.elapsed)
   const p1Dead = state.p1Y + G7.PH / 2 >= surf || state.p1Y - G7.PH / 2 <= G7.SPIKE_H
   const p2Dead = state.p2Y + G7.PH / 2 >= surf || state.p2Y - G7.PH / 2 <= G7.SPIKE_H
@@ -187,7 +187,7 @@ export function step(state: Game7State, events: GameInputEvent[], dt: number): G
     return state
   }
 
-  // 6) 제한시간까지 둘 다 생존 → 무승부
+  // 6) Both survive to the time limit → draw
   if (state.elapsed >= GAME_DURATION) state.result = 'DRAW'
   return state
 }

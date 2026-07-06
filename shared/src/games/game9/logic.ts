@@ -2,29 +2,29 @@ import type { GameInputEvent, GameResult } from '../types'
 import { GAME_DURATION } from '../types'
 
 /**
- * 게임7 = 스피드 오목(3목) · 턴제.
- *  · 7×7 판(교점)을 시스템이 행 우선(row-major)으로 순회한다: [0][0]…[0][6],[1][0]…[6][6].
- *  · 돌은 격자선의 교점 위에 놓인다(바둑/오목 방식).
- *  · 턴제: 시작하면 P1에게 TURN_TIME(≈1s, 한 바퀴)이 주어진다. 각 점은 CELL_TIME(0.02s)씩 강조.
- *     - 현재 턴 플레이어가 자기 키(P1=Q, P2=U)를 누르면 커서가 있는 교점에 돌을 놓고 '즉시' 상대 턴으로.
- *       (이미 찬 교점을 누르면 무시 — 커서는 계속 흐르므로 다시 노릴 수 있다.)
- *     - 시간 안에 못 놓으면 시스템이 빈 교점 중 하나에 랜덤으로 대신 놓고 상대 턴으로 넘긴다.
- *  · W(P1)/I(P2)는 턴과 무관하게 언제든 FLASH_TIME(0.1s) 화면 플래시로 시야 방해.
- *  · 먼저 가로/세로/대각 3목을 만들면 즉시 승리.
- *  · 시간이 끝나면: 2목이 있는 사람이 승. 둘 다 2목 여부가 같으면 '밀집도' 비교.
- *  · 밀집도 = 자기 돌들의 모든 쌍 사이 거리 제곱의 총합. 값이 작은(=더 촘촘한) 쪽이 승리.
- *    ※ 수학적으로 Σ|pi−pj|² = n·Σ|pi−중심|² 로 '퍼짐(분산)' 척도다. 값이 작을수록 고밀도이므로
- *      승자 방향을 바꾸려면 DENSITY_SMALLER_WINS만 뒤집으면 된다.
+ * Game 7 = Speed Gomoku (3-in-a-row) · turn-based.
+ *  · The system scans the 7×7 board (intersections) in row-major order: [0][0]…[0][6],[1][0]…[6][6].
+ *  · Stones are placed on the intersections of the grid lines (Go/Gomoku style).
+ *  · Turn-based: at the start, P1 is given TURN_TIME (≈1s, one full loop). Each point is highlighted for CELL_TIME (0.02s).
+ *     - When the current-turn player presses their key (P1=Q, P2=U), a stone is placed on the intersection under the cursor and 'immediately' passes to the opponent's turn.
+ *       (Pressing an already-filled intersection is ignored — the cursor keeps flowing, so you can aim again.)
+ *     - If you fail to place in time, the system places one for you at random on an empty intersection and passes to the opponent's turn.
+ *  · W(P1)/I(P2), regardless of whose turn it is, disrupt vision anytime with a FLASH_TIME (0.1s) screen flash.
+ *  · The first to make a horizontal/vertical/diagonal 3-in-a-row wins immediately.
+ *  · When time runs out: whoever has a 2-in-a-row wins. If both have the same 2-in-a-row status, compare 'density'.
+ *  · Density = the sum of the squared distances between every pair of your own stones. The smaller (= more tightly packed) side wins.
+ *    ※ Mathematically Σ|pi−pj|² = n·Σ|pi−center|², a 'spread (variance)' measure. The smaller the value, the higher the density, so
+ *      to flip the winner direction, just invert DENSITY_SMALLER_WINS.
  */
 export const G9 = {
   N: 7,
   CELLS: 49,
   CELL_TIME: 0.02,
-  /** 한 턴 길이(≈1s) = CELLS × CELL_TIME. 커서가 판을 정확히 한 바퀴 돈다 */
+  /** One turn length (≈1s) = CELLS × CELL_TIME. The cursor loops around the board exactly once */
   TURN_TIME: 0.98,
   WIN_RUN: 3,
   FLASH_TIME: 0.1,
-  /** true면 거리제곱합이 작은(촘촘한) 쪽 승, false면 큰(퍼진) 쪽 승 */
+  /** if true, the side with the smaller (tighter) sum of squared distances wins; if false, the larger (more spread) side wins */
   DENSITY_SMALLER_WINS: true,
 } as const
 
@@ -38,21 +38,21 @@ const DIRS: ReadonlyArray<readonly [number, number]> = [
 export interface Game9State {
   elapsed: number
   result: GameResult
-  /** 길이 49, 0=빈칸 1=P1 2=P2. 인덱스 = r*N+c */
+  /** length 49, 0=empty 1=P1 2=P2. index = r*N+c */
   board: number[]
-  /** 현재 턴 플레이어(1 또는 2) */
+  /** current-turn player (1 or 2) */
   turn: 1 | 2
-  /** 현재 턴 경과 시간(초). TURN_TIME에 도달하면 자동 배치 후 턴 전환 */
+  /** elapsed time of the current turn (seconds). When it reaches TURN_TIME, an auto placement happens and the turn switches */
   turnClock: number
-  /** 플래시 잔여 시간 */
+  /** remaining flash time */
   flash: number
-  /** 렌더용 현재 커서 교점 인덱스 */
+  /** current cursor intersection index for rendering */
   cursor: number
-  /** 방금 놓인 교점(하이라이트용), 없으면 -1 */
+  /** the intersection just placed (for highlighting), or -1 if none */
   lastPlaced: number
-  /** 직전 배치가 시간초과 자동 배치였는지(렌더 표시용) */
+  /** whether the previous placement was a timeout auto placement (for render display) */
   lastAuto: boolean
-  /** 자동 배치용 난수 시드 */
+  /** random seed for auto placement */
   seed: number
 }
 
@@ -71,7 +71,7 @@ export function create(rand: () => number): Game9State {
   }
 }
 
-/** 결정적 LCG 난수 */
+/** deterministic LCG random */
 function nextRand(seed: number): { u: number; seed: number } {
   const s = (Math.imul(seed, 1664525) + 1013904223) >>> 0
   return { u: s / 4294967296, seed: s }
@@ -79,7 +79,7 @@ function nextRand(seed: number): { u: number; seed: number } {
 
 const inBounds = (r: number, c: number) => r >= 0 && r < G9.N && c >= 0 && c < G9.N
 
-/** idx에 놓인 player 돌이 만드는 최장 연속 길이 */
+/** the longest run length formed by the player's stone placed at idx */
 function runThrough(board: number[], idx: number, player: number): number {
   const r0 = Math.floor(idx / G9.N)
   const c0 = idx % G9.N
@@ -100,7 +100,7 @@ function runThrough(board: number[], idx: number, player: number): number {
   return best
 }
 
-/** 판 전체에서 player의 최장 연속 길이 */
+/** the player's longest run length across the whole board */
 export function maxRun(board: number[], player: number): number {
   let best = 0
   for (let idx = 0; idx < G9.CELLS; idx++) {
@@ -111,7 +111,7 @@ export function maxRun(board: number[], player: number): number {
   return best
 }
 
-/** 밀집도 = 모든 쌍 거리 제곱의 총합 (= n·중심분산, '퍼짐' 척도) */
+/** density = the sum of squared distances of every pair (= n·center-variance, a 'spread' measure) */
 export function density(board: number[], player: number): number {
   const pts: Array<[number, number]> = []
   for (let idx = 0; idx < G9.CELLS; idx++) {
@@ -128,13 +128,13 @@ export function density(board: number[], player: number): number {
   return sum
 }
 
-/** 현재 턴 커서 위치(교점 인덱스). 턴 시작(turnClock=0)부터 순회 */
+/** current-turn cursor position (intersection index). Scans from turn start (turnClock=0) */
 function cursorAt(turnClock: number): number {
   const i = Math.floor(turnClock / G9.CELL_TIME)
   return i < 0 ? 0 : i >= G9.CELLS ? G9.CELLS - 1 : i
 }
 
-/** idx에 현재 턴 플레이어 돌을 놓고 턴을 넘긴다. 3목이면 result 세팅 */
+/** places the current-turn player's stone at idx and passes the turn. If it makes a 3-in-a-row, sets result */
 function placeAndAdvance(state: Game9State, idx: number, auto: boolean) {
   const player = state.turn
   state.board[idx] = player
@@ -144,12 +144,12 @@ function placeAndAdvance(state: Game9State, idx: number, auto: boolean) {
     state.result = player === 1 ? 'P1' : 'P2'
     return
   }
-  // 턴 전환
+  // turn switch
   state.turn = player === 1 ? 2 : 1
   state.turnClock = 0
 }
 
-/** 빈 교점 중 하나를 랜덤으로 고른다. 없으면 -1 */
+/** picks one empty intersection at random. Returns -1 if none */
 function randomEmpty(state: Game9State): number {
   const empties: number[] = []
   for (let i = 0; i < G9.CELLS; i++) if (state.board[i] === 0) empties.push(i)
@@ -169,16 +169,16 @@ export function step(state: Game9State, events: GameInputEvent[], dt: number): G
   const placeKey = state.turn === 1 ? 'KeyQ' : 'KeyU'
   for (const e of events) {
     if (e.type !== 'down') continue
-    // 플래시는 턴과 무관하게 언제든
+    // flash works anytime, regardless of whose turn it is
     if (e.code === 'KeyW' || e.code === 'KeyI') {
       state.flash = G9.FLASH_TIME
       continue
     }
-    // 현재 턴 플레이어의 배치 키만 유효
+    // only the current-turn player's placement key is valid
     if (e.code === placeKey && state.turnClock < G9.TURN_TIME) {
-      // 온라인: 클라가 로컬 커서로 고른 칸(e.cell)을 신뢰(내 턴·빈칸만 검증 → 치팅 이득 없음:
-      //   커서는 어차피 전 칸을 훑으므로 어떤 빈칸이든 타이밍으로 도달 가능).
-      // 오프라인/미지정: 서버측 스캔 커서(state.cursor)로 판정.
+      // online: trust the cell the client picked with its local cursor (e.cell) (only validate my-turn + empty → no cheating advantage:
+      //   the cursor sweeps every cell anyway, so any empty cell is reachable by timing).
+      // offline/unspecified: judge by the server-side scan cursor (state.cursor).
       const idx =
         typeof e.cell === 'number' && Number.isInteger(e.cell) && e.cell >= 0 && e.cell < G9.CELLS
           ? e.cell
@@ -186,20 +186,20 @@ export function step(state: Game9State, events: GameInputEvent[], dt: number): G
       if (state.board[idx] === 0) {
         placeAndAdvance(state, idx, false)
         if (state.result) return state
-        break // 이번 프레임에서 새 턴 입력은 받지 않는다
+        break // don't accept new-turn input in this frame
       }
-      // 이미 찬 교점 — 무시하고 계속 노릴 수 있음
+      // already-filled intersection — ignored, you can keep aiming
     }
   }
 
-  // 제한시간 안에 못 놓았으면 시스템이 랜덤 배치 후 턴 넘김
+  // if not placed within the time limit, the system places at random then passes the turn
   if (!state.result && state.turnClock >= G9.TURN_TIME) {
     const idx = randomEmpty(state)
     if (idx >= 0) {
       placeAndAdvance(state, idx, true)
       if (state.result) return state
     } else {
-      // 둘 곳이 없으면(사실상 발생 X) 턴만 넘긴다
+      // if there's nowhere to place (effectively never happens), just pass the turn
       state.turn = state.turn === 1 ? 2 : 1
       state.turnClock = 0
     }
@@ -211,15 +211,15 @@ export function step(state: Game9State, events: GameInputEvent[], dt: number): G
   return state
 }
 
-/** 시간 종료 시 승패 판정 */
+/** decide win/loss when time runs out */
 export function resolveTimeout(board: number[]): GameResult {
   const has2p1 = maxRun(board, 1) >= 2
   const has2p2 = maxRun(board, 2) >= 2
-  // (5) 2목이 있는 사람이 승 — 한쪽만 2목이면 그쪽 승
+  // (5) whoever has a 2-in-a-row wins — if only one side has it, that side wins
   if (has2p1 && !has2p2) return 'P1'
   if (has2p2 && !has2p1) return 'P2'
 
-  // (6) 둘 다 2목 여부가 같으면 밀집도 비교
+  // (6) if both have the same 2-in-a-row status, compare density
   const d1 = density(board, 1)
   const d2 = density(board, 2)
   if (d1 === d2) return 'DRAW'

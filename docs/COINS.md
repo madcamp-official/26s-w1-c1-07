@@ -1,80 +1,80 @@
-# MADPUMP 코인 시스템 (v1, 2026-07-05)
+# MADPUMP coin system (v1, 2026-07-05)
 
-> 재화 "코인"의 규칙 정본. 상수·헬퍼의 코드 정본은 `shared/src/coins.ts` (client/server 공유).
-> DB 스키마는 `docs/ERD.md` v2 (app_user.coins / unlocked_count).
+> The rule source of truth for the "Coin" currency. The code source of truth for constants·helpers is `shared/src/coins.ts` (shared by client/server).
+> The DB schema is `docs/ERD.md` v2 (app_user.coins / unlocked_count).
 
-## 1. 기본 규칙
+## 1. Basic rules
 
-- 모든 유저는 **30코인**으로 시작 (`app_user.coins DEFAULT 30`).
-- 용도: ① 오프라인 게임 해금 ② 온라인 매치 베팅 ③ (예정) 테마 구매.
+- Every user starts with **30 Coins** (`app_user.coins DEFAULT 30`).
+- Uses: ① unlocking offline games ② betting on online matches ③ (planned) theme purchases.
 
-## 2. 온라인 베팅
+## 2. Online betting
 
-빠른 시작 / 코드 생성하기 / 코드 입력하기 실행 전에 **"코인 베팅" 창**이 뜬다
-(보유 한도 내 정수, 0 허용). 베팅액은 `queue:join` / `room:create` / `room:join`
-페이로드의 `bet` 필드로 전달되고 서버가 보유량을 재검증한다(초과 시 `INVALID_BET`).
+Before running quick start / create code / enter code, a **"Coin bet" window** appears
+(an integer within your balance, 0 allowed). The bet amount is passed via the `bet` field of the `queue:join` / `room:create` / `room:join`
+payload, and the server re-validates the balance (`INVALID_BET` if it exceeds it).
 
-**정산 (매치 종료 시, `server/src/match.ts` finishMatch):**
+**Settlement (at match end, `server/src/match.ts` finishMatch):**
 
-| 매치 종류 | 승자 | 패자 | 무승부 |
+| Match type | Winner | Loser | Draw |
 |---|---|---|---|
-| 빠른 시작 (`quick`) | +자기 베팅 | −자기 베팅 | 변동 없음 |
-| 코드방 (`code`) | **+패자 베팅** | −자기 베팅 | 변동 없음 |
+| Quick start (`quick`) | +own bet | −own bet | no change |
+| Code room (`code`) | **+loser's bet** | −own bet | no change |
 
-정산 결과는 `match:end` 메시지에 플레이어별로 실려온다: `coinDelta`(증감), `coinBalance`(잔액).
-매치 종료 오버레이가 "+N COIN / −N COIN · 보유 M"으로 표시.
+The settlement result rides in the `match:end` message per player: `coinDelta` (change), `coinBalance` (balance).
+The match-end overlay shows "+N COIN / −N COIN · balance M".
 
-## 3. 오프라인 게임 해금
+## 3. Offline game unlock
 
-- 화면 순서(=게임 id) **마지막 2개(9번 스피드 오목 · 10번 줄다리기)만 잠금**, 나머지 8개는 처음부터 오픈.
-- 잠긴 2개는 **순서와 무관하게 각각 독립적으로** 해금 가능 (로그인 필요):
+- In screen order (= game id), **only the last 2 (No. 9 Speed Gomoku · No. 10 Tug of War) are locked**; the other 8 are open from the start.
+- The 2 locked ones can be unlocked **independently, regardless of order** (login required):
 
-| 게임 | 비용 |
+| Game | Cost |
 |---|---|
-| 9번 스피드 오목 | 30코인 |
-| 10번 줄다리기 | 50코인 |
+| No. 9 Speed Gomoku | 30 Coins |
+| No. 10 Tug of War | 50 Coins |
 
-- DB엔 **`unlocked_count`** 하나만 저장 — `LOCKABLE_GAME_IDS` 순서의 **비트마스크**(잠금 대상이
-  2개라 값 0~3, 스키마 마이그레이션 불필요). `unlockedGameIds(mask)` 헬퍼로 복원한다.
-- `POST /api/unlock` (인증 필요, body `{ gameId }`): 지정한 잠긴 게임을 해금 — 서버가
-  비용·중복·잔액을 검증하고 조건부 UPDATE로 비트 설정(동시 요청 안전).
-  응답 `{ unlockedGameId, coins, unlockedCount }`.
-- 비로그인 유저는 기본 **8종**만 플레이 가능, 해금 불가.
-- 온라인 매치의 라운드 게임 랜덤 선택(1~10)은 해금과 **무관** (오프라인 전용 제한).
+- The DB stores only **`unlocked_count`** — a **bitmask** in `LOCKABLE_GAME_IDS` order (2 lockable targets,
+  so values 0~3, no schema migration needed). Restore it with the `unlockedGameIds(mask)` helper.
+- `POST /api/unlock` (auth required, body `{ gameId }`): unlocks the specified locked game — the server
+  validates cost·duplicate·balance and sets the bit with a conditional UPDATE (concurrent-request safe).
+  Response `{ unlockedGameId, coins, unlockedCount }`.
+- Logged-out users can play the default **8 types** only, and cannot unlock.
+- The random round-game selection (1~10) in online matches is **unrelated** to unlocking (an offline-only restriction).
 
-## 4. 코인 노가다 (coin farm) — 솔로 펌프 미션
+## 4. Coin farm — solo pump mission
 
-게임 선택(오프라인) 우하단 **"⛏ 코인 노가다하기"** → `/farm`. 로그인 필수(비로그인은 로그인 모달).
-기존 펌프(게임6)의 U/I 레인 문법을 1인용으로 축약한 미션 모드다. 상수 정본: `shared/src/coins.ts`.
+Bottom-right of Game Select (offline): **"⛏ Coin farm"** → `/farm`. Login required (logged-out gets the login modal).
+It is a single-player mission mode condensing the U/I lane grammar of the existing Pump (Game 6). Constants source of truth: `shared/src/coins.ts`.
 
-- **미션**: 제한시간 **10초**(`FARM_DURATION`) 안에 정답 **25타**(`FARM_TARGET`) 달성 → MISSION COMPLETE, 코인 지급.
-- **실패 조건**: ① 시간 안에 25점 미달 → MISSION FAILED ② **틀린 키 1회 = 그 즉시 FAILED** (보상 없음).
-- **보상 분포** (`FARM_REWARD_TABLE`, 서버가 추첨 — `POST /api/farm/claim`):
+- **Mission**: within a **10-second** time limit (`FARM_DURATION`), reach **25 correct hits** (`FARM_TARGET`) → MISSION COMPLETE, coins awarded.
+- **Failure conditions**: ① fewer than 25 points within the time → MISSION FAILED ② **one wrong key = FAILED instantly** (no reward).
+- **Reward distribution** (`FARM_REWARD_TABLE`, drawn by the server — `POST /api/farm/claim`):
 
-| 코인 | 1 | 2 | 3 | 5 | 10 | 20 | 50 | 100 |
+| Coins | 1 | 2 | 3 | 5 | 10 | 20 | 50 | 100 |
 |---|---|---|---|---|---|---|---|---|
-| 확률 | 30% | 20% | 15% | 18% | 11% | 5% | 0.9% | 0.1% |
+| Probability | 30% | 20% | 15% | 18% | 11% | 5% | 0.9% | 0.1% |
 
-  기댓값 **4.7코인**(≈5), 최소 1 / 최대 100.
-- 게임 판정은 클라 계산(로스터 로그인과 같은 신뢰 모델). 서버는 유저당 **5초 쿨다운**
-  (`FARM_CLAIM_COOLDOWN_MS`)으로 스팸 호출만 차단하고 액수를 직접 추첨한다.
-- 구현: 화면 `client/src/screens/CoinFarm.tsx` / 서버 `POST /api/farm/claim` (`server/src/index.ts`).
+  Expected value **4.7 coins** (≈5), min 1 / max 100.
+- Game judgment is client-computed (same trust model as roster login). The server only blocks spam calls with a **5-second cooldown per user**
+  (`FARM_CLAIM_COOLDOWN_MS`) and draws the amount directly.
+- Implementation: screen `client/src/screens/CoinFarm.tsx` / server `POST /api/farm/claim` (`server/src/index.ts`).
 
-## 5. mock (아직 기능 없음)
+## 5. mock (no functionality yet)
 
-- **테마 변경하기** (메인 우하단): 테마 상점 모달 — 메모장/하키 테마 각 10,000코인 표시만,
-  구매 불가(COMING SOON). `client/src/modals/ThemeShop.tsx`
+- **Change Theme** (main bottom-right): theme shop modal — notepad/hockey themes each shown as 10,000 coins,
+  purchase disabled (COMING SOON). `client/src/modals/ThemeShop.tsx`
 
-## 6. API·이벤트 요약
+## 6. API·event summary
 
-| 위치 | 변경 |
+| Location | Change |
 |---|---|
-| `GET /api/me` | `coins`, `unlockedCount` 포함 (DB 최신값) |
-| `POST /api/login` | 응답에 `coins`, `unlockedCount` |
-| `POST /api/unlock` | 잠긴 게임 해금 (body `{ gameId }`; 400: `INVALID_GAME`/`ALREADY_UNLOCKED`/`NOT_ENOUGH_COINS`) |
-| `POST /api/farm/claim` | 노가다 보상 추첨·지급 (429: `COOLDOWN`) → `{ reward, coins }` |
-| `queue:join` `room:create` `room:join` | `{ bet }` 추가 + ack로 `INVALID_BET` 반환 |
-| `match:end` | `coinDelta`, `coinBalance` 추가 (플레이어별 개별 전송) |
+| `GET /api/me` | includes `coins`, `unlockedCount` (latest DB values) |
+| `POST /api/login` | `coins`, `unlockedCount` in the response |
+| `POST /api/unlock` | unlock a locked game (body `{ gameId }`; 400: `INVALID_GAME`/`ALREADY_UNLOCKED`/`NOT_ENOUGH_COINS`) |
+| `POST /api/farm/claim` | draw·grant farm reward (429: `COOLDOWN`) → `{ reward, coins }` |
+| `queue:join` `room:create` `room:join` | add `{ bet }` + return `INVALID_BET` via ack |
+| `match:end` | add `coinDelta`, `coinBalance` (sent individually per player) |
 
-마이그레이션: `server/prisma/migrations/20260705130654_coin_system`.
-기존 유저는 마이그레이션 시 자동으로 30코인/해금 0 상태가 된다.
+Migration: `server/prisma/migrations/20260705130654_coin_system`.
+Existing users automatically become 30 coins / 0 unlocked at migration time.

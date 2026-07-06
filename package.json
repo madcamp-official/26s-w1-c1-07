@@ -2,7 +2,7 @@
   "name": "madpump",
   "private": true,
   "version": "0.1.0",
-  "description": "MADPUMP — 1:1 대결 웹 미니게임 플랫폼 (몰입캠프)",
+  "description": "MADPUMP — 1:1 head-to-head web mini-game platform (Immersion Camp)",
   "workspaces": [
     "shared",
     "server",

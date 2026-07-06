@@ -1,28 +1,28 @@
 /**
- * 게임8 · 마그마 총격 듀얼 (NEON COIN-OP). 담당: game7 에이전트.
- * 컨테이너 testid: scr-game7 / 부품: game-stage(CRT 베젤), hud-*(HudFrame 내장), btn-exit
+ * Game 8 · Magma Shootout Duel (NEON COIN-OP). Owner: game7 agent.
+ * Container testid: scr-game7 / parts: game-stage(CRT bezel), hud-*(HudFrame embedded), btn-exit
  *
- * ── 게임(코어 game7) 요약 ─────────────────────────────────────────────
- *  · P1(왼쪽 시안)·P2(오른쪽 핑크)가 마주 보고 먼저 상대를 맞히면 승리.
- *  · 두 기체는 위에서 스폰돼 중력으로 낙하 — Q/U 살짝 점프(플래피), W/I 수평 발사(쿨다운).
- *  · 바닥 마그마가 10초간 상승(H→H/2), 닿으면 즉사. 천장 가시(0~SPIKE_H)에 닿아도 즉사.
- *  · 총알은 0.5초에 상대에 도달 → 발사 후 상대가 높이를 바꿔 회피 가능.
- *  · 명중=쏜 쪽 승 / 마그마·가시=닿은 쪽 패 / 10초 생존=DRAW.
+ * ── Game (core game7) summary ─────────────────────────────────────────────
+ *  · P1 (left cyan) and P2 (right pink) face off; the first to hit the opponent wins.
+ *  · Both ships spawn at the top and fall under gravity — Q/U for a small jump (flappy), W/I for horizontal fire (cooldown).
+ *  · Floor magma rises over 10s (H→H/2); touching it is instant death. Touching the ceiling spikes (0~SPIKE_H) is also instant death.
+ *  · A bullet reaches the opponent in 0.5s → after firing, the opponent can change height to dodge.
+ *  · Hit = the shooter wins / magma·spikes = the one who touched loses / surviving 10s = DRAW.
  *
- * ── 화면(neon-coinop, 처음부터 새로) ─────────────────────────────────
- *  · 논리 800×450 캔버스(=G7.W/H, 좌표 1:1) + DPR 스케일, CSS 16:9 반응형.
- *  · 발광요소 절제: 마그마(옐로/열), P1(시안), P2(핑크) 3계열 글로우.
- *    천장 가시·그리드는 무발광 dim 라인. 순색 대면적 금지(dim 바탕 + 2px 보더).
- *  · 등장 sign-on 플리커(≈420ms), 승패 순간에만 크로마틱 글리치. reduced-motion 존중.
- *  · 스캔라인은 전역(App) — 여기서 중복 렌더 금지.
+ * ── Screen (neon-coinop, from scratch) ─────────────────────────────────
+ *  · Logical 800×450 canvas (=G7.W/H, coords 1:1) + DPR scale, CSS 16:9 responsive.
+ *  · Restrained glow elements: magma (yellow/heat), P1 (cyan), P2 (pink) — 3 glow families.
+ *    Ceiling spikes·grid are non-glowing dim lines. No large areas of pure color (dim base + 2px border).
+ *  · Entrance sign-on flicker (≈420ms), chromatic glitch only at the win/loss moment. Respects reduced-motion.
+ *  · Scanlines are global (App) — do not render them redundantly here.
  *
- * ── 배선(게임1·2와 동일 envelope) ────────────────────────────────────
+ * ── Wiring (same envelope as games 1·2) ────────────────────────────────
  *  · game7.create(Math.random) / game7.step(state, events, dtSec)
- *  · attachLocalKeyboard: KeyQ/KeyW=P1, KeyU/KeyI=P2. 코어는 'down'만 처리(엣지 발사/점프).
- *  · step은 원본 mutate 후 동일 참조 반환 → 이전값 비교는 호출 전 스칼라 스냅샷.
- *  · result 확정 → 짧은 FX(RESULT_FX_MS) 후 reportRoundEnd 1회 → <ResultOverlay />
- *  · online 모드 → P2는 봇(생존 호버 + 정렬 시 발사 + 탄 회피 휴리스틱).
- *  · 매 틱 setDebugGame(state), 언마운트 setDebugGame(null).
+ *  · attachLocalKeyboard: KeyQ/KeyW=P1, KeyU/KeyI=P2. The core handles only 'down' (edge fire/jump).
+ *  · step mutates the original then returns the same reference → compare previous values via a scalar snapshot taken before the call.
+ *  · result confirmed → short FX (RESULT_FX_MS) then reportRoundEnd once → <ResultOverlay />
+ *  · online mode → P2 is a bot (survival hover + fires when aligned + bullet-dodge heuristic).
+ *  · setDebugGame(state) every tick, setDebugGame(null) on unmount.
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -51,7 +51,7 @@ import { sfx } from '@/audio';
 import './game7.css';
 
 // ---------------------------------------------------------------------------
-// 캔버스 = 코어 논리 해상도(800×450) 그대로 → 좌표 변환 불필요(1:1).
+// Canvas = core logical resolution (800×450) as-is → no coord transform needed (1:1).
 // ---------------------------------------------------------------------------
 const CW = G7.W;
 const CH = G7.H;
@@ -74,9 +74,9 @@ const COL0 = {
 const ARCADE_FONT = '"Press Start 2P", monospace';
 
 /**
- * 색은 플레이어 종속(역할과 독립) — functionColors()에 따라 P1/P2 엔티티 색을 '플레이어 색'으로 스왑한 팔레트.
- * fc.p1==='red'면 P1엔티티=빨강(핑크)·P2엔티티=파랑(시안)이 되도록 p1/p2(및 dim) 교환.
- * 오프라인/색 정보 없으면 fc={p1:'blue',p2:'red'} → COL0 그대로(기존 룩 유지).
+ * Color is player-dependent (independent of role) — a palette that swaps P1/P2 entity colors to the 'player color' per functionColors().
+ * If fc.p1==='red', swap p1/p2 (and dim) so P1 entity=red (pink)·P2 entity=blue (cyan).
+ * If offline / no color info, fc={p1:'blue',p2:'red'} → COL0 as-is (keeps the existing look).
  */
 function themedCols() {
   const fc = functionColors();
@@ -85,10 +85,10 @@ function themedCols() {
     : COL0;
 }
 
-/** 판정 → 결과 오버레이 사이 인게임 연출(피격 파편/글리치) 시간 */
+/** Duration of the in-game effect (hit shards/glitch) between the verdict → the result overlay */
 const RESULT_FX_MS = 620;
 
-/** 코어 result → 셸 MatchResult */
+/** core result → shell MatchResult */
 function toMatchResult(r: 'P1' | 'P2' | 'DRAW'): MatchResult {
   return r === 'P1' ? 'P1_WIN' : r === 'P2' ? 'P2_WIN' : 'DRAW';
 }
@@ -96,10 +96,10 @@ function toMatchResult(r: 'P1' | 'P2' | 'DRAW'): MatchResult {
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 /**
- * 라운드 종료 임팩트 SFX(패자 사인) — result 전이 순간에 1회만 호출한다(호출부에서 가드).
- *  · 승리 팡파레는 전역 레이어가 울리므로 여기선 승리 징글을 울리지 않는다.
- *  · 패자 판별: 승자 탄이 패자 사각형과 겹치면 피격(g7-hit),
- *    아니면 발끝이 마그마 표면 아래면 추락사(g7-magma-death). 천장 가시 사망은 매핑 없음(무음).
+ * Round-end impact SFX (loser sign) — call only once at the result transition moment (guarded by the caller).
+ *  · The victory fanfare is played by the global layer, so no victory jingle is played here.
+ *  · Loser detection: if a winner bullet overlaps the loser rect it's a hit (g7-hit),
+ *    otherwise if the feet are below the magma surface it's a fall death (g7-magma-death). Ceiling-spike death has no mapping (silent).
  */
 function playRoundEndSfx(s: Game7State): void {
   const surf = magmaSurfaceY(s.elapsed);
@@ -122,16 +122,16 @@ function playRoundEndSfx(s: Game7State): void {
   );
   if (hitByBullet) sfx('g7-hit');
   else if (inMagma(loserY)) sfx('g7-magma-death');
-  // else: 천장 가시 사망 — 매핑 없음(무음)
+  // else: ceiling-spike death — no mapping (silent)
 }
 
-/** sign-on 플리커 off 창(등장 시 프레임 blank). f = age/420 ∈ [0,1) */
+/** sign-on flicker off-window (blank frame during entrance). f = age/420 ∈ [0,1) */
 function signOffWindow(f: number): boolean {
   return f < 0.29 || (f >= 0.45 && f < 0.59) || (f >= 0.75 && f < 0.84);
 }
 
 // ---------------------------------------------------------------------------
-// 렌더 전용 이펙트 (state는 읽기만 — 로직 비침범)
+// Render-only effects (state is read-only — does not touch logic)
 // ---------------------------------------------------------------------------
 type Fx =
   | { kind: 'muzzle'; x: number; y: number; color: string; dir: 1 | -1; t: number }
@@ -147,11 +147,11 @@ interface DrawUi {
 }
 
 // ---------------------------------------------------------------------------
-// 온라인 mock 봇 — P2(핑크) 조종. 코어는 'down' 이벤트만 반응하므로 down만 합성.
-//   ① 생존: 천장 가시 ↔ 상승 마그마 사이 안전대에서 플래피 호버.
-//   ② 회피: 접근 중인 P1 탄(owner 1)과 y가 겹치면 반대편으로 목표 이동.
-//   ③ 발사: 상대와 y 정렬 + 쿨다운 준비 시 발사.
-// 반환: 이번 프레임에 합성한 이벤트 배열.
+// Online mock bot — controls P2 (pink). The core only reacts to 'down' events, so synthesize only down.
+//   ① Survive: flappy hover in the safe zone between ceiling spikes ↔ rising magma.
+//   ② Dodge: if an approaching P1 bullet (owner 1) overlaps in y, move the target to the opposite side.
+//   ③ Fire: fire when aligned with the opponent in y + cooldown ready.
+// Returns: the array of events synthesized this frame.
 // ---------------------------------------------------------------------------
 interface BotRefs {
   jumpAt: number;
@@ -167,13 +167,13 @@ function computeBotEvents(
   const events: GameInputEvent[] = [];
   const t = now / 1000;
   const surf = magmaSurfaceY(s.elapsed);
-  const safeTop = G7.SPIKE_H + G7.PH / 2 + 6; // 최소 p2Y (천장 회피)
-  const safeBottom = surf - G7.PH / 2 - 8; // 최대 p2Y (마그마 회피)
+  const safeTop = G7.SPIKE_H + G7.PH / 2 + 6; // min p2Y (avoid ceiling)
+  const safeBottom = surf - G7.PH / 2 - 8; // max p2Y (avoid magma)
 
-  // 기본 목표: 상대 높이에 맞춰 정렬(안전대 내 클램프)
+  // Default target: align to the opponent's height (clamped within the safe zone)
   let targetY = clamp(s.p1Y, safeTop + 8, safeBottom - 10);
 
-  // 회피: 접근 중인 P1 탄과 y가 겹치면 안전대 반대편으로
+  // Dodge: if an approaching P1 bullet overlaps in y, move to the opposite side of the safe zone
   for (const b of s.bullets) {
     if (b.owner !== 1) continue;
     const dist = G7.P2_X - b.x;
@@ -183,14 +183,14 @@ function computeBotEvents(
     }
   }
 
-  // 플래피 호버: 목표보다 아래(y 큼)이고 상승 중이 아니면 점프(쓰로틀)
+  // Flappy hover: if below the target (larger y) and not rising, jump (throttled)
   if (s.p2Y > targetY + 4 && s.p2Vy > -30 && now >= bot.jumpAt) {
     events.push({ code: 'KeyU', type: 'down', t });
     bot.jumpAt = now + 110 + Math.random() * 70;
     onJump();
   }
 
-  // 발사: y 정렬 + 쿨다운 준비
+  // Fire: y-aligned + cooldown ready
   if (Math.abs(s.p1Y - s.p2Y) < 22 && s.p2Cd === 0 && now >= bot.fireAt) {
     events.push({ code: 'KeyI', type: 'down', t });
     bot.fireAt = now + 240 + Math.random() * 240;
@@ -200,22 +200,22 @@ function computeBotEvents(
 }
 
 // ---------------------------------------------------------------------------
-// 캔버스 렌더러 (순수 그리기)
+// Canvas renderer (pure drawing)
 // ---------------------------------------------------------------------------
 function drawScene(ctx: CanvasRenderingContext2D, s: Game7State, fx: readonly Fx[], now: number, ui: DrawUi): void {
-  // 색은 플레이어 종속 — 로컬 COL이 아래 COL.p1/p2 사용부(총알·기체·FX)를 플레이어 색으로 덮는다.
+  // Color is player-dependent — the local COL overrides the COL.p1/p2 usages below (bullets·ships·FX) with the player color.
   const COL = themedCols();
   const surf = magmaSurfaceY(s.elapsed);
   const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
   const urgent = remainingMs <= 5000 && s.result === null;
-  const step120 = Math.floor(now / 120); // 아케이드 스텝 위상
+  const step120 = Math.floor(now / 120); // arcade step phase
 
-  // ---- 배경 필드 ----
+  // ---- Background field ----
   ctx.clearRect(0, 0, CW, CH);
   ctx.fillStyle = COL.field;
   ctx.fillRect(0, 0, CW, CH);
 
-  // 무발광 세로 그리드 + 중앙 분리선 (P1 | P2)
+  // Non-glowing vertical grid + center divider (P1 | P2)
   ctx.save();
   ctx.strokeStyle = urgent ? 'rgba(255,42,109,0.10)' : 'rgba(211,0,197,0.08)';
   ctx.lineWidth = 1;
@@ -232,7 +232,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game7State, fx: readonly Fx
   ctx.stroke();
   ctx.restore();
 
-  // 배경 워터마크 "VS" (퍼플, 무발광 아웃라인 — 발광요소 아님)
+  // Background watermark "VS" (purple, non-glowing outline — not a glow element)
   ctx.save();
   ctx.font = `bold 150px ${ARCADE_FONT}`;
   ctx.textAlign = 'center';
@@ -242,7 +242,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game7State, fx: readonly Fx
   ctx.strokeText('VS', CW / 2, CH / 2 - 20);
   ctx.restore();
 
-  // ---- 천장 가시(무발광 dim) ----
+  // ---- Ceiling spikes (non-glowing dim) ----
   ctx.save();
   ctx.fillStyle = COL.deep;
   ctx.fillRect(0, 0, CW, G7.SPIKE_H);
@@ -261,7 +261,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game7State, fx: readonly Fx
   }
   ctx.restore();
 
-  // ---- 마그마(상승 위협, 옐로/열 글로우 = 발광요소 1) ----
+  // ---- Magma (rising threat, yellow/heat glow = glow element 1) ----
   ctx.save();
   const mg = ctx.createLinearGradient(0, surf - 4, 0, CH);
   mg.addColorStop(0, 'rgba(253,245,0,0.85)');
@@ -269,7 +269,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game7State, fx: readonly Fx
   mg.addColorStop(1, 'rgba(74,10,38,0.96)');
   ctx.fillStyle = mg;
   ctx.fillRect(0, surf, CW, CH - surf);
-  // 표면 라인(스텝 웨이브 + 글로우)
+  // Surface line (step wave + glow)
   ctx.shadowColor = COL.accent;
   ctx.shadowBlur = urgent ? 22 : 15;
   ctx.strokeStyle = COL.accent;
@@ -284,7 +284,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game7State, fx: readonly Fx
   ctx.stroke();
   ctx.restore();
 
-  // ---- 총알(트레일 + 코어 도트, owner 색 = P1/P2 글로우에 포함) ----
+  // ---- Bullets (trail + core dot, owner color = included in P1/P2 glow) ----
   for (const b of s.bullets) {
     const col = b.owner === 1 ? COL.p1 : COL.p2;
     const tx = b.x - b.vx * 0.1;
@@ -307,7 +307,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game7State, fx: readonly Fx
     ctx.restore();
   }
 
-  // ---- 플레이어 기체 ----
+  // ---- Player ships ----
   const drawShip = (
     cx: number,
     cy: number,
@@ -325,7 +325,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game7State, fx: readonly Fx
     const halfH = G7.PH / 2;
     const inDanger = cy + halfH > surf - 22 || cy - halfH < G7.SPIKE_H + 16;
     ctx.save();
-    // 점프 분사 화염(플래피 상승 중)
+    // Jump thruster flame (while rising in flappy)
     if (!ui.reduce && vy < -30) {
       ctx.save();
       ctx.globalAlpha = 0.6;
@@ -349,17 +349,17 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game7State, fx: readonly Fx
     ctx.shadowBlur = 10;
     ctx.fillRect(-halfW, -halfH, G7.PW, G7.PH);
     ctx.strokeRect(-halfW, -halfH, G7.PW, G7.PH);
-    // 포신(상대 방향)
+    // Barrel (toward the opponent)
     const bx = dir > 0 ? halfW : -halfW - 8;
     ctx.fillRect(bx, -3, 8, 6);
     ctx.strokeRect(bx, -3, 8, 6);
-    // 콕핏 도트
+    // Cockpit dot
     ctx.shadowBlur = 0;
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(dir * 4, -2, 3, 0, Math.PI * 2);
     ctx.fill();
-    // 장전 완료 표시(총구 광점)
+    // Reload-ready indicator (muzzle light dot)
     if (cdReady) {
       ctx.shadowColor = color;
       ctx.shadowBlur = 8;
@@ -368,7 +368,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game7State, fx: readonly Fx
       ctx.fill();
       ctx.shadowBlur = 0;
     }
-    // 위험 경고 테(마그마/가시 근접 시 스텝 점멸)
+    // Danger warning border (step-blink when near magma/spikes)
     if (inDanger && (ui.reduce || step120 % 2 === 0)) {
       ctx.strokeStyle = COL.error;
       ctx.lineWidth = 2;
@@ -377,7 +377,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game7State, fx: readonly Fx
       ctx.strokeRect(-halfW - 3, -halfH - 3, G7.PW + 6, G7.PH + 6);
       ctx.shadowBlur = 0;
     }
-    // 라벨
+    // Label
     ctx.font = `10px ${ARCADE_FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
@@ -392,7 +392,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game7State, fx: readonly Fx
   };
 
   const loserHidden = (owner: 1 | 2) => {
-    // 피격/사망 연출 중엔 해당 기체를 파편으로 대체
+    // During the hit/death effect, replace that ship with shards
     const chroma = fx.find((f) => f.kind === 'chroma');
     if (!chroma) return false;
     if (s.result === 'P1' && owner === 2) return now - chroma.t > 60;
@@ -403,7 +403,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game7State, fx: readonly Fx
   drawShip(G7.P1_X, s.p1Y, COL.p1, COL.p1dim, 1, s.p1Vy, s.p1Cd === 0, ui.p1IsYou, 'P1', loserHidden(1));
   drawShip(G7.P2_X, s.p2Y, COL.p2, COL.p2dim, -1, s.p2Vy, s.p2Cd === 0, ui.p2IsYou, 'P2', loserHidden(2));
 
-  // ---- 이펙트(머즐/파편/캡션) ----
+  // ---- Effects (muzzle/shards/caption) ----
   for (const f of fx) {
     const age = now - f.t;
     if (f.kind === 'muzzle' && age < 90) {
@@ -448,7 +448,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game7State, fx: readonly Fx
     }
   }
 
-  // ---- 승패 크로마틱 글리치(승패 순간에만) ----
+  // ---- Win/loss chromatic glitch (only at the win/loss moment) ----
   const chroma = fx.find((f) => f.kind === 'chroma');
   if (chroma && !ui.reduce && now - chroma.t < 90) {
     ctx.save();
@@ -460,7 +460,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game7State, fx: readonly Fx
     ctx.restore();
   }
 
-  // ---- 등장 sign-on 플리커(프레임 blank) ----
+  // ---- Entrance sign-on flicker (blank frame) ----
   if (!ui.reduce) {
     const age = now - ui.mountAt;
     if (age < 420 && signOffWindow(age / 420)) {
@@ -471,11 +471,11 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game7State, fx: readonly Fx
 }
 
 // ---------------------------------------------------------------------------
-// 스냅샷 사이 외삽(보간) — 서버 스냅샷을 dt초만큼 각 오브젝트 '자기 물리'로 전진시킨 표시용 복사본.
-//  · 탄: 수평 등속(x += vx·dt). 기체: 중력 적분(vy += G·dt, y += vy·dt) — 코어 step과 동일 공식.
-//  · vx/vy가 스냅샷에 이미 있어 ID 매칭 불필요·추가지연 0. 점프/반전 순간만 미세오차이며
-//    다음 스냅샷이 즉시 교정. 30/60Hz 스냅샷을 60fps로 부드럽게 잇는다(탄·기체 순간이동 제거).
-//  · result 확정 시엔 호출하지 않는다(승패 위치는 서버값 그대로).
+// Extrapolation (interpolation) between snapshots — a display-only copy that advances the server snapshot by dt seconds using each object's 'own physics'.
+//  · Bullets: horizontal constant velocity (x += vx·dt). Ships: gravity integration (vy += G·dt, y += vy·dt) — same formula as core step.
+//  · vx/vy are already in the snapshot, so no ID matching·zero added latency. Only jump/reversal moments have a tiny error, and
+//    the next snapshot corrects it immediately. Smoothly bridges 30/60Hz snapshots at 60fps (removes bullet·ship teleporting).
+//  · Not called once result is confirmed (win/loss positions stay at the server values).
 // ---------------------------------------------------------------------------
 function extrapolate(s: Game7State, dt: number): Game7State {
   const p1Vy = Math.min(G7.MAX_FALL, s.p1Vy + G7.GRAVITY * dt);
@@ -491,22 +491,22 @@ function extrapolate(s: Game7State, dt: number): Game7State {
 }
 
 // ---------------------------------------------------------------------------
-// 컴포넌트
+// Component
 // ---------------------------------------------------------------------------
 export default function Game7() {
   useDebugScreen('scr-game7');
   const flow = useFlow();
   const navigate = useNavigate();
 
-  // ── 온라인 렌더 훅(성능 표준): 활성/역할만 선택 구독 → 값이 바뀌는 라운드 경계에서만 리렌더.
-  //   스냅샷은 stateRef/snapAtRef로 미러(리렌더 유발 안 함), per-snapshot 작업은 onSnapshot에 위임.
+  // ── Online render hook (performance standard): subscribe only to active/role → re-render only at round boundaries where the values change.
+  //   Snapshots are mirrored via stateRef/snapAtRef (no re-render triggered); per-snapshot work is delegated to onSnapshot.
   const { isOnline, myRole, stateRef, snapAtRef } = useOnlineRender<Game7State>(7, (s) => {
-    setDebugGame(s); // 디버그 브리지 — 스냅샷마다 갱신(기존 미러 effect 본문)
+    setDebugGame(s); // debug bridge — updated every snapshot (the body of the old mirror effect)
   });
-  // 입력 핸들러(장수 리스너)가 항상 최신 '온라인 활성 여부'를 보게 하는 stale-closure 방지 ref
+  // A stale-closure-preventing ref so the input handler (long-lived listener) always sees the latest 'is online active'
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
-  // 내 색(매치 고정, 역할과 독립). 키캡/YOU 표기는 이 색으로 — 값이 바뀔 때만 리렌더(스냅샷마다 X).
+  // My color (fixed per match, independent of role). KeyCap/YOU labels use this color — re-render only when the value changes (not every snapshot).
   const myColor = useSyncExternalStore(
     onlineStore.subscribe,
     () => onlineStore.get().myColor ?? 'blue',
@@ -522,13 +522,13 @@ export default function Game7() {
   const resultAtRef = useRef(0);
   const mountAtRef = useRef(0);
   const reduceRef = useRef(false);
-  /** 온라인 로컬 예측: 내 기체의 점프 입력 대기 플래그(KeyU down에서 set, 루프에서 소비) */
+  /** Online local prediction: pending-jump flag for my ship (set on KeyU down, consumed in the loop) */
   const jumpPendingRef = useRef(false);
-  /** 온라인 로컬 예측된 내 기체 y (null=아직 스냅샷 전/스냅 필요) */
+  /** Online locally-predicted y of my ship (null=before first snapshot / needs snap) */
   const predYRef = useRef<number | null>(null);
-  /** 온라인 로컬 예측된 내 기체 vy(중력 적분 상태) */
+  /** Online locally-predicted vy of my ship (gravity-integration state) */
   const predVyRef = useRef(0);
-  /** 예측 적분용 직전 렌더 프레임 시각(performance.now) */
+  /** Timestamp of the previous render frame, used for prediction integration (performance.now) */
   const lastFrameRef = useRef(0);
 
   const [hudMs, setHudMs] = useState(GAME_DURATION * 1000);
@@ -540,7 +540,7 @@ export default function Game7() {
   const lampRef = useRef({ flashU, flashI });
   lampRef.current = { flashU, flashI };
 
-  // direct-URL 복구 + 디버그 브리지 정리
+  // direct-URL recovery + debug bridge cleanup
   useEffect(() => {
     const f = getFlow();
     if (f.phase === 'idle' || f.gameId !== 7) startOfflineGame(7);
@@ -548,7 +548,7 @@ export default function Game7() {
     return () => setDebugGame(null);
   }, []);
 
-  // 캔버스 해상도 초기화(DPR 스케일)
+  // Initialize canvas resolution (DPR scale)
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
@@ -558,19 +558,19 @@ export default function Game7() {
     c.getContext('2d')?.scale(dpr, dpr);
   }, []);
 
-  // 키보드 — 로컬 어댑터. GameInputEvent 큐 적재 + 램프 점등.
-  // (P1 Q/W, P2 U/I. online이면 P2 키는 봇이 대행하므로 흡수하지 않음)
+  // Keyboard — local adapter. Enqueues GameInputEvent + lights lamps.
+  // (P1 Q/W, P2 U/I. When online, the bot handles P2 keys so they are not absorbed)
   useEffect(() => {
     const detach = attachLocalKeyboard(
       () => performance.now() / 1000,
       (e) => {
-        // 진짜 서버 온라인: 로컬 큐/봇 안 씀 → 서버로만 전송. 내 역할은 서버가 role로 재기입하므로
-        // 4키(Q/W/U/I) 아무거나 눌러도 내 슬롯으로 간다(A=주키 Q·U / B=보조키 W·I).
+        // True server-online: does not use the local queue/bot → sends only to the server. The server rewrites my role,
+        // so pressing any of the 4 keys (Q/W/U/I) goes to my slot (A=primary key Q·U / B=secondary key W·I).
         if (isOnlineRef.current) {
-          // 온라인은 U/I 두 키만(요구사항). U=주키(slotA=점프), I=보조키(slotB=발사). Q/W는 무시.
+          // Online uses only the two keys U/I (requirement). U=primary key (slotA=jump), I=secondary key (slotB=fire). Q/W ignored.
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           if (e.code === 'KeyU') {
-            // U=내 기체 점프. down 엣지를 로컬 예측(즉시 상승)에도 반영 — 어느 역할이든 U=내 점프.
+            // U=my ship jump. The down edge is also reflected in local prediction (immediate rise) — U=my jump for any role.
             if (e.type === 'down') {
               jumpPendingRef.current = true;
               flashU();
@@ -584,7 +584,7 @@ export default function Game7() {
           onlineSendInput(slot, e.type, e.t ?? performance.now() / 1000);
           return;
         }
-        // ── 오프라인 경로(그대로) — f.mode==='online'은 로컬 봇 대전(P2 키 흡수) ──
+        // ── Offline path (as-is) — f.mode==='online' is a local bot match (absorbs P2 keys) ──
         const f = getFlow();
         const online = f.mode === 'online';
         if (e.code === 'KeyQ') {
@@ -616,24 +616,24 @@ export default function Game7() {
     return detach;
   }, [flashQ, flashW, flashU, flashI]);
 
-  // 라운드 수명주기: state 생성 → rAF 루프(step+draw) → 결과 보고.
-  // 탭 백그라운드로 rAF가 멈춰도 워치독 interval이 타이머(10초→DRAW)를 진행시킨다.
+  // Round lifecycle: create state → rAF loop (step+draw) → report result.
+  // Even if rAF stalls due to a background tab, the watchdog interval advances the timer (10s→DRAW).
   useEffect(() => {
     if (isOnline) {
-      // 온라인: 서버 권위 상태만 그린다(step·봇·판정보고 없음).
-      // 첫 스냅샷 전(state=null)에는 초기 create 상태를 그려 빈 캔버스를 피한다.
+      // Online: draws only the server-authoritative state (no step·bot·verdict reporting).
+      // Before the first snapshot (state=null), draw the initial create state to avoid a blank canvas.
       if (!stateRef.current) stateRef.current = game7.create(Math.random);
       mountAtRef.current = performance.now();
-      predYRef.current = null; // 입장/재진입 경계 — 다음 스냅샷에서 내 기체 예측을 다시 스냅
+      predYRef.current = null; // enter/re-enter boundary — re-snap my ship prediction on the next snapshot
       jumpPendingRef.current = false;
-      resultAtRef.current = 0; // 서버 result 전이 1회 감지용 가드 리셋
+      resultAtRef.current = 0; // reset the guard used to detect the server result transition once
       let raf = 0;
       const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
         const ctx = canvasRef.current?.getContext('2d');
         const s = stateRef.current;
         if (!ctx || !s) return;
-        // 서버 권위 result가 처음 확정된 프레임에만 패자 임팩트음 1회
+        // Play the loser impact sound once, only on the frame where the server-authoritative result is first confirmed
         if (s.result !== null && resultAtRef.current === 0) {
           resultAtRef.current = now;
           playRoundEndSfx(s);
@@ -641,13 +641,13 @@ export default function Game7() {
         fxRef.current = fxRef.current.filter((f) => now - f.t < 1200);
         const players = getPlayerDisplays(getFlow());
 
-        // (남의 것) 스냅샷 사이 외삽: 마지막 스냅샷을 경과 dt만큼 각 오브젝트 물리로 전진(최대 50ms 캡).
-        //  탄=수평 등속(vx), 기체=중력 적분. 종료(result) 시엔 외삽하지 않는다(서버 위치 그대로).
+        // (others') Extrapolate between snapshots: advance the last snapshot by the elapsed dt using each object's physics (capped at 50ms).
+        //  Bullet=horizontal constant velocity (vx), ship=gravity integration. Do not extrapolate at end (result) (server position as-is).
         const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
         let view = extraDt > 0 && s.result === null ? extrapolate(s, extraDt) : s;
 
-        // (내 캐릭터) 내 기체는 live 입력으로 로컬 예측 → 점프 즉각 반응·롤백 제거.
-        //  화해: 매 프레임 서버값으로 약하게 수렴 + 큰 어긋남(라운드리셋/사망)만 스냅.
+        // (my character) My ship is locally predicted from live input → immediate jump response·no rollback.
+        //  Reconciliation: converge weakly toward the server value each frame + snap only on large discrepancies (round reset/death).
         if (myRole && s.result === null) {
           const frameDt = lastFrameRef.current ? Math.min(0.05, (now - lastFrameRef.current) / 1000) : 0;
           const myY = myRole === 'P1' ? s.p1Y : s.p2Y;
@@ -655,16 +655,16 @@ export default function Game7() {
           let py = predYRef.current;
           let pvy = predVyRef.current;
           if (py === null || Math.abs(myY - py) > 80) {
-            py = myY; // 초기/라운드리셋/큰 desync 스냅
+            py = myY; // snap on initial/round-reset/large desync
             pvy = myVy;
           }
           if (jumpPendingRef.current) {
-            pvy = -G7.JUMP_V; // 점프 즉시 반영(코어와 동일한 임펄스)
+            pvy = -G7.JUMP_V; // reflect the jump immediately (same impulse as the core)
             jumpPendingRef.current = false;
           }
-          pvy = Math.min(G7.MAX_FALL, pvy + G7.GRAVITY * frameDt); // 중력 적분(서버와 동일 공식)
+          pvy = Math.min(G7.MAX_FALL, pvy + G7.GRAVITY * frameDt); // gravity integration (same formula as the server)
           py = py + pvy * frameDt;
-          py += (myY - py) * 0.08; // 서버로 약하게 수렴(지연·적분 드리프트 보정)
+          py += (myY - py) * 0.08; // converge weakly toward the server (corrects latency·integration drift)
           predYRef.current = py;
           predVyRef.current = pvy;
           view = myRole === 'P1' ? { ...view, p1Y: py, p1Vy: pvy } : { ...view, p2Y: py, p2Vy: pvy };
@@ -701,17 +701,17 @@ export default function Game7() {
     let last = performance.now();
 
     const frame = (now: number) => {
-      // 라운드 인트로 중엔 시뮬 정지(코어 step 스킵) + last 갱신으로 재개 시 dt 점프 방지
+      // Pause the sim during the round intro (skip core step) + update `last` to prevent a dt jump on resume
       if (isRoundIntroActive()) {
         last = now;
         return;
       }
-      const dt = Math.min(0.1, (now - last) / 1000); // 초 단위, 100ms 클램프(중력 폭주 방지)
+      const dt = Math.min(0.1, (now - last) / 1000); // in seconds, clamped to 100ms (prevents gravity runaway)
       if (dt <= 0) return;
       last = now;
       let s = stateRef.current;
       if (!s) return;
-      // FX(머즐/파편/캡션) 색도 플레이어 종속 팔레트로 — 오프라인은 기본 role 색과 동일.
+      // FX (muzzle/shards/caption) colors also use the player-dependent palette — offline is the same as the default role color.
       const COL = themedCols();
 
       if (s.result === null) {
@@ -728,7 +728,7 @@ export default function Game7() {
           for (const e of botEvents) events.push(e);
         }
 
-        // step은 원본을 in-place mutate 후 동일 참조 반환 → 이전값은 호출 전 스냅샷
+        // step mutates the original in-place then returns the same reference → previous values come from a snapshot taken before the call
         const prevP1Cd = s.p1Cd;
         const prevP2Cd = s.p2Cd;
         const prevP1Y = s.p1Y;
@@ -739,7 +739,7 @@ export default function Game7() {
         const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
         setHudMs(Math.ceil(remainingMs / 1000) * 1000);
 
-        // 발사 순간(쿨다운 0→FIRE_COOLDOWN 상승) → 머즐 스파크
+        // At the firing moment (cooldown rises 0→FIRE_COOLDOWN) → muzzle spark
         if (s.p1Cd > prevP1Cd) {
           fxRef.current.push({ kind: 'muzzle', x: G7.P1_X + G7.PW / 2 + 8, y: prevP1Y, color: COL.p1, dir: 1, t: now });
         }
@@ -747,10 +747,10 @@ export default function Game7() {
           fxRef.current.push({ kind: 'muzzle', x: G7.P2_X - G7.PW / 2 - 8, y: prevP2Y, color: COL.p2, dir: -1, t: now });
         }
 
-        // 판정 순간 이펙트(글리치는 승패 순간에만)
+        // Verdict-moment effect (glitch only at the win/loss moment)
         if (s.result !== null && resultAtRef.current === 0) {
           resultAtRef.current = now;
-          playRoundEndSfx(s); // 패자 임팩트음(피격/추락) — 이 블록은 라운드당 1회
+          playRoundEndSfx(s); // loser impact sound (hit/fall) — this block runs once per round
           fxRef.current.push({ kind: 'chroma', t: now });
           if (s.result === 'P1') {
             fxRef.current.push(
@@ -775,9 +775,9 @@ export default function Game7() {
           }
         }
       } else if (!reportedRef.current && now - resultAtRef.current >= RESULT_FX_MS) {
-        // 온라인은 서버가 round:end를 구동 → 화면은 결과 보고에 관여하지 않는다.
+        // Online: the server drives round:end → the screen does not participate in result reporting.
         if (isOnline) return;
-        // 피격/사망 연출을 짧게 보여준 뒤 1회 보고 → ResultOverlay(phase 전환 → 이 effect cleanup)
+        // Show the hit/death effect briefly, then report once → ResultOverlay (phase transition → this effect's cleanup)
         reportedRef.current = true;
         if (s.result) reportRoundEnd(toMatchResult(s.result));
       }
@@ -802,7 +802,7 @@ export default function Game7() {
       frame(now);
     };
     raf = requestAnimationFrame(loop);
-    // rAF가 스로틀되면(백그라운드 탭) interval이 타이머를 진행시킨다 — rAF 생존 시 개입 안 함
+    // If rAF is throttled (background tab), the interval advances the timer — no intervention while rAF is alive
     const watchdog = setInterval(() => {
       const now = performance.now();
       if (now - last > 280) frame(now);
@@ -831,9 +831,9 @@ export default function Game7() {
             navigate('/');
           }}
         >
-          ◀ 나가기
+          ◀ Exit
         </Button>
-        <span className="g7-title font-arcade c-muted">게임7 · 이카루스 매치</span>
+        <span className="g7-title font-arcade c-muted">Game 7 · Icarus Match</span>
       </div>
 
       <div className="g7-hudwrap">
@@ -848,38 +848,38 @@ export default function Game7() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g7-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g7-canvas" aria-label="게임7 스테이지 — 이카루스 매치" />
+        <canvas ref={canvasRef} className="g7-canvas" aria-label="Game 7 stage — Icarus Match" />
 
-        {/* 위험 안내 배지 — 마그마 상승/천장 가시 (좌상단, 무발광 캡션) */}
+        {/* Hazard badges — rising magma / ceiling spikes (top-left, non-glowing caption) */}
         <div className="g7-hazard" aria-hidden>
           <span className="g7-hazard__row g7-hazard__row--spike font-arcade">▲ SPIKES</span>
           <span className="g7-hazard__row g7-hazard__row--magma font-arcade">MAGMA ▲</span>
         </div>
       </div>
 
-      {/* 온스크린 키캡 — 실제 배정 키(SPEC Q2), 입력 순간 램프 점등 */}
+      {/* On-screen keycaps — actual assigned keys (SPEC Q2), lamp lights on input */}
       {isOnline ? (
-        // 온라인: 로컬 플레이어 컨트롤만(U=점프 / I=발사), 내 색으로 표기
+        // Online: local player controls only (U=jump / I=fire), labeled in my color
         <div className="g7-keys g7-keys--online">
           <div className="g7-keys__group">
             <span className={`g7-keys__tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {myColor === 'blue' ? '파랑' : '빨강'} · HOVER · FIRE
+              YOU · {myColor === 'blue' ? 'BLUE' : 'RED'} · HOVER · FIRE
             </span>
-            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="▲" lit={uLit} label="점프" />
-            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="◉" lit={iLit} label="발사" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="▲" lit={uLit} label="Jump" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="◉" lit={iLit} label="Fire" />
           </div>
         </div>
       ) : (
         <div className="g7-keys">
           <div className="g7-keys__group">
-            <KeyCap role="P1" keyChar="Q" icon="▲" lit={qLit} label="점프" />
-            <KeyCap role="P1" keyChar="W" icon="◉" lit={wLit} label="발사" />
+            <KeyCap role="P1" keyChar="Q" icon="▲" lit={qLit} label="Jump" />
+            <KeyCap role="P1" keyChar="W" icon="◉" lit={wLit} label="Fire" />
             <span className="g7-keys__tag font-arcade c-p1">P1 · CYAN</span>
           </div>
           <div className="g7-keys__group">
             <span className="g7-keys__tag font-arcade c-p2">P2 · PINK</span>
-            <KeyCap role="P2" keyChar="U" icon="▲" lit={uLit} label="점프" />
-            <KeyCap role="P2" keyChar="I" icon="◉" lit={iLit} label="발사" />
+            <KeyCap role="P2" keyChar="U" icon="▲" lit={uLit} label="Jump" />
+            <KeyCap role="P2" keyChar="I" icon="◉" lit={iLit} label="Fire" />
           </div>
         </div>
       )}

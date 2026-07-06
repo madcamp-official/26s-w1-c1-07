@@ -1,4 +1,4 @@
-/* 코인 노가다 (CoinFarm.tsx) — 게임6 화면 문법의 1레인 축약 */
+/* Coin grind (CoinFarm.tsx) — a 1-lane condensation of the Game 6 screen grammar */
 
 .cf-root {
   position: relative;
@@ -30,7 +30,7 @@
 
 .cf-stage {
   position: relative;
-  /* 520px → 1.5배 (세로는 aspect-ratio로 자동 1.5배) */
+  /* 520px → 1.5x (height auto-scales 1.5x via aspect-ratio) */
   width: min(92vw, 780px);
 }
 
@@ -40,7 +40,7 @@
   aspect-ratio: 480 / 450;
 }
 
-/* 오버레이 (ready / success / fail) */
+/* overlay (ready / success / fail) */
 .cf-overlay {
   position: absolute;
   inset: 0;
@@ -106,7 +106,7 @@
   letter-spacing: 0.12em;
 }
 
-/* 비로그인 안내 패널 */
+/* logged-out info panel */
 .cf-login-req {
   display: flex;
   flex-direction: column;

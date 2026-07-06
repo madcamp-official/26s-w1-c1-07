@@ -1,28 +1,28 @@
 /**
- * 게임5 — 몬스터 포격전 (NEON COIN-OP). 담당: game8 에이전트.
- * 컨테이너 testid: scr-game8 / 부품: game-stage(CRT 베젤), hud-*(HudFrame 내장), btn-exit
+ * Game 5 — Monster Bombardment (NEON COIN-OP). Owner: game8 agent.
+ * Container testid: scr-game8 / parts: game-stage(CRT bezel), hud-*(HudFrame embedded), btn-exit
  *
- * ── 원칙 ────────────────────────────────────────────────────────────────
- *  · 로직/판정은 100% @madpump/shared game8 코어(create/step). 재구현·복제 없음.
- *  · 화면(캔버스 렌더·연출)은 neon-coinop 톤으로 새로 작성. game-lab/design-lab 미참조.
- *  · 색·폰트는 theme.css 토큰 값(PLAN §1)만 hex로 복사해 캔버스에 사용.
+ * ── Principles ────────────────────────────────────────────────────────────────
+ *  · Logic/judging is 100% the @madpump/shared game8 core (create/step). No re-implementation or duplication.
+ *  · The screen (canvas render/effects) is written fresh in the neon-coinop tone. No reference to game-lab/design-lab.
+ *  · For colors/fonts, only theme.css token values (PLAN §1) are copied as hex into the canvas.
  *
- * ── 무엇을 그리나 (game8 상태 필드에서 파생) ─────────────────────────────
- *  · 중앙 좌우 두 대포: P1=(CX-GAP,CY) 시안 / P2=(CX+GAP,CY) 핑크.
- *      state.p1Angle/p2Angle = 포신 방향, p1Dir/p2Dir = 회전 방향(±1),
- *      p1Cooldown/p2Cooldown = 장전(쿨다운 링), p1Score/p2Score = 격추 수.
- *  · state.monsters[] : 가장자리→목표 대포 직선 침공. target(1|2)에 따라 코어 색.
- *  · state.shots[]    : owner(1|2) 색 네온 트레이서.
- *  · 승패 = 대포 피격(즉사) 또는 10초 생존 후 점수 판정 → state.result('P1'|'P2'|'DRAW').
+ * ── What is drawn (derived from game8 state fields) ─────────────────────────────
+ *  · Two cannons, center left/right: P1=(CX-GAP,CY) cyan / P2=(CX+GAP,CY) pink.
+ *      state.p1Angle/p2Angle = barrel direction, p1Dir/p2Dir = rotation direction(±1),
+ *      p1Cooldown/p2Cooldown = reload(cooldown ring), p1Score/p2Score = kill count.
+ *  · state.monsters[] : straight-line invasion from the edge → target cannon. Core color by target(1|2).
+ *  · state.shots[]    : owner(1|2) colored neon tracer.
+ *  · Win/loss = cannon hit(instant death) or score judgment after surviving 10s → state.result('P1'|'P2'|'DRAW').
  *
- * ── 배선 (게임1·2 패턴 동일) ─────────────────────────────────────────────
- *   mount → idle/다른게임이면 startOfflineGame(8) (direct-URL 복구)
- *   라운드마다 game8.create(Math.random)
- *   rAF 루프(+백그라운드 워치독) → game8.step(state, events, dtSec) → setDebugGame 매 틱
- *   입력 attachLocalKeyboard: KeyQ/KeyW=P1, KeyU/KeyI=P2 (코어가 엣지/쿨다운 처리)
- *   result 확정 → 인게임 연출(RESULT_FX_MS) 후 reportRoundEnd(매핑) 1회 → <ResultOverlay />
- *   online 모드 → P2 대포는 봇(가장 위협적인 몬스터로 조준·발사), 사람은 P1(q/w)
- *   ★코어는 원본 mutate 후 동일 참조 반환 → 이전값 비교는 step 호출 전에 스칼라 스냅샷.
+ * ── Wiring (same pattern as game 1·2) ─────────────────────────────────────────────
+ *   mount → if idle/different game, startOfflineGame(8) (direct-URL recovery)
+ *   game8.create(Math.random) each round
+ *   rAF loop(+background watchdog) → game8.step(state, events, dtSec) → setDebugGame every tick
+ *   input attachLocalKeyboard: KeyQ/KeyW=P1, KeyU/KeyI=P2 (core handles edge/cooldown)
+ *   result settled → in-game effect(RESULT_FX_MS) then reportRoundEnd(mapping) once → <ResultOverlay />
+ *   online mode → P2 cannon is a bot(aims/fires at the most threatening monster), human is P1(q/w)
+ *   ★The core mutates the original then returns the same reference → snapshot scalars before the step call for prev-value comparison.
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -58,15 +58,15 @@ import { sfx } from '@/audio';
 import './game8.css';
 
 // ---------------------------------------------------------------------------
-// 캔버스 논리 해상도 = 코어 필드(800×450). 좌표를 1:1로 그린다(스케일 없음).
-// 실제 픽셀은 DPR로 업스케일 → CSS aspect-ratio 16/9로 반응형.
+// Canvas logical resolution = core field(800×450). Coordinates drawn 1:1 (no scaling).
+// Actual pixels are upscaled by DPR → responsive via CSS aspect-ratio 16/9.
 // ---------------------------------------------------------------------------
 const CW = G8.W; // 800
 const CH = G8.H; // 450
 
 const ARCADE = "'Press Start 2P', monospace";
 
-/** theme.css §1 팔레트(값만 복사 — import 금지). 역할 기본색 = P1 시안 / P2 핑크. */
+/** theme.css §1 palette (values copied only — no import). Role default colors = P1 cyan / P2 pink. */
 const COL0 = {
   field: '#1a0b2e', // --bg-raised
   deep: '#160a33', // --surface-deep
@@ -83,11 +83,11 @@ const COL0 = {
 type Pal = Record<keyof typeof COL0, string>;
 
 /**
- * 색 = 플레이어 종속(역할 아님) 로컬 팔레트.
- * 이 라운드 P1/P2 '기능 엔티티'의 실제 플레이어 색으로 p1/p2(+dim)를 배치한다:
- *  functionColors().p1='red' 이면 P1엔티티=핑크·P2엔티티=시안이 되도록 p1↔p2를 스왑.
- *  나머지(field/deep/accent/accent2/error 등)는 플레이어와 무관하므로 불변.
- *  오프라인·색 정보 없음 → functionColors 기본값({p1:'blue',p2:'red'}) → COL0 그대로(기존 동작 동일).
+ * Color = player-dependent (not role) local palette.
+ * Places p1/p2(+dim) using the actual player colors of this round's P1/P2 'function entities':
+ *  if functionColors().p1='red', swap p1↔p2 so that P1 entity=pink · P2 entity=cyan.
+ *  The rest (field/deep/accent/accent2/error, etc.) is player-independent, so unchanged.
+ *  Offline · no color info → functionColors default({p1:'blue',p2:'red'}) → COL0 as-is (same as existing behavior).
  */
 function playerCol(): Pal {
   const fc = functionColors();
@@ -96,22 +96,22 @@ function playerCol(): Pal {
     : COL0;
 }
 
-/** 대포 고정 위치 (코어 규약과 동일) */
+/** Fixed cannon positions (same as the core convention) */
 const P1 = { x: G8.CX - G8.GAP, y: G8.CY };
 const P2 = { x: G8.CX + G8.GAP, y: G8.CY };
 
-/** 판정 → 결과 오버레이 전환 사이 인게임 연출 시간(폭발/생존 러쉬) */
+/** In-game effect time between judgment → result overlay transition (explosion/survival rush) */
 const RESULT_FX_MS = 650;
 
-/** 대포 위협 감지 반경(렌더 전용 경고 링) */
+/** Cannon threat-detection radius (render-only warning ring) */
 const DANGER_R = 96;
 
-/** 코어 result → 셸 MatchResult */
+/** core result → shell MatchResult */
 function toMatchResult(r: 'P1' | 'P2' | 'DRAW'): MatchResult {
   return r === 'P1' ? 'P1_WIN' : r === 'P2' ? 'P2_WIN' : 'DRAW';
 }
 
-/** 각도를 (-π, π] 로 정규화 */
+/** Normalize the angle to (-π, π] */
 function normAngle(a: number): number {
   let x = a % (Math.PI * 2);
   if (x > Math.PI) x -= Math.PI * 2;
@@ -120,7 +120,7 @@ function normAngle(a: number): number {
 }
 
 // ---------------------------------------------------------------------------
-// 렌더 전용 이펙트 (로직 비침범)
+// Render-only effects (does not touch logic)
 // ---------------------------------------------------------------------------
 type Fx =
   | { kind: 'muzzle'; x: number; y: number; color: string; t: number }
@@ -140,7 +140,7 @@ function nearestMonsterDist(monsters: readonly Monster[], p: { x: number; y: num
 }
 
 // ---------------------------------------------------------------------------
-// 캔버스 렌더러 (순수 그리기 — state는 읽기만)
+// Canvas renderer (pure drawing — state is read-only)
 // ---------------------------------------------------------------------------
 function drawBaseRing(ctx: CanvasRenderingContext2D, p: { x: number; y: number }, col: string): void {
   ctx.save();
@@ -157,7 +157,7 @@ function drawMonster(ctx: CanvasRenderingContext2D, m: Monster, COL: Pal, reduce
   const target = m.target === 1 ? P1 : P2;
   const coreCol = m.target === 1 ? COL.p1 : COL.p2;
 
-  // 조준선 — 이 몬스터가 노리는 대포 색으로 희미하게 (위협 배정 즉독)
+  // Aim line — faint, in the color of the cannon this monster targets (instantly reads threat assignment)
   ctx.save();
   ctx.strokeStyle = coreCol;
   ctx.globalAlpha = 0.12;
@@ -169,7 +169,7 @@ function drawMonster(ctx: CanvasRenderingContext2D, m: Monster, COL: Pal, reduce
   ctx.stroke();
   ctx.restore();
 
-  // 몸통 — 퍼플 네온 스파이크(외계 침공체)
+  // Body — purple neon spikes (alien invader)
   const pulse = reduce ? 1 : 1 + 0.1 * Math.sin(m.anim * 6);
   const R = G8.MONSTER_R * pulse;
   ctx.save();
@@ -195,7 +195,7 @@ function drawMonster(ctx: CanvasRenderingContext2D, m: Monster, COL: Pal, reduce
   ctx.stroke();
   ctx.restore();
 
-  // 코어(목표 색 눈알)
+  // Core (target-colored eyeball)
   ctx.save();
   ctx.fillStyle = coreCol;
   ctx.shadowColor = coreCol;
@@ -208,7 +208,7 @@ function drawMonster(ctx: CanvasRenderingContext2D, m: Monster, COL: Pal, reduce
 
 function drawShot(ctx: CanvasRenderingContext2D, x: number, y: number, vx: number, vy: number, owner: 1 | 2, COL: Pal): void {
   const col = owner === 1 ? COL.p1 : COL.p2;
-  // rgb는 트레이서 그라디언트용 — 해석된 색(시안/핑크)에서 역산해 스왑에도 정확히 따른다.
+  // rgb is for the tracer gradient — derived back from the resolved color (cyan/pink) so it follows swaps exactly too.
   const rgb = col === COL0.p1 ? '5,217,232' : '255,42,109';
   const tx = x - vx * 0.05;
   const ty = y - vy * 0.05;
@@ -245,7 +245,7 @@ function drawCannon(
   now: number,
   reduce: boolean,
 ): void {
-  // 위협 경고 링 (몬스터 근접 시 — 긴장 피드백)
+  // Threat warning ring (when a monster is near — tension feedback)
   if (nearestDist < DANGER_R) {
     const prox = 1 - nearestDist / DANGER_R;
     const pulse = reduce ? 0.6 : 0.45 + 0.45 * Math.sin(now / 70);
@@ -261,7 +261,7 @@ function drawCannon(
     ctx.restore();
   }
 
-  // 포신
+  // Barrel
   const tipx = p.x + Math.cos(angle) * G8.BARREL_LEN;
   const tipy = p.y + Math.sin(angle) * G8.BARREL_LEN;
   ctx.save();
@@ -280,7 +280,7 @@ function drawCannon(
   ctx.fill();
   ctx.restore();
 
-  // 몸통(dim 바탕 + 2px 플레이어색 보더 + 글로우)
+  // Body (dim base + 2px player-color border + glow)
   ctx.save();
   ctx.beginPath();
   ctx.arc(p.x, p.y, G8.CANNON_R, 0, Math.PI * 2);
@@ -293,7 +293,7 @@ function drawCannon(
   ctx.stroke();
   ctx.restore();
 
-  // 장전 링(쿨다운 회복 = 원호 채움, 준비 완료면 글로우)
+  // Reload ring (cooldown recovery = arc fill, glow when ready)
   const ready = 1 - Math.min(1, Math.max(0, cooldown / G8.FIRE_COOLDOWN));
   ctx.save();
   ctx.beginPath();
@@ -308,7 +308,7 @@ function drawCannon(
   ctx.stroke();
   ctx.restore();
 
-  // 라벨 + YOU
+  // Label + YOU
   ctx.save();
   ctx.font = `10px ${ARCADE}`;
   ctx.textAlign = 'center';
@@ -412,18 +412,18 @@ function drawScene(
   p2IsYou: boolean,
   reduce: boolean,
 ): void {
-  // 색 = 플레이어 종속(역할 아님) — P1/P2 기능 엔티티를 실제 플레이어 색으로 칠한다.
-  // 로컬 COL이 모듈 COL0를 shadow → 아래 COL.p1/p2 사용부가 자동으로 플레이어 색을 따른다.
+  // Color = player-dependent (not role) — paint the P1/P2 function entities with the actual player colors.
+  // Local COL shadows module COL0 → the COL.p1/p2 usages below automatically follow the player colors.
   const COL = playerCol();
   const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
   const urgent = remainingMs <= 5000 && s.result === null;
 
-  // 필드
+  // Field
   ctx.clearRect(0, 0, CW, CH);
   ctx.fillStyle = COL.field;
   ctx.fillRect(0, 0, CW, CH);
 
-  // 옅은 네온 그리드 (임박 시 핑크 톤)
+  // Faint neon grid (pink tone when time is almost up)
   ctx.save();
   ctx.strokeStyle = urgent ? 'rgba(255,42,109,0.10)' : 'rgba(211,0,197,0.07)';
   ctx.lineWidth = 1;
@@ -441,26 +441,26 @@ function drawScene(
   }
   ctx.restore();
 
-  // 대포 베이스 링
+  // Cannon base rings
   drawBaseRing(ctx, P1, COL.p1);
   drawBaseRing(ctx, P2, COL.p2);
 
-  // 몬스터
+  // Monsters
   for (const m of s.monsters) drawMonster(ctx, m, COL, reduce);
 
-  // 총알
+  // Bullets
   for (const sh of s.shots) drawShot(ctx, sh.x, sh.y, sh.vx, sh.vy, sh.owner, COL);
 
-  // 대포
+  // Cannons
   const near1 = nearestMonsterDist(s.monsters, P1);
   const near2 = nearestMonsterDist(s.monsters, P2);
   drawCannon(ctx, P1, s.p1Angle, s.p1Cooldown, COL.p1, COL.p1dim, near1, 'P1', p1IsYou, now, reduce);
   drawCannon(ctx, P2, s.p2Angle, s.p2Cooldown, COL.p2, COL.p2dim, near2, 'P2', p2IsYou, now, reduce);
 
-  // 이펙트
+  // Effects
   for (const f of fx) drawFx(ctx, f, COL, now, reduce);
 
-  // 승패 순간 크로마틱 어버레이션 1프레임
+  // Single-frame chromatic aberration at the win/loss moment
   const chroma = fx.find((f) => f.kind === 'chroma');
   if (chroma && now - chroma.t < 110) {
     ctx.save();
@@ -474,9 +474,9 @@ function drawScene(
 }
 
 // ---------------------------------------------------------------------------
-// 온라인 mock 봇 — P2 대포. 판정은 여전히 코어(game8.step).
-// 가장 위협적인(자신을 노리는·가까운) 몬스터로 조준하고, 정렬되면 발사.
-// 반환: 이번 프레임 합성 입력 이벤트 (KeyU=방향전환 / KeyI=발사)
+// Online mock bot — P2 cannon. Judging is still the core (game8.step).
+// Aims at the most threatening monster (targeting it · nearby), fires when aligned.
+// Returns: this frame's synthetic input events (KeyU=change direction / KeyI=fire)
 // ---------------------------------------------------------------------------
 interface BotMemory {
   lastToggleAt: number;
@@ -485,11 +485,11 @@ interface BotMemory {
 
 function botEvents(s: Game8State, now: number, mem: BotMemory): GameInputEvent[] {
   const out: GameInputEvent[] = [];
-  // 1) 표적 선정 — P2를 노리는 몬스터 우선(위협), 없으면 아무 몬스터(득점)
+  // 1) Target selection — prefer monsters targeting P2 (threat), otherwise any monster (scoring)
   let target: Monster | null = null;
   let best = Infinity;
   for (const m of s.monsters) {
-    const threat = m.target === 2 ? 0 : 100000; // 위협 몬스터에 강한 가산점
+    const threat = m.target === 2 ? 0 : 100000; // strong bonus for threatening monsters
     const d = Math.hypot(m.x - P2.x, m.y - P2.y) + threat;
     if (d < best) {
       best = d;
@@ -502,14 +502,14 @@ function botEvents(s: Game8State, now: number, mem: BotMemory): GameInputEvent[]
   const diff = normAngle(desired - s.p2Angle);
   const tSec = now / 1000;
 
-  // 2) 회전 방향 정렬 — angle += ROT_SPEED*dir*dt 이므로 diff>0 이면 dir=+1 이 최단
+  // 2) Align rotation direction — since angle += ROT_SPEED*dir*dt, if diff>0 then dir=+1 is shortest
   const wantDir: 1 | -1 = diff >= 0 ? 1 : -1;
   if (Math.abs(diff) > 0.25 && s.p2Dir !== wantDir && now - mem.lastToggleAt > 150) {
     out.push({ code: 'KeyU', type: 'down', t: tSec });
     mem.lastToggleAt = now;
   }
 
-  // 3) 발사 — 대략 정렬 + 쿨다운 준비 (코어가 쿨다운 재확인하므로 안전)
+  // 3) Fire — roughly aligned + cooldown ready (safe since the core re-checks cooldown)
   if (Math.abs(diff) < 0.16 && s.p2Cooldown === 0 && now - mem.lastFireAt > G8.FIRE_COOLDOWN * 1000 * 0.85) {
     out.push({ code: 'KeyI', type: 'down', t: tSec });
     mem.lastFireAt = now;
@@ -518,11 +518,12 @@ function botEvents(s: Game8State, now: number, mem: BotMemory): GameInputEvent[]
 }
 
 // ---------------------------------------------------------------------------
-// 스냅샷 사이 보간(외삽) — 서버 스냅샷을 dt초만큼 각 오브젝트 '자기 속도'로 전진시킨
-// 표시용 상태를 만든다. 총알·몬스터는 vx/vy로, 대포는 ROT_SPEED·dir로 회전 전진.
-// 스냅샷에 속도/방향이 이미 있어 ID 매칭 불필요하고 추가 지연 0. 방향전환(토글) 순간만
-// 미세 오차이며 다음 스냅샷이 즉시 교정한다. 30/60Hz 스냅샷을 60fps 렌더로 부드럽게 잇는 게 목적.
-// (표시용 얕은 복사 — 원본 state는 읽기만, 판정 비침범)
+// Interpolation between snapshots (extrapolation) — advances the server snapshot by dt seconds
+// at each object's 'own velocity' to build a display state. Bullets·monsters advance by vx/vy,
+// cannons rotate by ROT_SPEED·dir. Since velocity/direction are already in the snapshot, no ID
+// matching is needed and there is 0 added latency. Only the direction-change (toggle) moment has a
+// tiny error, and the next snapshot corrects it immediately. The goal is to smoothly bridge 30/60Hz
+// snapshots into a 60fps render. (Shallow copy for display — original state is read-only, judging untouched)
 // ---------------------------------------------------------------------------
 function extrapolate(s: Game8State, dt: number): Game8State {
   return {
@@ -540,11 +541,11 @@ function extrapolate(s: Game8State, dt: number): Game8State {
 }
 
 // ---------------------------------------------------------------------------
-// 컴포넌트
+// Component
 // ---------------------------------------------------------------------------
 /**
- * 종료 연출 — result가 null→승패로 바뀌는 순간 '진 쪽 대포'에서 폭발을 스폰하고,
- * 이후 매 프레임 폭발 파편 + 기본 플래시를 그린다. 온라인/오프라인 루프 공용.
+ * End effect — the moment result flips from null→win/loss, spawns an explosion at the
+ * 'losing side's cannon', then draws explosion debris + a base flash every frame. Shared by the online/offline loops.
  */
 function runEndFx(
   ctx: CanvasRenderingContext2D,
@@ -555,11 +556,11 @@ function runEndFx(
 ): void {
   const started = endRef.current.update(result, now);
   if (started && result && result !== 'DRAW') {
-    // result='P1'이면 P2 패배 → P2 대포 폭발, 'P2'이면 P1 대포 폭발.
+    // result='P1' means P2 loses → P2 cannon explodes; 'P2' means P1 cannon explodes.
     const loser = result === 'P1' ? P2 : P1;
     exRef.current = { parts: makeExplosion(loser.x, loser.y), cx: loser.x, cy: loser.y };
   }
-  if (!result) exRef.current = null; // 새 라운드 정리
+  if (!result) exRef.current = null; // clean up for a new round
   const age = endRef.current.age(now);
   if (exRef.current && age !== null) {
     drawExplosion(ctx, exRef.current.parts, exRef.current.cx, exRef.current.cy, age);
@@ -575,7 +576,7 @@ export default function Game8() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const actionsRef = useRef<GameInputEvent[]>([]);
   const fxRef = useRef<Fx[]>([]);
-  // 종료 연출: result 전환 추적 + 진 쪽 대포 폭발 파편 보관
+  // End effect: track result transition + retain the losing side's cannon explosion debris
   const endRef = useRef<EndTracker>(createEndTracker());
   const explosionRef = useRef<{ parts: Particle[]; cx: number; cy: number } | null>(null);
   const reportedRef = useRef(false);
@@ -583,9 +584,9 @@ export default function Game8() {
   const botRef = useRef<BotMemory>({ lastToggleAt: 0, lastFireAt: 0 });
   const reduceRef = useRef(false);
 
-  /** HUD 남은 시간(초 단위 양자화 — 리렌더 절약) */
+  /** HUD remaining time (quantized to seconds — saves re-renders) */
   const [hudMs, setHudMs] = useState(GAME_DURATION * 1000);
-  /** 격추 점수(새 메커니즘 — neon 스코어 셀) */
+  /** Kill score (new mechanic — neon score cells) */
   const [scores, setScores] = useState<{ p1: number; p2: number }>({ p1: 0, p2: 0 });
 
   const [qLit, flashQ] = useKeyLamp();
@@ -595,29 +596,29 @@ export default function Game8() {
   const lampRef = useRef({ flashU, flashI });
   lampRef.current = { flashU, flashI };
 
-  // ── 온라인 렌더 훅(성능 표준): 활성/역할만 선택 구독 → 라운드 경계에서만 리렌더.
-  //    서버 스냅샷은 stateRef/snapAtRef에 직접 미러(리렌더 없음), per-snapshot HUD 반영은 onSnapshot.
-  //    isOnline=false면 오프라인(로컬 2인/봇) 100% 기존 동작.
+  // ── Online render hook (performance standard): selectively subscribes only to active/role → re-renders only at round boundaries.
+  //    Server snapshots are mirrored directly into stateRef/snapAtRef (no re-render); per-snapshot HUD updates via onSnapshot.
+  //    If isOnline=false, offline (local 2-player/bot) behaves 100% as before.
   const { isOnline, myRole, stateRef, snapAtRef } = useOnlineRender<Game8State>(8, (s) => {
     setDebugGame(s);
-    // 오프라인 루프의 setHudMs/setScores를 서버 상태로 대체(HUD 라이브 유지) — 값 바뀔 때만 리렌더.
+    // Replace the offline loop's setHudMs/setScores with server state (keeps HUD live) — re-render only when values change.
     const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
     setHudMs(Math.ceil(remainingMs / 1000) * 1000);
     setScores({ p1: s.p1Score, p2: s.p2Score });
   });
-  // 키보드 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref.
+  // ref that lets the keyboard handler (stable closure) see the latest 'is online active'.
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
 
-  // 색 = 플레이어 종속(역할과 독립). 키캡/YOU 태그를 이 색으로 칠한다.
-  // 색은 매치 경계에서만 바뀌는 원시값 → 선택 구독으로 60Hz 리렌더 없이 반응.
+  // Color = player-dependent (independent of role). Paint the keycaps/YOU tag with this color.
+  // Color is a primitive that changes only at match boundaries → responds via selective subscription without 60Hz re-renders.
   const myColor = useSyncExternalStore(
     onlineStore.subscribe,
     () => onlineStore.get().myColor ?? 'blue',
     () => onlineStore.get().myColor ?? 'blue',
   );
 
-  // direct-URL 복구 + prefers-reduced-motion 기록 + 디버그 브리지 정리
+  // direct-URL recovery + record prefers-reduced-motion + clean up the debug bridge
   useEffect(() => {
     const f = getFlow();
     if (f.phase === 'idle' || f.gameId !== 8) startOfflineGame(8);
@@ -627,7 +628,7 @@ export default function Game8() {
     return () => setDebugGame(null);
   }, []);
 
-  // 캔버스 해상도(dpr 스케일) — 좌표는 800×450 논리계 그대로 사용
+  // Canvas resolution (dpr scale) — coordinates use the 800×450 logical space as-is
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
@@ -637,21 +638,21 @@ export default function Game8() {
     c.getContext('2d')?.scale(dpr, dpr);
   }, []);
 
-  // 키보드 — GameInputEvent 큐 수집 + 램프 점등.
-  // P1 q/w, P2 u/i. 온라인이면 P2 키는 봇 대행이므로 흡수하지 않는다.
+  // Keyboard — collect the GameInputEvent queue + light lamps.
+  // P1 q/w, P2 u/i. When online, P2 keys are handled by the bot, so they are not absorbed.
   useEffect(() => {
     const detach = attachLocalKeyboard(
       () => performance.now() / 1000,
       (e) => {
-        // ── 서버 온라인: 로컬 큐/봇 없이 서버로만 전송 ──
-        // 내가 어느 role이든 서버가 role로 재기입하므로 4키 아무거나 내 슬롯으로 감.
+        // ── Server online: send only to the server, no local queue/bot ──
+        // Whatever my role is, the server rewrites it by role, so any of the 4 keys goes to my slot.
         if (isOnlineRef.current) {
-          // 온라인은 U/I 두 키만(요구사항). U=주키(slotA), I=보조키(slotB). Q/W는 무시.
+          // Online uses only the U/I two keys (requirement). U=primary key(slotA), I=secondary key(slotB). Q/W ignored.
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           if (e.type === 'down') {
             if (e.code === 'KeyU') flashU();
             else {
-              flashI(); // I=발사(slotB)
+              flashI(); // I=fire(slotB)
               sfx('g8-cannon-fire');
             }
           }
@@ -660,24 +661,24 @@ export default function Game8() {
           return;
         }
 
-        // ── 오프라인(로컬 2인 + 봇) 기존 처리 그대로 ──
+        // ── Offline (local 2-player + bot) existing handling as-is ──
         const f = getFlow();
-        const botMode = f.mode === 'online'; // 옛 online = P2 mock 봇 모드
+        const botMode = f.mode === 'online'; // legacy online = P2 mock bot mode
         if (e.code === 'KeyQ') {
           if (e.type === 'down') flashQ();
         } else if (e.code === 'KeyW') {
           if (e.type === 'down') {
             flashW();
-            sfx('g8-cannon-fire'); // P1 발사 입력
+            sfx('g8-cannon-fire'); // P1 fire input
           }
         } else if (e.code === 'KeyU') {
-          if (botMode) return; // 온라인(봇) P2 = 봇 대행
+          if (botMode) return; // online(bot) P2 = handled by bot
           if (e.type === 'down') flashU();
         } else if (e.code === 'KeyI') {
           if (botMode) return;
           if (e.type === 'down') {
             flashI();
-            sfx('g8-cannon-fire'); // P2 발사 입력
+            sfx('g8-cannon-fire'); // P2 fire input
           }
         }
         if (f.phase === 'playing') actionsRef.current.push(e);
@@ -686,11 +687,11 @@ export default function Game8() {
     return detach;
   }, [flashQ, flashW, flashU, flashI]);
 
-  // 라운드 수명주기: state 생성 → rAF 루프(step+draw) → 결과 보고
+  // Round lifecycle: create state → rAF loop(step+draw) → report result
   useEffect(() => {
-    // ── 온라인: 서버 상태만 그리는 draw-only 루프 (step·봇·result보고 없음) ──
+    // ── Online: draw-only loop that renders only server state (no step·bot·result reporting) ──
     if (isOnline) {
-      // 첫 스냅샷 전엔 빈 캔버스 대신 정적 create 상태를 렌더(절대 step하지 않음)
+      // Before the first snapshot, render a static create state instead of an empty canvas (never steps)
       if (!stateRef.current) stateRef.current = game8.create(Math.random);
       let raf = 0;
       let stopped = false;
@@ -702,12 +703,12 @@ export default function Game8() {
           const now = performance.now();
           fxRef.current = fxRef.current.filter((f) => now - f.t < 1400);
           const disp = getPlayerDisplays(getFlow());
-          // 스냅샷 사이 외삽: 마지막 스냅샷을 경과 dt만큼 각 오브젝트 자기 속도로 전진(최대 50ms 캡).
-          // 종료(result) 후엔 외삽하지 않는다(총알/몬스터가 판정 위치를 지나쳐 보이지 않게).
+          // Extrapolation between snapshots: advance the last snapshot by elapsed dt at each object's own velocity (capped at 50ms).
+          // After end (result), do not extrapolate (so bullets/monsters don't appear to overshoot the judged position).
           const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
           const view = extraDt > 0 && s.result === null ? extrapolate(s, extraDt) : s;
           drawScene(ctx, view, fxRef.current, now, disp.P1.isYou, disp.P2.isYou, reduceRef.current);
-          runEndFx(ctx, endRef, explosionRef, s.result, now); // 진 쪽 대포 폭발 + 플래시
+          runEndFx(ctx, endRef, explosionRef, s.result, now); // losing side's cannon explosion + flash
         }
         raf = requestAnimationFrame(loop);
       };
@@ -748,7 +749,7 @@ export default function Game8() {
         const events = actionsRef.current;
         actionsRef.current = [];
 
-        // 온라인 봇(P2) 합성 입력
+        // Online bot (P2) synthetic input
         if (getFlow().mode === 'online') {
           const bev = botEvents(s, now, botRef.current);
           for (const e of bev) {
@@ -758,12 +759,12 @@ export default function Game8() {
           }
         }
 
-        // ★step은 원본 mutate 후 동일 참조 반환 → 이전값은 호출 전에 값/참조로 스냅샷
+        // ★step mutates the original then returns the same reference → snapshot prev values by value/reference before the call
         const prevP1Cd = s.p1Cooldown;
         const prevP2Cd = s.p2Cooldown;
         const prevP1Score = s.p1Score;
         const prevP2Score = s.p2Score;
-        const prevMonsters = s.monsters; // 격추 감지용(참조 diff)
+        const prevMonsters = s.monsters; // for kill detection (reference diff)
 
         s = game8.step(s, events, dt);
         stateRef.current = s;
@@ -775,11 +776,11 @@ export default function Game8() {
           setScores({ p1: s.p1Score, p2: s.p2Score });
         }
 
-        // 색 = 플레이어 종속(역할 아님) — fx 색도 P1/P2 엔티티의 실제 플레이어 색으로.
+        // Color = player-dependent (not role) — fx colors also use the actual player colors of the P1/P2 entities.
         const COL = playerCol();
 
-        // ── 렌더 전용 이펙트 파생 (로직 비침범) ──
-        // 발사: 쿨다운이 0→FIRE_COOLDOWN 으로 오른 순간(포신 끝에 머즐 스파크)
+        // ── Render-only effect derivation (does not touch logic) ──
+        // Fire: the moment cooldown rises from 0→FIRE_COOLDOWN (muzzle spark at the barrel tip)
         if (s.p1Cooldown > prevP1Cd) {
           fxRef.current.push({
             kind: 'muzzle',
@@ -799,7 +800,7 @@ export default function Game8() {
           });
         }
 
-        // 격추: 이번 step 전 배열엔 있으나 후 배열엔 없는 몬스터 = 총알에 맞아 소멸
+        // Kill: a monster present in the pre-step array but absent from the post-step array = destroyed by a bullet
         if (prevMonsters !== s.monsters) {
           let hit = false;
           for (const m of prevMonsters) {
@@ -808,10 +809,10 @@ export default function Game8() {
               fxRef.current.push({ kind: 'shards', x: m.x, y: m.y, color: COL.accent2, t: now });
             }
           }
-          if (hit) sfx('g8-monster-hit'); // 이번 step에 격추된 몬스터가 있는 순간(1회, 15ms 중복은 엔진 억제)
+          if (hit) sfx('g8-monster-hit'); // the moment a monster is killed in this step (once, 15ms duplicates suppressed by the engine)
         }
 
-        // 판정 순간(1회) — 대포 피격(즉사) vs 시간초과(점수) 구분
+        // Judgment moment (once) — distinguish cannon hit(instant death) vs timeout(score)
         if (s.result !== null && resultAtRef.current === 0) {
           resultAtRef.current = now;
           const touchR = G8.MONSTER_R + G8.CANNON_R + 0.5;
@@ -821,8 +822,8 @@ export default function Game8() {
             else if (Math.hypot(m.x - P2.x, m.y - P2.y) <= touchR) loser = 2;
           }
           if (loser !== null) {
-            sfx('g8-cannon-damaged'); // 대포가 몬스터에 피격돼 파괴된 임팩트(패자 죽는 소리, 1회)
-            // 대포 파괴 — 폭발 + 글리치
+            sfx('g8-cannon-damaged'); // impact of a cannon hit by a monster and destroyed (loser death sound, once)
+            // Cannon destroyed — explosion + glitch
             const pos = loser === 1 ? P1 : P2;
             const col = loser === 1 ? COL.p1 : COL.p2;
             fxRef.current.push(
@@ -841,7 +842,7 @@ export default function Game8() {
               life: RESULT_FX_MS,
             });
           } else {
-            // 시간초과 생존 — 점수 높은 대포가 방어 성공
+            // Survived timeout — the higher-scoring cannon successfully defended
             const owner: 1 | 2 = s.result === 'P1' ? 1 : 2;
             const pos = owner === 1 ? P1 : P2;
             const col = owner === 1 ? COL.p1 : COL.p2;
@@ -852,20 +853,20 @@ export default function Game8() {
           }
         }
       } else if (!reportedRef.current && now - resultAtRef.current >= RESULT_FX_MS) {
-        // 온라인은 서버가 round:end를 구동하므로 화면은 보고하지 않는다
+        // Online: the server drives round:end, so the screen does not report
         if (isOnline) return;
-        // 폭발/생존 연출을 짧게 보여준 뒤 라운드 종료 1회 보고 → ResultOverlay
+        // After briefly showing the explosion/survival effect, report round end once → ResultOverlay
         reportedRef.current = true;
         if (s.result) reportRoundEnd(toMatchResult(s.result));
       }
 
-      // 렌더
+      // Render
       const ctx = canvasRef.current?.getContext('2d');
       if (ctx) {
         fxRef.current = fxRef.current.filter((f) => now - f.t < 1400);
         const disp = getPlayerDisplays(getFlow());
         drawScene(ctx, s, fxRef.current, now, disp.P1.isYou, disp.P2.isYou, reduceRef.current);
-        runEndFx(ctx, endRef, explosionRef, s.result, now); // 진 쪽 대포 폭발 + 플래시
+        runEndFx(ctx, endRef, explosionRef, s.result, now); // losing side's cannon explosion + flash
       }
     };
 
@@ -875,7 +876,7 @@ export default function Game8() {
     };
     raf = requestAnimationFrame(loop);
 
-    // 백그라운드 탭에서 rAF가 멈추면 인터벌 워치독이 대신 스텝(QA 자동화 대응)
+    // If rAF halts in a background tab, an interval watchdog steps instead (handles QA automation)
     const watchdog = setInterval(() => {
       const now = performance.now();
       if (!stopped && now - last > 280) step(now);
@@ -892,7 +893,7 @@ export default function Game8() {
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
   const urgent = flow.phase === 'playing' && hudMs <= 5000;
-  // 색 = 플레이어 종속 — 스코어 셀도 P1/P2 엔티티의 실제 플레이어 색으로(blue→--p1 시안 / red→--p2 핑크).
+  // Color = player-dependent — score cells also use the actual player colors of the P1/P2 entities (blue→--p1 cyan / red→--p2 pink).
   const fc = functionColors();
   const p1KillCls = fc.p1 === 'blue' ? 'g8-score--p1' : 'g8-score--p2';
   const p2KillCls = fc.p2 === 'blue' ? 'g8-score--p1' : 'g8-score--p2';
@@ -910,9 +911,9 @@ export default function Game8() {
             navigate('/');
           }}
         >
-          ◀ 나가기
+          ◀ Exit
         </Button>
-        <span className="g8-title font-arcade c-muted">게임8 · 뿌슝뿌슝</span>
+        <span className="g8-title font-arcade c-muted">Game 8 · Pew Pew</span>
       </div>
 
       <div className="g8-hudwrap">
@@ -927,16 +928,16 @@ export default function Game8() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g8-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g8-canvas" aria-label="게임8 스테이지 — 뿌슝뿌슝" />
+        <canvas ref={canvasRef} className="g8-canvas" aria-label="Game 8 stage — Pew Pew" />
 
-        {/* 새 메커니즘: 격추 점수 — neon 스코어 셀 (P1 좌상 / P2 우상) */}
-        <div className={`g8-score ${p1KillCls}`} aria-label={`P1 격추 ${scores.p1}`}>
+        {/* New mechanic: kill score — neon score cells (P1 top-left / P2 top-right) */}
+        <div className={`g8-score ${p1KillCls}`} aria-label={`P1 kills ${scores.p1}`}>
           <span className="g8-score__label font-arcade">P1 KILLS</span>
           <span key={scores.p1} className="g8-score__num font-arcade">
             {scores.p1}
           </span>
         </div>
-        <div className={`g8-score ${p2KillCls}`} aria-label={`P2 격추 ${scores.p2}`}>
+        <div className={`g8-score ${p2KillCls}`} aria-label={`P2 kills ${scores.p2}`}>
           <span className="g8-score__label font-arcade">P2 KILLS</span>
           <span key={scores.p2} className="g8-score__num font-arcade">
             {scores.p2}
@@ -945,31 +946,31 @@ export default function Game8() {
 
       </div>
 
-      {/* 온스크린 키캡 — 실제 배정 키(SPEC Q2) + 입력 순간 램프 점등 */}
+      {/* On-screen keycaps — actual assigned keys(SPEC Q2) + lamp lights on input */}
       {isOnline ? (
-        // 온라인: 로컬 플레이어(U/I)만. 색=내 플레이어 색(역할 아님). U=방향전환(slotA) / I=발사(slotB).
+        // Online: only the local player(U/I). Color=my player color(not role). U=change direction(slotA) / I=fire(slotB).
         <div className="g8-keys g8-keys--online">
           <div className="g8-keys__group">
             <span className={`g8-keys__tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {myColor === 'blue' ? '파랑' : '빨강'}
+              YOU · {myColor === 'blue' ? 'BLUE' : 'RED'}
             </span>
-            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="⇄" lit={uLit} label="방향전환" />
-            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="◉" lit={iLit} label="발사" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="⇄" lit={uLit} label="Change direction" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="◉" lit={iLit} label="Fire" />
           </div>
           <span className="g8-keys__hint font-arcade">SHOOT THE INVADERS</span>
         </div>
       ) : (
         <div className="g8-keys">
           <div className="g8-keys__group">
-            <KeyCap role="P1" keyChar="Q" icon="⇄" lit={qLit} label="방향전환" />
-            <KeyCap role="P1" keyChar="W" icon="◉" lit={wLit} label="발사" />
+            <KeyCap role="P1" keyChar="Q" icon="⇄" lit={qLit} label="Change direction" />
+            <KeyCap role="P1" keyChar="W" icon="◉" lit={wLit} label="Fire" />
             <span className="g8-keys__tag font-arcade c-p1">P1</span>
           </div>
           <span className="g8-keys__hint font-arcade">SHOOT THE INVADERS</span>
           <div className="g8-keys__group">
             <span className="g8-keys__tag font-arcade c-p2">P2</span>
-            <KeyCap role="P2" keyChar="U" icon="⇄" lit={uLit} label="방향전환" />
-            <KeyCap role="P2" keyChar="I" icon="◉" lit={iLit} label="발사" />
+            <KeyCap role="P2" keyChar="U" icon="⇄" lit={uLit} label="Change direction" />
+            <KeyCap role="P2" keyChar="I" icon="◉" lit={iLit} label="Fire" />
           </div>
         </div>
       )}

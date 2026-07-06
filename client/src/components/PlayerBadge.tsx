@@ -1,13 +1,13 @@
 /**
- * PlayerBadge — 플레이어색 네온 칩 (닉네임 + 아바타 + YOU 점멸 태그).
- * (아키텍트 소유 — 구현 에이전트 수정 금지)
+ * PlayerBadge — player-color neon chip (nickname + avatar + blinking YOU tag).
+ * (Owned by the architect — implementation agents must not modify)
  *
- * P1=시안 / P2=핑크 절대 고정 (PLAN §1.1). 채움은 dim 바탕 + 플레이어색 2px 보더.
- * S7 VS 대기실 프로필 칩, 인게임 트랙 배지 등에 사용.
+ * P1=cyan / P2=pink strictly fixed (PLAN §1.1). Fill is a dim background + player-color 2px border.
+ * Used for the S7 VS waiting-room profile chip, in-game track badges, etc.
  *
- * 사용법:
- *   <PlayerBadge role="P1" name="펌프광인" you />
- *   <PlayerBadge role="P2" name="???" empty />   // S7 상대 대기 빈 슬롯(점선 점멸)
+ * Usage:
+ *   <PlayerBadge role="P1" name="PumpFiend" you />
+ *   <PlayerBadge role="P2" name="???" empty />   // S7 opponent-waiting empty slot (dashed, blinking)
  */
 import type { PlayerRole } from '@/shell';
 import { Avatar } from './Avatar';
@@ -16,11 +16,11 @@ import './playerbadge.css';
 export interface PlayerBadgeProps {
   role: PlayerRole;
   name: string;
-  /** "YOU" 점멸 태그 */
+  /** Blinking "YOU" tag */
   you?: boolean;
-  /** 아바타 색 인덱스 (생략 시 플레이어색) */
+  /** Avatar color index (player color if omitted) */
   avatarColorIndex?: number;
-  /** 빈 슬롯 상태 (S7 상대 대기 — 점선 보더 + 점멸) */
+  /** Empty-slot state (S7 opponent waiting — dashed border + blink) */
   empty?: boolean;
   className?: string;
 }

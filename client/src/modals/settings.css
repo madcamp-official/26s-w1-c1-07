@@ -1,4 +1,4 @@
-/* S4 설정 모달 전용 스타일 (lobby 에이전트 소유). PLAN §2-S4 OPERATOR MENU */
+/* Styles specific to the S4 Settings modal (owned by the lobby agent). PLAN §2-S4 OPERATOR MENU */
 
 .s4-title {
   text-align: center;
@@ -45,7 +45,7 @@
   gap: 8px;
 }
 
-/* ◀ ▶ 사각 스텝 버튼 — 누르면 램프 점등 느낌 */
+/* ◀ ▶ square step buttons — lamp-lit feel when pressed */
 .s4-step {
   width: 36px;
   height: 36px;
@@ -71,7 +71,7 @@
     inset 0 0 8px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
-/* Press Start 2P 대형 숫자 입력 */
+/* Press Start 2P large number input */
 .s4-num {
   width: 92px;
   padding: 8px 4px;
@@ -101,7 +101,7 @@
   margin-top: 26px;
 }
 
-/* 게임 선택 체크박스 (S4) — 체크한 게임만 온라인 매치에 등장 */
+/* Game Select checkboxes (S4) — only checked games appear in online matches */
 .s4-games {
   margin-top: 18px;
 }.s4-games-grid {

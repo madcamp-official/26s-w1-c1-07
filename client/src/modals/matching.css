@@ -1,4 +1,4 @@
-/* S7 온라인 매칭 상태 모달 전용 스타일 (lobby 에이전트 소유). PLAN §2-S7 VS 스크린 */
+/* Styles specific to the S7 online matchmaking status modal (owned by the lobby agent). PLAN §2-S7 VS screen */
 
 .s7-arena {
   display: flex;
@@ -8,7 +8,7 @@
   padding: 18px 6px 22px;
 }
 
-/* 대형 VS — 대기 중엔 소등(퍼플 아웃라인), 성사 시 발광 */
+/* Large VS — dark while waiting (purple outline), glows once matched */
 .s7-vs {
   flex: none;
   font-size: 34px;
@@ -21,7 +21,7 @@
   -webkit-text-stroke: 0;
 }
 
-/* 상태 스트립 */
+/* Status strip */
 .s7-status {
   text-align: center;
   border-top: 1px solid var(--hairline);

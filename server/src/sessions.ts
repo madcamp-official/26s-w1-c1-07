@@ -1,6 +1,6 @@
 /**
- * 서버 인메모리 세션 스토어 (BUILD_PLAN D14). 재시작 시 재로그인.
- * 쿠키엔 opaque sid만, 사용자 정보는 서버에.
+ * Server in-memory session store (BUILD_PLAN D14). Re-login on restart.
+ * Cookie holds only an opaque sid; user info stays on the server.
  */
 import { randomBytes } from 'node:crypto'
 
@@ -8,7 +8,7 @@ export interface Session {
   userId: bigint
   nickname: string
   imageUrl: string | null
-  /** 분반 이름 (user_group.name) — 없으면 null */
+  /** Class name (user_group.name) — null if none */
   groupName: string | null
 }
 
@@ -31,7 +31,7 @@ export function destroySession(sid: string | undefined): void {
   if (sid) sessions.delete(sid)
 }
 
-/** 쿠키 헤더에서 sid 추출 (소켓 핸드셰이크용) */
+/** Extract sid from the cookie header (for socket handshake) */
 export function sidFromCookieHeader(cookie: string | undefined): string | undefined {
   if (!cookie) return undefined
   for (const part of cookie.split(';')) {

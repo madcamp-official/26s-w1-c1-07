@@ -1,23 +1,23 @@
 /**
- * MADPUMP 소켓 통합 봉투 — client/server 공유 계약 (BUILD_PLAN D7·D8·D9).
+ * MADPUMP socket unified envelope — client/server shared contract (BUILD_PLAN D7·D8·D9).
  *
- * 원칙: 입력은 게임 무관 단일 이벤트(game:input), 상태는 게임별 투영(game:state).
- * 새 게임 추가 시 이 파일은 안 바뀐다.
+ * Principle: input is a single game-agnostic event (game:input), state is a per-game projection (game:state).
+ * Adding a new game does not change this file.
  */
 import type { GameInputEvent, GameResult } from '../games/types'
 import type { GameId } from '../games/registry'
 
-/** DB 저장 표기(매치 슬롯 기준). GameResult('P1'/'P2')와 다름 — 서버가 역할→슬롯 번역 */
+/** DB storage notation (based on match slot). Differs from GameResult('P1'/'P2') — server translates role→slot */
 export type SlotResult = 'A_WIN' | 'B_WIN' | 'DRAW'
 
-/** GameResult(라운드 역할 승자) + 역할배정 → 슬롯 결과 번역.
- * roleOfA = 이 라운드에서 playerA가 맡은 역할('P1'|'P2'). */
+/** GameResult(round role winner) + role assignment → slot result translation.
+ * roleOfA = the role playerA holds in this round ('P1'|'P2'). */
 export function toSlotResult(r: GameResult, roleOfA: 'P1' | 'P2'): SlotResult {
   if (r === 'DRAW' || r === null) return 'DRAW'
   return r === roleOfA ? 'A_WIN' : 'B_WIN'
 }
 
-// ── 세션/로비 ────────────────────────────────────────────────
+// ── Session/Lobby ────────────────────────────────────────────────
 export interface MeInfo {
   id: string
   nickname: string
@@ -42,95 +42,95 @@ export interface RoomSnapshot {
   members: RoomMemberView[]
 }
 
-// ── 매치/라운드 ─────────────────────────────────────────────
+// ── Match/Round ─────────────────────────────────────────────
 export interface OpponentView {
   nickname: string
   imageUrl: string | null
 }
 
-/** 플레이어 색 — 역할(P1/P2)이 아니라 '플레이어'에 종속(매치당 고정). 렌더러는 이 색으로 칠한다. */
+/** Player color — bound to the 'player' rather than the role (P1/P2), fixed per match. The renderer paints with this color. */
 export type PlayerColor = 'blue' | 'red'
 
-/** match:start — 각 플레이어에게 개별(자기 슬롯 포함) */
+/** match:start — sent individually to each player (includes their own slot) */
 export interface MatchStartMsg {
   matchId: string
-  you: 'A' | 'B' // 매치 고정 슬롯(승패 판정용). 라운드별 역할(P1/P2)은 round:start
+  you: 'A' | 'B' // match-fixed slot (for win/loss judging). Per-round role (P1/P2) comes in round:start
   totalRounds: number
   opponent: OpponentView
-  /** 내 색(매치 고정). 역할과 무관 — 공격/수비 역할은 매치마다 랜덤이라 색이 곧 역할이 아니다. */
+  /** My color (match-fixed). Independent of role — attack/defense roles are random each match, so color is not the role. */
   yourColor: PlayerColor
-  /** 상대 색(매치 고정) */
+  /** Opponent color (match-fixed) */
   oppColor: PlayerColor
   /**
-   * 슬롯머신 3릴 결과(서버 추첨) — 라운드 r(1-based)의 게임 = slotGames[(r-1) % 3].
-   * (릴1 → 1·4·7라운드, 릴2 → 2·5·8, 릴3 → 3·6·9)
-   * 클라는 이 값으로 슬롯 연출만 한다(0.3초 간격 순차 정지).
+   * Slot-machine 3-reel result (server draw) — game of round r (1-based) = slotGames[(r-1) % 3].
+   * (reel1 → rounds 1·4·7, reel2 → 2·5·8, reel3 → 3·6·9)
+   * The client only uses this for the slot animation (sequential stop at 0.3s intervals).
    */
   slotGames: GameId[]
-  /** 내가 이 매치에 건 코인 */
+  /** Coins I bet on this match */
   yourBet: number
-  /** 상대가 건 코인 */
+  /** Coins the opponent bet */
   oppBet: number
-  /** 내 베팅이 보유 전액이었으면 true → VS 화면에 ALL-IN 표시 */
+  /** true if my bet was my entire balance → show ALL-IN on the VS screen */
   yourAllIn: boolean
-  /** 상대 베팅이 보유 전액이었으면 true */
+  /** true if the opponent's bet was their entire balance */
   oppAllIn: boolean
 }
 
-/** round:start — 이 라운드의 게임 종류 통보 (역할은 매 라운드 랜덤이라 여기 실림) */
+/** round:start — announces this round's game type (role is random each round, so it's carried here) */
 export interface RoundStartMsg {
   matchId: string
   round: number // 1-based
   gameId: GameId
-  role: Role // 이 라운드에서 내 역할 (P1/P2)
-  countdownMs: number // 라운드 시작 전 카운트다운
+  role: Role // my role in this round (P1/P2)
+  countdownMs: number // countdown before the round starts
 }
 
-/** [C→S] game:input — 통합 입력 봉투 */
+/** [C→S] game:input — unified input envelope */
 export interface GameInputMsg {
   matchId: string
-  code: GameInputEvent['code'] // 서버가 role로 재기입(스푸핑 방지)
+  code: GameInputEvent['code'] // server rewrites by role (anti-spoofing)
   type: GameInputEvent['type']
   t: number
-  /** (선택) 오목처럼 클라가 로컬 커서로 고른 칸 인덱스. 서버는 유효성(내 턴·빈칸)만 검증. */
+  /** (optional) Cell index the client picked with a local cursor, like in Gomoku. The server validates only legality (my turn · empty cell). */
   cell?: number
 }
 
-/** [S→C] game:state — 렌더 투영(seed 등 비전송) */
+/** [S→C] game:state — render projection (seed etc. not sent) */
 export interface GameStateMsg {
   matchId: string
   round: number
   seq: number
-  state: unknown // 게임별 view (seed 제거). 클라가 gameId로 타입 해석
+  state: unknown // per-game view (seed removed). The client interprets the type by gameId
 }
 
 /** round:end */
 export interface RoundEndMsg {
   matchId: string
   round: number
-  result: GameResult // 그 라운드 역할 승자
-  wins: { P1: number; P2: number } // 누적(라운드 역할 기준 표시용)
+  result: GameResult // winner of that round's role
+  wins: { P1: number; P2: number } // cumulative (for display by round role)
 }
 
-/** [C→S] queue:join / room:create / room:join 에 실리는 베팅액 (보유 코인 한도 내 정수) */
+/** [C→S] Bet amount carried on queue:join / room:create / room:join (integer within the held-coin limit) */
 export interface BetPayload {
   bet: number
 }
 
-/** match:end — game_match INSERT 커밋 후에만. 플레이어별 개별 전송(코인 정산 결과 포함) */
+/** match:end — only after the game_match INSERT commits. Sent individually per player (includes coin settlement result) */
 export interface MatchEndMsg {
   matchId: string
-  result: SlotResult // 매치 최종(슬롯 기준)
+  result: SlotResult // match final (slot-based)
   recordedMatchId: string // game_match.id
   playedAt: string
-  /** 이 매치로 인한 내 코인 증감 (빠른시작: ±자기 베팅 / 코드방: 승자 +패자 베팅) */
+  /** My coin change from this match (quick start: ±own bet / code room: winner +loser's bet) */
   coinDelta: number
-  /** 정산 후 내 보유 코인 */
+  /** My held coins after settlement */
   coinBalance: number
   /**
-   * 리벤지 신청 자격 — 내가 패자이고 신청 가능할 때만 non-null (docs/ONLINE_MATCH.md):
-   *  · 무승부 아님 · 직전 매치의 리벤지 신청자가 아님(연속 신청 금지) · 정산 후 보유 ≥ 1
-   *  · stake = min(직전 내 베팅 × 2, 정산 후 보유) — 2배가 안 되면 ALL-IN
+   * Rematch eligibility — non-null only when I'm the loser and can request one (docs/ONLINE_MATCH.md):
+   *  · not a draw · not the rematch requester of the previous match (no consecutive requests) · held ≥ 1 after settlement
+   *  · stake = min(my previous bet × 2, held after settlement) — if it can't double, ALL-IN
    */
   revenge: { stake: number; allIn: boolean } | null
 }
@@ -140,33 +140,33 @@ export interface MatchAbortedMsg {
   reason: 'OPPONENT_LEFT'
 }
 
-// ── 리벤지 매치 (docs/ONLINE_MATCH.md) ───────────────────────────
-/** [S→C 승자] revenge:offer — 패자가 신청한 리벤지 제안 */
+// ── Rematch (docs/ONLINE_MATCH.md) ───────────────────────────
+/** [S→C winner] revenge:offer — rematch offer requested by the loser */
 export interface RevengeOfferMsg {
-  /** 신청자(직전 패자) 닉네임 */
+  /** Requester (previous loser) nickname */
   fromNickname: string
-  /** 수락 시 내가 걸 코인 = min(직전 내 베팅 × 2, 현재 보유) */
+  /** Coins I'll stake if I accept = min(my previous bet × 2, current held) */
   yourStake: number
-  /** 내 스테이크가 보유 전액이면 true (ALL-IN) */
+  /** true if my stake is my entire balance (ALL-IN) */
   yourAllIn: boolean
-  /** 신청자가 걸 코인 */
+  /** Coins the requester will stake */
   oppStake: number
   oppAllIn: boolean
-  /** 이 시간 안에 응답 없으면 자동 거절(ms) */
+  /** Auto-decline if no response within this time (ms) */
   timeoutMs: number
 }
 
-/** [S→C 양측] revenge:result — 리벤지 성사 여부. accepted=true면 곧바로 match:start가 이어진다 */
+/** [S→C both sides] revenge:result — whether the rematch is on. If accepted=true, match:start follows immediately */
 export interface RevengeResultMsg {
   accepted: boolean
-  /** 거절 사유 (accepted=false일 때) */
+  /** Decline reason (when accepted=false) */
   reason?: 'DECLINED' | 'TIMEOUT' | 'CANCELLED' | 'UNAVAILABLE'
 }
 
-/** 소켓 ack 규약 */
+/** Socket ack convention */
 export type Ack<T> = { ok: true; data: T } | { ok: false; code: string; message: string }
 
-/** 이벤트명 상수 (오타 방지) */
+/** Event-name constants (typo prevention) */
 export const EV = {
   hello: 'lobby:hello',
   lobbyError: 'lobby:error',
@@ -189,10 +189,10 @@ export const EV = {
   roundEnd: 'round:end',
   matchEnd: 'match:end',
   matchAborted: 'match:aborted',
-  // 리벤지 매치
-  revengeRequest: 'revenge:request', // C→S (패자, ack)
-  revengeOffer: 'revenge:offer', // S→C (승자)
-  revengeRespond: 'revenge:respond', // C→S (승자, { accept })
-  revengeCancel: 'revenge:cancel', // C→S (패자 — 대기 중 취소)
-  revengeResult: 'revenge:result', // S→C (양측)
+  // Rematch
+  revengeRequest: 'revenge:request', // C→S (loser, ack)
+  revengeOffer: 'revenge:offer', // S→C (winner)
+  revengeRespond: 'revenge:respond', // C→S (winner, { accept })
+  revengeCancel: 'revenge:cancel', // C→S (loser — cancel while waiting)
+  revengeResult: 'revenge:result', // S→C (both sides)
 } as const

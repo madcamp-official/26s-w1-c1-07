@@ -1,13 +1,13 @@
 /**
- * 세션 상태 — 로스터 로그인(분반→멤버 선택, docs/AUTH.md) + 쿠키 세션.
- * 서버가 mp_session 쿠키를 발급하고, 클라는 이 스토어에 유저 정보를 미러링한다.
+ * Session state — roster login (class → member selection, docs/AUTH.md) + cookie session.
+ * The server issues the mp_session cookie, and the client mirrors user info into this store.
  *
- * 사용법:
- *   const session = useSession();          // React 컴포넌트에서 구독
- *   restoreSession();                      // 부팅 시 GET /api/me 로 세션 복원
- *   await fetchRoster();                   // 로그인 다이얼로그용 분반·멤버 명단
- *   await loginAs(userId);                 // 멤버 선택 → 즉시 로그인 (인증 절차 없음)
- *   logout();                              // 로그아웃 → 이후 navigate('/')
+ * Usage:
+ *   const session = useSession();          // subscribe in a React component
+ *   restoreSession();                      // restore session via GET /api/me on boot
+ *   await fetchRoster();                   // class·member list for the login dialog
+ *   await loginAs(userId);                 // select member → log in immediately (no auth step)
+ *   logout();                              // log out → then navigate('/')
  */
 import { createStore, useStore } from './store';
 import { SERVER_URL } from '../net/config';
@@ -15,21 +15,21 @@ import { disconnectOnline } from '../net/online';
 
 export interface SessionUser {
   id: string;
-  /** Avatar 컴포넌트 palette 인덱스 (0~7) */
+  /** Avatar component palette index (0~7) */
   avatarColorIndex: number;
-  /** 프로필 사진 URL (로스터 로그인은 항상 null — 아바타 색으로 표시) */
+  /** Profile picture URL (always null for roster login — shown as an avatar color) */
   imageUrl: string | null;
 }
 
 export interface SessionState {
   loggedIn: boolean;
   nickname: string | null;
-  /** 분반 이름 (예: '1분반') */
+  /** Class name (e.g. 'Class 1') */
   groupName: string | null;
   user: SessionUser | null;
-  /** 보유 코인 (비로그인 시 0) — 서버 /api/me 가 정본, 여기는 미러 */
+  /** Coins held (0 when not logged in) — server /api/me is the source of truth, this is a mirror */
   coins: number;
-  /** 오프라인 게임 해금 상태 (LOCKABLE_GAME_IDS 순서의 비트마스크 — shared/coins.ts) */
+  /** Offline game unlock state (bitmask in LOCKABLE_GAME_IDS order — shared/coins.ts) */
   unlockedCount: number;
 }
 
@@ -44,17 +44,17 @@ const INITIAL: SessionState = {
 
 export const sessionStore = createStore<SessionState>(INITIAL);
 
-/** React 훅 */
+/** React hook */
 export function useSession(): SessionState {
   return useStore(sessionStore);
 }
 
-/** 비-React 코드용 스냅샷 */
+/** Snapshot for non-React code */
 export function getSession(): SessionState {
   return sessionStore.get();
 }
 
-/** 서버 응답 유저 형태 */
+/** Server-response user shape */
 interface ServerUser {
   id: string;
   nickname: string;
@@ -64,7 +64,7 @@ interface ServerUser {
   unlockedCount?: number;
 }
 
-/** 유저 id로 아바타 색 인덱스 결정 (0~7 고정 매핑) */
+/** Decide avatar color index from user id (fixed 0~7 mapping) */
 function avatarIndexOf(id: string): number {
   let h = 0;
   for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) & 0xffff;
@@ -82,15 +82,15 @@ function setLoggedInUser(u: ServerUser): void {
   });
 }
 
-/** 코인/해금 상태만 갱신 (해금 API 응답, 매치 정산 반영용) */
+/** Update only coin/unlock state (for reflecting unlock API responses, match settlement) */
 export function updateWallet(coins: number, unlockedCount?: number): void {
   sessionStore.set(unlockedCount === undefined ? { coins } : { coins, unlockedCount });
 }
 
 /**
- * 게임 해금 (POST /api/unlock) — 잠긴 게임 id 를 지정, 성공 시 지갑 갱신.
- * 잠긴 두 게임은 순서 무관하게 각각 해금할 수 있다 (shared/coins.ts).
- * @returns 성공: { unlockedGameId } / 실패: { error: 사용자 표시용 메시지 }
+ * Unlock a game (POST /api/unlock) — specify the locked game id, update the wallet on success.
+ * The two locked games can each be unlocked independently of order (shared/coins.ts).
+ * @returns success: { unlockedGameId } / failure: { error: user-facing message }
  */
 export async function unlockGame(gameId: number): Promise<{ unlockedGameId?: number; error?: string }> {
   try {
@@ -101,27 +101,27 @@ export async function unlockGame(gameId: number): Promise<{ unlockedGameId?: num
       body: JSON.stringify({ gameId }),
     });
     const data = await res.json();
-    if (!res.ok) return { error: data?.error?.message ?? '해금 실패' };
+    if (!res.ok) return { error: data?.error?.message ?? 'Unlock failed' };
     updateWallet(data.coins, data.unlockedCount);
     return { unlockedGameId: data.unlockedGameId };
   } catch {
-    return { error: '서버 연결 실패' };
+    return { error: 'Server connection failed' };
   }
 }
 
-/** claimFarmReward 결과 — code/retryAfterMs 는 실패 시에만 */
+/** claimFarmReward result — code/retryAfterMs only on failure */
 export interface FarmClaimResult {
   reward?: number;
   error?: string;
-  /** 서버 에러 코드: 'UNAUTHENTICATED' | 'COOLDOWN' | 'NETWORK' 등 */
+  /** Server error code: 'UNAUTHENTICATED' | 'COOLDOWN' | 'NETWORK' etc. */
   code?: string;
-  /** COOLDOWN일 때 재시도까지 남은 시간(ms) */
+  /** Time remaining until retry (ms) when COOLDOWN */
   retryAfterMs?: number;
 }
 
 /**
- * 코인 노가다 미션 클리어 보상 수령 (POST /api/farm/claim) — 서버가 액수 추첨.
- * 401(UNAUTHENTICATED)이면 서버 세션이 죽은 것 — 클라 세션도 로그아웃으로 동기화한다.
+ * Claim the coin-grind mission clear reward (POST /api/farm/claim) — the server rolls the amount.
+ * On 401 (UNAUTHENTICATED) the server session is dead — sync the client session to logged out too.
  */
 export async function claimFarmReward(): Promise<FarmClaimResult> {
   try {
@@ -131,7 +131,7 @@ export async function claimFarmReward(): Promise<FarmClaimResult> {
       const code = data?.error?.code as string | undefined;
       if (code === 'UNAUTHENTICATED') sessionStore.set({ ...INITIAL });
       return {
-        error: data?.error?.message ?? '보상 수령 실패',
+        error: data?.error?.message ?? 'Reward claim failed',
         code,
         retryAfterMs: data?.error?.retryAfterMs,
       };
@@ -139,15 +139,15 @@ export async function claimFarmReward(): Promise<FarmClaimResult> {
     updateWallet(data.coins);
     return { reward: data.reward };
   } catch {
-    return { error: '서버 연결 실패', code: 'NETWORK' };
+    return { error: 'Server connection failed', code: 'NETWORK' };
   }
 }
 
 /**
- * 세션 동기화 — 쿠키가 살아있으면(GET /api/me) 로그인 상태로 전환.
- * 서버가 ANON을 답하면(서버 재시작으로 인메모리 세션 소멸 등) 클라 상태도
- * 로그아웃으로 내린다 — 화면만 로그인인 "유령 세션"이 남지 않게.
- * main.tsx 부팅 시 + 각 화면 진입 시 fire-and-forget 으로 호출.
+ * Session sync — if the cookie is alive (GET /api/me), switch to logged-in state.
+ * If the server answers ANON (e.g. in-memory session lost on server restart), bring the
+ * client state down to logged out too — so no "ghost session" that's only logged in on screen remains.
+ * Called fire-and-forget on main.tsx boot + on each screen entry.
  */
 export async function restoreSession(): Promise<void> {
   try {
@@ -157,11 +157,11 @@ export async function restoreSession(): Promise<void> {
     if (data.status === 'USER' && data.user) setLoggedInUser(data.user);
     else if (data.status === 'ANON' && sessionStore.get().loggedIn) sessionStore.set({ ...INITIAL });
   } catch {
-    // 서버 미기동/네트워크 오류 — 판단 불가이므로 현 상태 유지
+    // Server not running / network error — can't determine, so keep current state
   }
 }
 
-/** 로그인 다이얼로그용 분반·멤버 명단 (GET /api/roster) */
+/** Class·member list for the login dialog (GET /api/roster) */
 export interface RosterMember {
   id: string;
   nickname: string;
@@ -180,8 +180,8 @@ export async function fetchRoster(): Promise<RosterGroup[]> {
 }
 
 /**
- * 멤버 선택 로그인 (POST /api/login) — 성공 시 세션 쿠키 발급 + 스토어 갱신.
- * @returns true 성공 / false 실패
+ * Member-selection login (POST /api/login) — on success, issues session cookie + updates the store.
+ * @returns true on success / false on failure
  */
 export async function loginAs(userId: string): Promise<boolean> {
   try {
@@ -201,9 +201,9 @@ export async function loginAs(userId: string): Promise<boolean> {
   }
 }
 
-/** 로그아웃. 호출자가 navigate('/') 할 것 (S1으로 전환됨). */
+/** Log out. The caller should navigate('/') (transitions to S1). */
 export function logout(): void {
   void fetch(`${SERVER_URL}/api/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
-  disconnectOnline(); // 소켓/온라인 상태도 정리
+  disconnectOnline(); // also clean up socket/online state
   sessionStore.set({ ...INITIAL });
 }

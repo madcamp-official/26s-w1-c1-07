@@ -1,10 +1,10 @@
 /**
- * S4 설정 모달 (lobby 에이전트 소유).
- * 본체 testid: modal-settings / 부품: btn-settings-save
- * - 라운드 수: 제거됨 — 온라인 매치는 항상 9라운드(슬롯 3게임 × 3회전, docs/ONLINE_MATCH.md).
- * - 라운드 시간: 제거됨(온라인은 게임별 고정 시간).
- * - 게임 선택: 체크박스로 플레이할 게임 선택 — 슬롯머신 3릴이 체크한 게임들 중에서 뽑힌다.
- * 열림 조건: flow.modal === 'settings'.
+ * S4 Settings modal (owned by the lobby agent).
+ * root testid: modal-settings / parts: btn-settings-save
+ * - Round count: removed — online matches are always 9 rounds (3 slot games × 3 turns, docs/ONLINE_MATCH.md).
+ * - Round time: removed (online uses a fixed time per game).
+ * - Game Select: pick games to play via checkboxes — the slot machine's 3 reels are drawn from the checked games.
+ * Open condition: flow.modal === 'settings'.
  */
 import { useEffect, useState } from 'react';
 import { Button, Modal } from '../components';
@@ -19,7 +19,7 @@ export default function SettingsModal() {
 
   const [enabled, setEnabled] = useState<Set<GameId>>(new Set(flow.enabledGames));
 
-  // 열릴 때마다 저장된 값으로 재동기화.
+  // Re-sync to the saved value each time it opens.
   useEffect(() => {
     if (open) setEnabled(new Set(flow.enabledGames));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -37,14 +37,14 @@ export default function SettingsModal() {
   const noneSelected = enabled.size === 0;
 
   const save = () => {
-    if (noneSelected) return; // 최소 1개 게임 필요
+    if (noneSelected) return; // at least 1 game required
     setEnabledGames([...enabled]);
     closeModal();
   };
 
   const resetToDefault = () => {
     setEnabled(new Set(ALL_GAME_IDS));
-    // 모달은 열린 채 유지, 저장은 확인을 눌러야
+    // Keep the modal open; saving requires pressing Confirm
   };
 
   return (
@@ -56,7 +56,7 @@ export default function SettingsModal() {
       testId="modal-settings"
       width={520}
     >
-      <h2 className="font-display s4-title">설정</h2>
+      <h2 className="font-display s4-title">Settings</h2>
 
       <div className="s4-games">
         <div className="s4-games-grid">
@@ -77,17 +77,17 @@ export default function SettingsModal() {
         </div>
         {noneSelected && (
           <p className="s4-games-warn" role="alert">
-            최소 1개 게임은 선택해야 합니다
+            You must select at least 1 game
           </p>
         )}
       </div>
 
       <div className="s4-actions">
         <Button variant="primary" data-testid="btn-settings-save" onClick={save} disabled={noneSelected}>
-          확인
+          Confirm
         </Button>
         <Button variant="secondary" onClick={resetToDefault}>
-          기본값으로 설정
+          Reset to default
         </Button>
       </div>
     </Modal>

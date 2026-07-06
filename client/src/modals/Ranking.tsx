@@ -1,13 +1,13 @@
 /**
- * 분반 전체 랭킹 모달 — 메인 리더보드 패널 클릭으로 진입 (docs/COINS.md).
- * 본체 testid: modal-ranking / 부품: ranking-me, ranking-list, btn-ranking-close
+ * Class full ranking modal — entered by clicking the main leaderboard panel (docs/COINS.md).
+ * root testid: modal-ranking / parts: ranking-me, ranking-list, btn-ranking-close
  *
- * 구성 (위→아래):
- *   ① 내 정보 행 (하이라이트)
- *   ② 간격
- *   ③ 1등부터 꼴등까지 분반 전체 인원 (코인순, 공동 등수 표기 그대로 — 스크롤)
- *   ④ "닫기" 버튼
- * 데이터: GET /api/leaderboard (열릴 때마다 재조회 — 코인 변동 반영).
+ * Layout (top → bottom):
+ *   ① My info row (highlighted)
+ *   ② Spacing
+ *   ③ Everyone in the class from 1st to last (by coins, tied ranks shown as-is — scrolls)
+ *   ④ "Close" button
+ * Data: GET /api/leaderboard (re-fetched each time it opens — reflects coin changes).
  */
 import { useEffect, useState } from 'react';
 import { Button, Modal, ordinal, rankColor } from '../components';
@@ -24,7 +24,7 @@ function pct(rate: number): string {
 function Row({ row, me }: { row: LeaderboardRow; me?: boolean }) {
   return (
     <div className={`rk-row${me ? ' rk-row--me' : ''}`}>
-      {/* 1·2·3등은 금/은/동 (rankColor), 그 외는 CSS 기본색 */}
+      {/* 1st·2nd·3rd are gold/silver/bronze (rankColor), the rest use the CSS default color */}
       <span className="rk-rank font-arcade glow-text" style={{ color: rankColor(row.rank) }}>
         {ordinal(row.rank)}
       </span>
@@ -47,7 +47,7 @@ export default function RankingModal() {
   const [data, setData] = useState<LeaderboardData | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // 열릴 때마다 최신 랭킹 재조회
+  // Re-fetch the latest ranking each time it opens
   useEffect(() => {
     if (!open) return;
     let alive = true;
@@ -66,7 +66,7 @@ export default function RankingModal() {
     <Modal
       open={open}
       onClose={closeModal}
-      marquee={`${data?.groupName ?? '분반'} 전체 랭킹 — FULL RANKING`}
+      marquee={`${data?.groupName ?? 'Class'} full ranking — FULL RANKING`}
       accentColor="var(--accent)"
       testId="modal-ranking"
       width={560}
@@ -75,19 +75,19 @@ export default function RankingModal() {
         {loading && <p className="rk-empty font-arcade c-muted">LOADING…</p>}
 
         {!loading && (!data || data.rows.length === 0) && (
-          <p className="rk-empty c-muted">NO RECORD — 랭킹 정보가 없습니다</p>
+          <p className="rk-empty c-muted">NO RECORD — No ranking data</p>
         )}
 
         {!loading && data && data.rows.length > 0 && (
           <>
-            {/* ① 최상단: 내 정보 */}
+            {/* ① Top: my info */}
             {data.me && (
               <div className="rk-me" data-testid="ranking-me">
                 <Row row={data.me} me />
               </div>
             )}
 
-            {/* ② 간격 후 ③ 전체 목록 (1등 → 꼴등) */}
+            {/* ② After spacing, ③ full list (1st → last) */}
             <div className="rk-list" data-testid="ranking-list">
               <div className="rk-head font-arcade c-muted" aria-hidden>
                 <span className="rk-rank">RANK</span>
@@ -104,9 +104,9 @@ export default function RankingModal() {
           </>
         )}
 
-        {/* ④ 최하단: 닫기 */}
+        {/* ④ Bottom: close */}
         <Button variant="tertiary" block data-testid="btn-ranking-close" onClick={closeModal}>
-          닫기
+          Close
         </Button>
       </div>
     </Modal>

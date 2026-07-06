@@ -1,45 +1,45 @@
 # AGENTS.md — MADPUMP
 
-AI 에이전트가 이 레포에서 작업하기 전에 읽는 진입점. (사람도 읽으면 좋음)
-**세션 시작 시 `context/` 폴더를 먼저 읽어라** — 지금까지의 진행상황·결정·누가 뭘 하는지가 거기 있다.
+The entry point AI agents read before working in this repo. (Good for humans to read too.)
+**At the start of a session, read the `context/` folder first** — the progress so far, decisions, and who is doing what live there.
 
-## 이 프로젝트가 뭔가
-1v1 2버튼(온라인=U·I) 미니게임 대전. npm workspaces 모노레포.
-- `shared/` — 게임코어 10종(순수 `tick`)+통합 입력계약+소켓 이벤트/타입 (`@madpump/shared`)
-- `client/` — React18+Vite SPA. 화면·캔버스 렌더·온라인 넷코드
-- `server/` — Fastify+Socket.IO 단일 프로세스. 세션쿠키 인증·서버권위 매치러너·Prisma(MySQL)
-- `docs/` — 명세(API_SPEC/MERGE_PLAN/BUILD_PLAN/ERD/DEPLOY)
-- `context/` — **진행상황·결정·현재작업** (에이전트 공유 컨텍스트)
-- `design-lab/`, `game-lab/` — 참고용 실험 폴더. **main 코드는 이걸 참조하면 안 됨**(삭제해도 빌드돼야 함)
+## What this project is
+1v1 two-button (online = U·I) minigame battles. An npm workspaces monorepo.
+- `shared/` — 10 game cores (pure `tick`) + unified input contract + socket events/types (`@madpump/shared`)
+- `client/` — React18 + Vite SPA. Screens, canvas rendering, online netcode
+- `server/` — Fastify + Socket.IO single process. Session-cookie auth, server-authoritative match runner, Prisma (MySQL)
+- `docs/` — specs (API_SPEC/MERGE_PLAN/BUILD_PLAN/ERD/DEPLOY)
+- `context/` — **progress, decisions, current work** (shared agent context)
+- `design-lab/`, `game-lab/` — experimental reference folders. **main code must not reference these** (it must still build if they are deleted)
 
-## 명령어
+## Commands
 ```bash
-npm install                              # 루트에서 1회 (workspaces)
-npm run dev -w @madpump/client           # 클라 개발 → localhost:5173
-npm --prefix server run dev              # 서버 개발(tsx watch) → localhost:3000
-npm --prefix client run build            # 클라 프로덕션 빌드(client/dist)
-npm --prefix shared run typecheck        # 타입체크 (shared/server/client 각각)
+npm install                              # once at the root (workspaces)
+npm run dev -w @madpump/client           # client dev → localhost:5173
+npm --prefix server run dev              # server dev (tsx watch) → localhost:3000
+npm --prefix client run build            # client production build (client/dist)
+npm --prefix shared run typecheck        # typecheck (shared/server/client each)
 npm --prefix server run typecheck
 npm --prefix client run typecheck
-npm run check:standalone                 # 자립성 가드(main이 lab 폴더 참조 안 하는지)
-bash scripts/deploy.sh                   # 배포 (먼저 cp deploy.env.example deploy.env)
+npm run check:standalone                 # standalone guard (checks main does not reference lab folders)
+bash scripts/deploy.sh                   # deploy (first cp deploy.env.example deploy.env)
 ```
-DB: `docker compose up -d`(로컬 MySQL 3307) / prisma는 `server/`에서(`npm --prefix server run prisma:generate`, `db:seed`). 배포는 `docs/DEPLOY.md` 참고.
+DB: `docker compose up -d` (local MySQL 3307) / prisma runs from `server/` (`npm --prefix server run prisma:generate`, `db:seed`). For deploy, see `docs/DEPLOY.md`.
 
-## 코드 컨벤션
-- 게임 로직/판정은 **`shared` 코어만** 사용(재구현 금지). 화면은 캔버스 직접 렌더.
-- 온라인 입력은 **U/I 두 키만**. 서버가 슬롯→역할 물리키로 재기입(안티치트).
-- 넷코드 = 서버권위 "덤 클라"(예측 없음). 클라는 서버 state를 그리고 입력만 전송.
-- 주변 코드 스타일·주석 밀도·네이밍을 그대로 따를 것.
+## Code conventions
+- Use **only the `shared` core** for game logic/judgment (no reimplementation). Screens render directly to canvas.
+- Online input is **only the two keys U/I**. The server rewrites slot → role physical keys (anti-cheat).
+- Netcode = server-authoritative "dumb client" (no prediction). The client draws the server state and only sends input.
+- Follow the surrounding code style, comment density, and naming as-is.
 
-## 경계
-- ✅ 항상: 커밋 전 `typecheck` + `build` + `check:standalone` 통과 확인. 작업 전 `git pull`.
-- ⚠️ 물어보고: `git push`, 배포(`deploy.sh`), **공유 VM DB 마이그레이션/리셋**, 외부로 나가는 행위.
-- 🚫 절대: `.env`·`deploy.env`·SSH키 등 **비밀 커밋 금지**. main에서 `design-lab`/`game-lab` 참조 금지.
+## Boundaries
+- ✅ Always: before committing, confirm `typecheck` + `build` + `check:standalone` pass. `git pull` before working.
+- ⚠️ Ask first: `git push`, deploy (`deploy.sh`), **shared VM DB migration/reset**, any outbound action.
+- 🚫 Never: **commit secrets** like `.env` · `deploy.env` · SSH keys. Never reference `design-lab`/`game-lab` from main.
 
-## 커밋
-- 작은 단위로. 메시지는 한국어(레포 관습). push 전 `git pull --rebase`.
-- 여럿(사람+여러 AI)이 같은 main을 만진다 → `context/now.md`에 **지금 뭐 하는지** 적고 시작할 것.
+## Commits
+- In small units. Messages in Korean (repo convention). `git pull --rebase` before push.
+- Many contributors (humans + multiple AIs) touch the same main → write **what you are doing now** in `context/now.md` before you start.
 
-## 배포처
-KAIST VM(내부망) → **http://172.10.8.242**. 서버가 client/dist 정적서빙+API+소켓 단일 프로세스.
+## Deploy target
+KAIST VM (internal network) → **http://172.10.8.242**. The server is a single process: static-serving client/dist + API + socket.

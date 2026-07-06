@@ -1,4 +1,4 @@
-/* HudFrame 스타일 (아키텍트 소유) — PLAN §1.5 공통 HUD 프레임 */
+/* HudFrame styles (owned by the architect) — PLAN §1.5 shared HUD frame */
 
 .nc-hud {
   display: flex;
@@ -45,7 +45,7 @@
   vertical-align: 2px;
 }
 
-/* 라운드 램프 — 중앙을 향해 배열 (P2 쪽은 역순) */
+/* round lamps — arranged toward the center (P2 side is reversed) */
 .nc-hud__lamps {
   display: flex;
   gap: 5px;
@@ -66,7 +66,7 @@
 .nc-hud__time-caption,
 .nc-hud__round-caption {
   font-size: 9px;
-  font-size: max(10px, 9px); /* Press Start 2P 10px 미만 금지 보정 */
+  font-size: max(10px, 9px); /* Press Start 2P correction: never below 10px */
 }
 
 .nc-hud__secs {

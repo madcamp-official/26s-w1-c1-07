@@ -1,17 +1,17 @@
 /**
- * 코인 노가다 (scr-coin-farm) — 솔로 펌프 미션으로 코인 벌기 (docs/COINS.md).
- * 컨테이너 testid: scr-coin-farm / 부품: btn-farm-start, btn-farm-retry, btn-farm-exit, farm-stage
+ * Coin Farm (scr-coin-farm) — earn coins with a solo Pump mission (docs/COINS.md).
+ * Container testid: scr-coin-farm / parts: btn-farm-start, btn-farm-retry, btn-farm-exit, farm-stage
  *
- * ── 규칙 (shared/src/coins.ts FARM_*) ───────────────────────────
- *  · 로그인 유저 1인 전용. U/I 키만 사용 (게임6 펌프의 P2 레인 문법).
- *  · 제한시간 10초(FARM_DURATION) 안에 정답 30타(FARM_TARGET) → MISSION COMPLETE,
- *    서버(/api/farm/claim)가 확률표로 보상 추첨(기댓값 ~5코인, 1~100).
- *  · 시간 초과 → MISSION FAILED (보상 없음).
- *  · 틀린 키 단 1회 → 그 즉시 MISSION FAILED.
+ * ── Rules (shared/src/coins.ts FARM_*) ───────────────────────────
+ *  · For a single logged-in user only. Uses only the U/I keys (P2 lane grammar of Game 6 Pump).
+ *  · Land 30 correct hits (FARM_TARGET) within the 10s time limit (FARM_DURATION) → MISSION COMPLETE,
+ *    the server (/api/farm/claim) draws a reward from a probability table (expected value ~5 coins, 1~100).
+ *  · Time out → MISSION FAILED (no reward).
+ *  · A single wrong key → instant MISSION FAILED.
  *
- * ── 화면 ────────────────────────────────────────────────────────
- *  게임6의 노트 하이웨이 비주얼을 1레인으로 축약(캔버스). 점수 잭팟/타이머 내장.
- *  ready → (시작하기) → playing → success(보상 표시) | fail(사유 표시) → 다시 도전.
+ * ── Screen ──────────────────────────────────────────────────────
+ *  Condenses Game 6's note-highway visual into a single lane (canvas). Built-in score jackpot / timer.
+ *  ready → (Start) → playing → success (shows reward) | fail (shows reason) → Play again.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -24,9 +24,9 @@ import { openLoginModal } from '../modals/Login';
 import { setDebugGame, useDebugScreen } from '../debug';
 import './coin-farm.css';
 
-// ── 솔로 펌프 로직 (게임6 P2 레인 규칙 + 미션 판정) ─────────────
+// ── Solo Pump logic (Game 6 P2 lane rules + mission judging) ─────────────
 const FLASH = 0.12;
-/** 시퀀스 길이 — 목표 30타 + 미리보기 여유 */
+/** Sequence length — target 30 hits + preview headroom */
 const SEQ_LEN = FARM_TARGET + 10;
 
 type Outcome = null | 'success' | 'wrong' | 'timeout';
@@ -55,19 +55,19 @@ function stepFarm(s: FarmState, events: GameInputEvent[], dt: number): FarmState
 
   for (const e of events) {
     if (e.type !== 'down') continue;
-    if (e.code !== 'KeyU' && e.code !== 'KeyI') continue; // 노가다는 U/I 전용 (Q/W 무시)
+    if (e.code !== 'KeyU' && e.code !== 'KeyI') continue; // farming is U/I only (Q/W ignored)
     const got = e.code === 'KeyU' ? 0 : 1;
     if (got === s.seq[s.idx]) {
       s.score += 1;
       s.idx += 1;
       s.flash = FLASH;
       if (s.score >= FARM_TARGET) {
-        s.outcome = 'success'; // 목표 달성 — 조기 종료
+        s.outcome = 'success'; // target reached — early exit
         return s;
       }
     } else {
       s.wrong = FLASH;
-      s.outcome = 'wrong'; // 오답 1회 = 즉시 실패
+      s.outcome = 'wrong'; // one wrong answer = instant fail
       return s;
     }
   }
@@ -76,10 +76,10 @@ function stepFarm(s: FarmState, events: GameInputEvent[], dt: number): FarmState
   return s;
 }
 
-// ── 캔버스 렌더 (게임6 레인 문법의 1레인 축약) ──────────────────
+// ── Canvas render (single-lane condensation of Game 6 lane grammar) ──────────────────
 const CW = 480;
 const CH = 450;
-/** 표시 배율 — 논리 좌표(480×450)는 유지하고 캔버스 해상도·CSS 크기만 1.5배 (선명도 유지) */
+/** Display scale — keeps logical coords (480×450) but bumps canvas resolution and CSS size by 1.5× (preserves sharpness) */
 const DISPLAY_SCALE = 1.5;
 const LANE_X = CW / 2;
 const HIT_Y = 330;
@@ -107,7 +107,7 @@ function drawFarm(ctx: CanvasRenderingContext2D, s: FarmState, scroll: number, n
   const remain = Math.max(0, FARM_DURATION - s.elapsed);
   const urgent = remain <= 3 && s.outcome === null;
 
-  // 레인 패널
+  // Lane panel
   ctx.save();
   ctx.fillStyle = COL.deep;
   ctx.globalAlpha = 0.55;
@@ -118,7 +118,7 @@ function drawFarm(ctx: CanvasRenderingContext2D, s: FarmState, scroll: number, n
   ctx.strokeRect(LANE_X - LANE_HALF, 96, LANE_HALF * 2, 312);
   ctx.restore();
 
-  // 타일 하이웨이
+  // Tile highway
   const lo = Math.floor(scroll) - 2;
   const hi = Math.floor(scroll) + 6;
   for (let j = hi; j >= lo; j--) {
@@ -154,7 +154,7 @@ function drawFarm(ctx: CanvasRenderingContext2D, s: FarmState, scroll: number, n
     ctx.shadowBlur = isNow ? 14 : 4;
     ctx.lineWidth = isNow ? 2.5 : 1.5;
     ctx.strokeRect(-sz / 2, -sz / 2, sz, sz);
-    // 방향 + 글자 (0=U=◀, 1=I=▶)
+    // Direction + letter (0=U=◀, 1=I=▶)
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = isNow ? COL.text : COL.gold;
@@ -167,7 +167,7 @@ function drawFarm(ctx: CanvasRenderingContext2D, s: FarmState, scroll: number, n
     ctx.restore();
   }
 
-  // 히트라인
+  // Hit line
   ctx.save();
   ctx.strokeStyle = s.flash > 0 ? COL.text : COL.gold;
   ctx.shadowColor = COL.gold;
@@ -184,7 +184,7 @@ function drawFarm(ctx: CanvasRenderingContext2D, s: FarmState, scroll: number, n
   ctx.fillText('NOW', LANE_X - LANE_HALF + 4, HIT_Y + TILE / 2 + 26);
   ctx.restore();
 
-  // 점수 잭팟 (SCORE n / 30)
+  // Score jackpot (SCORE n / 30)
   ctx.save();
   ctx.textAlign = 'center';
   ctx.fillStyle = COL.muted;
@@ -202,7 +202,7 @@ function drawFarm(ctx: CanvasRenderingContext2D, s: FarmState, scroll: number, n
   ctx.fillText(`/${FARM_TARGET}`, LANE_X + 4, 74);
   ctx.restore();
 
-  // 타이머 (좌상단)
+  // Timer (top-left)
   ctx.save();
   ctx.textAlign = 'left';
   ctx.fillStyle = COL.muted;
@@ -215,7 +215,7 @@ function drawFarm(ctx: CanvasRenderingContext2D, s: FarmState, scroll: number, n
   ctx.fillText(remain.toFixed(1), 20, 66);
   ctx.restore();
 
-  // 타임 게이지 (하단)
+  // Time gauge (bottom)
   ctx.save();
   const ratio = remain / FARM_DURATION;
   ctx.fillStyle = COL.deep;
@@ -228,7 +228,7 @@ function drawFarm(ctx: CanvasRenderingContext2D, s: FarmState, scroll: number, n
   void now;
 }
 
-// ── 컴포넌트 ────────────────────────────────────────────────────
+// ── Component ────────────────────────────────────────────────────
 type Phase = 'ready' | 'playing' | 'success' | 'fail';
 
 export default function CoinFarm() {
@@ -238,7 +238,7 @@ export default function CoinFarm() {
 
   const [phase, setPhase] = useState<Phase>('ready');
   const [failReason, setFailReason] = useState<'wrong' | 'timeout'>('timeout');
-  /** 보상: null = 수령 중, 숫자 = 획득 코인 */
+  /** Reward: null = claiming, number = coins earned */
   const [reward, setReward] = useState<number | null>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
 
@@ -254,34 +254,34 @@ export default function CoinFarm() {
   const lampRef = useRef({ flashU, flashI });
   lampRef.current = { flashU, flashI };
 
-  // 진입 시 서버와 세션 동기화 — 서버 재시작 등으로 세션이 죽었으면
-  // 클라 상태가 로그아웃으로 내려가 플레이 전에 로그인 안내가 뜬다 (헛 클리어 방지)
+  // Sync the session with the server on entry — if the session died (e.g. server restart),
+  // the client state drops to logged-out so the login prompt appears before playing (prevents wasted clears)
   useEffect(() => {
     void restoreSession();
   }, []);
 
   /**
-   * 보상 수령 — 실패 유형별 복구:
-   *  · COOLDOWN(연속 클리어): 서버가 준 남은 시간만큼 기다렸다 1회 자동 재시도
-   *  · UNAUTHENTICATED: claimFarmReward가 세션을 로그아웃으로 내림 → 로그인 패널 표시,
-   *    재로그인 후 [보상 다시 받기]로 이 함수를 다시 호출하면 수령된다
-   *  · 네트워크 오류: 에러 표시 + [보상 다시 받기]
+   * Reward claim — recovery per failure type:
+   *  · COOLDOWN (back-to-back clears): waits out the remaining time given by the server, then auto-retries once
+   *  · UNAUTHENTICATED: claimFarmReward drops the session to logged-out → shows the login panel,
+   *    after re-logging in, calling this function again via [Claim reward again] collects it
+   *  · Network error: shows the error + [Claim reward again]
    */
   const doClaim = useCallback(async () => {
     setReward(null);
     setClaimError(null);
     let r = await claimFarmReward();
     if (r.code === 'COOLDOWN') {
-      // 서버가 남은 시간을 안 줬으면 쿨다운 전체만큼 대기 (보수적 fallback)
+      // If the server didn't provide the remaining time, wait the full cooldown (conservative fallback)
       const waitMs = (r.retryAfterMs ?? FARM_CLAIM_COOLDOWN_MS) + 300;
       await new Promise((res) => setTimeout(res, waitMs));
       r = await claimFarmReward();
     }
     if (r.reward !== undefined) setReward(r.reward);
-    else setClaimError(r.error ?? '보상 수령 실패');
+    else setClaimError(r.error ?? 'Reward claim failed');
   }, []);
 
-  // 캔버스 dpr × 표시 배율 스케일 (그리기 코드는 논리 480×450 그대로)
+  // Canvas dpr × display-scale scaling (drawing code stays logical 480×450)
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
@@ -291,7 +291,7 @@ export default function CoinFarm() {
     c.getContext('2d')?.scale(dpr, dpr);
   }, []);
 
-  // 키 입력 — playing 중에만 큐에 수집 (U/I 램프 점등)
+  // Key input — queued only while playing (lights the U/I lamps)
   useEffect(() => {
     const detach = attachLocalKeyboard(
       () => performance.now() / 1000,
@@ -309,7 +309,7 @@ export default function CoinFarm() {
     };
   }, []);
 
-  // 게임 루프 — playing 동안 rAF (step + draw)
+  // Game loop — rAF while playing (step + draw)
   useEffect(() => {
     if (phase !== 'playing') return;
 
@@ -336,7 +336,7 @@ export default function CoinFarm() {
         setDebugGame(s);
 
         if (s.outcome !== null) {
-          // 판정 — 짧은 여운 후 오버레이 (마지막 프레임은 그려짐)
+          // Judging — overlay after a short beat (the last frame still draws)
           const out: Outcome = s.outcome;
           window.setTimeout(() => {
             if (out === 'success') {
@@ -358,16 +358,16 @@ export default function CoinFarm() {
     return () => cancelAnimationFrame(raf);
   }, [phase, doClaim]);
 
-  // 비로그인(또는 서버 세션 소멸) — 리다이렉트 대신 로그인 안내 패널.
-  // 미션 클리어 후 401로 로그아웃된 경우에도 이 패널로 재로그인하면
-  // 컴포넌트 state(phase='success')가 살아 있어 [보상 다시 받기]가 가능하다.
+  // Not logged in (or server session gone) — a login prompt panel instead of a redirect.
+  // Even when logged out by a 401 after clearing the mission, re-logging in via this panel
+  // keeps the component state (phase='success') alive, so [Claim reward again] is possible.
   if (!session.loggedIn) {
     return (
       <main data-testid="scr-coin-farm" className="cf-root">
         <div className="vanish-grid dim" aria-hidden />
         <div className="cf-topbar">
           <Button variant="tertiary" data-testid="btn-farm-exit" onClick={() => navigate('/select')}>
-            ◀ 나가기
+            ◀ Exit
           </Button>
           <span className="cf-title font-arcade c-muted">COIN FARM</span>
           <span className="cf-topbar-spacer" aria-hidden />
@@ -375,14 +375,14 @@ export default function CoinFarm() {
         <div className="cf-login-req" data-testid="farm-login-required">
           <span className="font-arcade c-accent glow-text cf-overlay__big">COIN FARM</span>
           <p className="font-display cf-overlay__rules">
-            코인은 계정 재화라서 <strong className="c-accent">로그인</strong>이 필요합니다.
+            Coins are account currency, so you need to <strong className="c-accent">log in</strong>.
           </p>
           <div className="cf-overlay__actions">
             <Button variant="primary" data-testid="btn-farm-login" onClick={() => openLoginModal()}>
-              로그인
+              Log in
             </Button>
             <Button variant="tertiary" onClick={() => navigate('/select')}>
-              돌아가기
+              Go back
             </Button>
           </div>
         </div>
@@ -396,7 +396,7 @@ export default function CoinFarm() {
 
       <div className="cf-topbar">
         <Button variant="tertiary" data-testid="btn-farm-exit" onClick={() => navigate('/select')}>
-          ◀ 나가기
+          ◀ Exit
         </Button>
         <span className="cf-title font-arcade c-muted">COIN FARM</span>
         <span className="cf-coins font-arcade c-accent glow-text" data-testid="coin-balance">
@@ -405,18 +405,18 @@ export default function CoinFarm() {
       </div>
 
       <div data-testid="farm-stage" className="crt-bezel cf-stage">
-        <canvas ref={canvasRef} className="cf-canvas" aria-label="코인 노가다 스테이지 — 솔로 펌프" />
+        <canvas ref={canvasRef} className="cf-canvas" aria-label="Coin Farm stage — solo Pump" />
 
         {phase === 'ready' && (
           <div className="cf-overlay" data-testid="farm-ready">
             <span className="font-arcade c-accent glow-text cf-overlay__big">COIN MISSION</span>
             <p className="font-display cf-overlay__rules">
-              {FARM_DURATION}초 안에 <strong className="c-accent">{FARM_TARGET}점</strong>을 달성하면 코인 획득!
+              Reach <strong className="c-accent">{FARM_TARGET} points</strong> within {FARM_DURATION}s to earn coins!
               <br />
-              틀린 키를 누르면 <strong className="c-error">그 즉시 실패</strong>합니다.
+              Press the wrong key and you <strong className="c-error">fail instantly</strong>.
             </p>
             <Button variant="primary" coin data-testid="btn-farm-start" onClick={() => setPhase('playing')}>
-              시작하기
+              Start
             </Button>
           </div>
         )}
@@ -431,9 +431,9 @@ export default function CoinFarm() {
             ) : claimError ? (
               <>
                 <span className="font-display c-error">{claimError}</span>
-                {/* 보상 유실 방지 — 수령 실패(네트워크/쿨다운/재로그인 직후)는 재시도 가능 */}
+                {/* Prevents lost rewards — a failed claim (network/cooldown/just after re-login) can be retried */}
                 <Button variant="secondary" data-testid="btn-farm-reclaim" onClick={() => void doClaim()}>
-                  보상 다시 받기
+                  Claim reward again
                 </Button>
               </>
             ) : (
@@ -446,10 +446,10 @@ export default function CoinFarm() {
                 onClick={() => setPhase('ready')}
                 disabled={reward === null && !claimError}
               >
-                다시 도전
+                Play again
               </Button>
               <Button variant="tertiary" onClick={() => navigate('/select')}>
-                나가기
+                Exit
               </Button>
             </div>
           </div>
@@ -459,24 +459,24 @@ export default function CoinFarm() {
           <div className="cf-overlay" data-testid="farm-fail">
             <span className="font-arcade cf-overlay__big cf-lose glow-text">MISSION FAILED</span>
             <span className="font-display c-muted">
-              {failReason === 'wrong' ? '틀린 키를 눌렀습니다!' : `시간 안에 ${FARM_TARGET}점을 못 채웠습니다`}
+              {failReason === 'wrong' ? 'You pressed the wrong key!' : `Didn't reach ${FARM_TARGET} points in time`}
             </span>
             <div className="cf-overlay__actions">
               <Button variant="primary" data-testid="btn-farm-retry" onClick={() => setPhase('ready')}>
-                다시 도전
+                Play again
               </Button>
               <Button variant="tertiary" onClick={() => navigate('/select')}>
-                나가기
+                Exit
               </Button>
             </div>
           </div>
         )}
       </div>
 
-      {/* 온스크린 키캡 — U/I 전용 */}
+      {/* On-screen keycaps — U/I only */}
       <div className="cf-keys">
-        <KeyCap role="P2" keyChar="U" icon="◀" lit={uLit} label="왼쪽" />
-        <KeyCap role="P2" keyChar="I" icon="▶" lit={iLit} label="오른쪽" />
+        <KeyCap role="P2" keyChar="U" icon="◀" lit={uLit} label="Left" />
+        <KeyCap role="P2" keyChar="I" icon="▶" lit={iLit} label="Right" />
         <span className="cf-keys__hint font-arcade c-muted">HIT THE GLOWING PAD</span>
       </div>
     </main>

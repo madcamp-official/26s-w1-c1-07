@@ -1,8 +1,8 @@
 /**
- * 게임6 · 펌프 전용 스타일 (game3 화면 소유 — 신규 제작).
- * 공용 theme.css 유틸(.crt-bezel/.vanish-grid/.font-arcade/.glow-text/.anim-*) 위에
- * 레이아웃/연출만 얹는다. 토큰·글로우 공식은 PLAN §1(neon-coinop) 준수.
- * 스캔라인은 App 전역(.crt-overlay) — 여기서 중복 렌더 금지.
+ * Game 6 · Pump-specific styles (owned by the game3 screen — newly built).
+ * Layers only layout/presentation on top of the shared theme.css utils
+ * (.crt-bezel/.vanish-grid/.font-arcade/.glow-text/.anim-*). Follows the token/glow formula in PLAN §1 (neon-coinop).
+ * Scanlines are global to the App (.crt-overlay) — do not re-render them here.
  */
 
 .g3-screen {
@@ -32,9 +32,9 @@
   width: min(1020px, 100%);
 }
 
-/* CRT 스테이지 — 베젤은 theme.css .crt-bezel, 여기서는 크기만.
-   상하 고정 크롬(topbar+HUD+키캡+gap+padding) + 베젤 테두리를 감안해
-   뷰포트 높이 기반으로 폭을 캡(하단 키캡 잘림 방지). 캔버스 16:9. */
+/* CRT stage — the bezel is theme.css .crt-bezel; here we only set the size.
+   Accounting for the fixed top/bottom chrome (topbar+HUD+keycaps+gap+padding) plus the bezel border,
+   cap the width based on viewport height (prevents the bottom keycaps from being clipped). Canvas 16:9. */
 .g3-stage {
   width: min(1020px, 100%, calc((100vh - 310px) * 16 / 9 + 28px));
 }
@@ -45,7 +45,7 @@
   aspect-ratio: 16 / 9;
 }
 
-/* 라운드 인트로 — sign-on 플리커 후 소등 (steps, 부드러운 fade 금지 §1.4) */
+/* Round intro — sign-on flicker then blackout (steps, no smooth fade §1.4) */
 .g3-round-intro {
   position: absolute;
   inset: 0;
@@ -83,11 +83,11 @@
 @media (prefers-reduced-motion: reduce) {
   .g3-round-intro {
     animation: none;
-    opacity: 0; /* HUD의 ROUND n/m 캡션이 정보 정본 — 인트로는 장식이라 생략 */
+    opacity: 0; /* The HUD's ROUND n/m caption is the source of truth — the intro is decorative, so skip it */
   }
 }
 
-/* 하단 키캡 열 — 좌 P1(시안) / 우 P2(핑크), 실제 배정 키 표기 (SPEC Q2) */
+/* Bottom keycap row — left P1 (cyan) / right P2 (pink), showing the actually assigned keys (SPEC Q2) */
 .g3-keys {
   width: min(1020px, 100%);
   display: flex;

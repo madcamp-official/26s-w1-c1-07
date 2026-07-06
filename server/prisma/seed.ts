@@ -1,45 +1,45 @@
 /**
- * MADPUMP 시드 데이터
- * 정본: docs/ERD.md note #15(게임 사전) / note #17(점수 설정 단일 행) / docs/AUTH.md(로스터 로그인)
+ * MADPUMP seed data
+ * Canonical: docs/ERD.md note #15 (game dictionary) / note #17 (single-row scoring settings) / docs/AUTH.md (roster login)
  *
- * 멱등(idempotent): 여러 번 실행해도 안전하도록 upsert 사용.
- * 실행: npm --workspace @madpump/server run db:seed  (또는 npx prisma db seed)
+ * Idempotent: uses upsert so it is safe to run multiple times.
+ * Run: npm --workspace @madpump/server run db:seed  (or npx prisma db seed)
  */
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// 게임 종류 사전 — 코드의 게임 번호(1~10)와 고정 매핑. 이 테이블은 "코드 미러".
-// (id = 화면 순서, shared/coins.ts GAME_ORDER 와 일치)
+// Game type dictionary — fixed mapping to the code's game numbers (1~10). This table is the "code mirror".
+// (id = screen order, matches shared/coins.ts GAME_ORDER)
 const GAMES = [
-  { id: 1, name: "숫자 맞추기" },
-  { id: 2, name: "타이드 펜싱" },
-  { id: 3, name: "펌프" },
-  { id: 4, name: "미사일 매치" },
-  { id: 5, name: "라이트 사이클" },
-  { id: 6, name: "공룡 달리기" },
-  { id: 7, name: "이카루스 매치" },
-  { id: 8, name: "뿌슝뿌슝" },
-  { id: 9, name: "스피드 오목" },
-  { id: 10, name: "줄다리기" },
+  { id: 1, name: "Number Guess" },
+  { id: 2, name: "Tide Fencing" },
+  { id: 3, name: "Pump" },
+  { id: 4, name: "Missile Match" },
+  { id: 5, name: "Light Cycle" },
+  { id: 6, name: "Dino Run" },
+  { id: 7, name: "Icarus Match" },
+  { id: 8, name: "Pew Pew" },
+  { id: 9, name: "Speed Gomoku" },
+  { id: 10, name: "Tug of War" },
 ] as const;
 
-// 분반별 고정 멤버 로스터 — 로그인은 이 명단에서 선택 (docs/AUTH.md).
-// 같은 이름이 다른 분반에 있을 수 있다(예: 이서진) → app_user 유니크는 (group_id, nickname).
+// Fixed per-class member roster — login picks from this list (docs/AUTH.md).
+// The same name can appear in different classes (e.g. Lee Seojin) → app_user uniqueness is (group_id, nickname).
 const ROSTER: Record<string, string[]> = {
-  "1분반": [
-    "이지민", "박준서", "라태형", "이종혁", "유나연", "유영석", "김태현", "권순호",
-    "이유담", "안종화", "허서준", "이서진", "정서영", "이예원", "김희서", "주성민",
+  "Class 1": [
+    "Lee Jimin", "Park Junseo", "Ra Taehyeong", "Lee Jonghyeok", "Yu Nayeon", "Yu Yeongseok", "Kim Taehyeon", "Kwon Sunho",
+    "Lee Yudam", "An Jonghwa", "Heo Seojun", "Lee Seojin", "Jeong Seoyeong", "Lee Yewon", "Kim Huiseo", "Ju Seongmin",
   ],
-  "2분반": [
-    "박서윤", "최재윤", "김민재", "이예지", "김경원", "이재준", "양우현", "주영준",
-    "박지민", "황시우", "박채훈", "박소요", "원건희", "이서영", "임유빈", "박도현",
-    "박정준", "김도현", "김도연",
+  "Class 2": [
+    "Park Seoyun", "Choi Jaeyun", "Kim Minjae", "Lee Yeji", "Kim Gyeongwon", "Lee Jaejun", "Yang Uhyeon", "Ju Yeongjun",
+    "Park Jimin", "Hwang Siu", "Park Chaehun", "Park Soyo", "Won Geonhui", "Lee Seoyeong", "Im Yubin", "Park Dohyeon",
+    "Park Jeongjun", "Kim Dohyeon", "Kim Doyeon",
   ],
-  "3분반": [
-    "손기환", "김윤서", "양호성", "정유진", "김민", "조예준", "안소희", "이서진",
-    "강우현", "송재훈", "이지오", "김재훈", "임성진", "박지호", "조준호", "김규민",
-    "서영빈", "김혜리", "박수현", "박민수",
+  "Class 3": [
+    "Son Gihwan", "Kim Yunseo", "Yang Hoseong", "Jeong Yujin", "Kim Min", "Jo Yejun", "An Sohui", "Lee Seojin",
+    "Kang Uhyeon", "Song Jaehun", "Lee Jio", "Kim Jaehun", "Im Seongjin", "Park Jiho", "Jo Junho", "Kim Gyumin",
+    "Seo Yeongbin", "Kim Hyeri", "Park Suhyeon", "Park Minsu",
   ],
 };
 
@@ -47,12 +47,12 @@ async function main() {
   for (const g of GAMES) {
     await prisma.game.upsert({
       where: { id: g.id },
-      update: { name: g.name }, // 이름만 동기화, is_active 는 운영 값 보존
+      update: { name: g.name }, // sync only the name, preserve the operational is_active value
       create: { id: g.id, name: g.name, isActive: true },
     });
   }
 
-  // 분반 + 멤버 로스터
+  // Classes + member roster
   let userCount = 0;
   for (const [groupName, members] of Object.entries(ROSTER)) {
     const group = await prisma.userGroup.upsert({
@@ -63,17 +63,17 @@ async function main() {
     for (const nickname of members) {
       await prisma.appUser.upsert({
         where: { groupId_nickname: { groupId: group.id, nickname } },
-        update: { deletedAt: null }, // soft-delete 됐던 멤버도 로스터에 있으면 복구
+        update: { deletedAt: null }, // restore a soft-deleted member if they are in the roster
         create: { nickname, groupId: group.id },
       });
       userCount += 1;
     }
   }
 
-  // 점수 설정: 항상 단일 행(id=1). 승3 / 무1 / 패0 기본값.
+  // Scoring settings: always a single row (id=1). Defaults Win 3 / Draw 1 / Loss 0.
   await prisma.scoreConfig.upsert({
     where: { id: 1 },
-    update: {}, // 이미 있으면 admin 이 바꿔놓은 값 보존 (덮어쓰지 않음)
+    update: {}, // if it already exists, preserve the value the admin set (do not overwrite)
     create: { id: 1, winPoints: 3, drawPoints: 1, lossPoints: 0 },
   });
 
@@ -84,14 +84,14 @@ async function main() {
     prisma.scoreConfig.count(),
   ]);
   console.log(
-    `✅ Seed 완료 — game ${games}행, user_group ${groups}행, app_user ${users}행(로스터 ${userCount}명), score_config ${cfg}행`,
+    `✅ Seed done — game ${games} rows, user_group ${groups} rows, app_user ${users} rows (roster ${userCount} members), score_config ${cfg} rows`,
   );
 }
 
 main()
   .then(() => prisma.$disconnect())
   .catch(async (e) => {
-    console.error("❌ Seed 실패:", e);
+    console.error("❌ Seed failed:", e);
     await prisma.$disconnect();
     process.exit(1);
   });

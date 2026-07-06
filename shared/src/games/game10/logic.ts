@@ -2,30 +2,30 @@ import type { GameInputEvent, GameResult } from '../types'
 import { GAME_DURATION } from '../types'
 
 /**
- * 게임10 = 줄다리기(Tug of War) · 교대 연타.
- *  · 밧줄 중앙 마커 pos ∈ [-1, 1]. -1=P1 완승선(왼쪽), +1=P2 완승선(오른쪽).
- *  · 각 플레이어는 자기 두 키를 '교대로' 눌러야 당긴다.
- *      P1: Q↔W 번갈아,  P2: U↔I 번갈아. 같은 키 연타는 무효(직전과 다른 키만 인정).
- *  · 유효 당김 1회 = PULL 만큼 자기 쪽으로. 아무도 안 당기면 SPRING으로 서서히 중앙 복귀.
- *  · 마커가 완승선(±1)에 닿으면 즉시 승리. 10초 종료 시 마커가 있는 쪽이 승(정중앙 DRAW).
+ * Game 10 = Tug of War · alternating mashing.
+ *  · Rope center marker pos ∈ [-1, 1]. -1 = P1 win line (left), +1 = P2 win line (right).
+ *  · Each player must press their two keys 'alternately' to pull.
+ *      P1: alternate Q↔W,  P2: alternate U↔I. Mashing the same key is void (only a key different from the previous one counts).
+ *  · One valid pull = PULL toward your side. If no one pulls, the SPRING slowly returns it to center.
+ *  · When the marker touches a win line (±1) it's an instant win. When the 10s runs out, the side the marker is on wins (dead center is a DRAW).
  */
 export const G10 = {
   W: 800,
   H: 450,
-  /** 유효 교대 입력 1회당 당기는 정규화 거리 */
+  /** Normalized distance pulled per valid alternating input */
   PULL: 0.045,
-  /** 중앙 복귀 스프링 계수(초당) */
+  /** Center-return spring coefficient (per second) */
   SPRING: 0.55,
-  /** 완승 경계 */
+  /** Win boundary */
   WIN_AT: 1,
-  /** 당김 피드백 플래시 시간 */
+  /** Pull feedback flash duration */
   FLASH: 0.12,
 } as const
 
 export interface Game10State {
   elapsed: number
   result: GameResult
-  /** [-1,1], 음수=P1 우세 */
+  /** [-1,1], negative = P1 leading */
   pos: number
   p1LastKey: 'KeyQ' | 'KeyW' | null
   p2LastKey: 'KeyU' | 'KeyI' | null
@@ -60,7 +60,7 @@ export function step(state: Game10State, events: GameInputEvent[], dt: number): 
   for (const e of events) {
     if (e.type !== 'down') continue
     if (e.code === 'KeyQ' || e.code === 'KeyW') {
-      // 직전과 다른 키일 때만 유효(교대 강제)
+      // Only valid when the key differs from the previous one (enforces alternation)
       if (e.code !== state.p1LastKey) {
         state.p1LastKey = e.code
         state.pos -= G10.PULL
@@ -77,11 +77,11 @@ export function step(state: Game10State, events: GameInputEvent[], dt: number): 
     }
   }
 
-  // 중앙 복귀 스프링
+  // Center-return spring
   state.pos += -state.pos * G10.SPRING * dt
   state.pos = clamp(state.pos, -1.2, 1.2)
 
-  // 완승 판정
+  // Win check
   if (state.pos <= -G10.WIN_AT) {
     state.result = 'P1'
     return state

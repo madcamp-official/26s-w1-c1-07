@@ -1,11 +1,11 @@
--- game_match 스키마 보정 (docs/AUTH.md §4 참고)
--- 원인: 0_init 마이그레이션이 ERD v1 초안(game_id + player1/2_id + P1_WIN enum) 기준으로 생성된 뒤
---       schema.prisma 가 슬롯 모델(player_a/b_id + A_WIN enum + game_round 분리)로 바뀌었는데
---       마이그레이션이 재생성되지 않아 DB와 Prisma 클라이언트가 어긋났다.
---       → 지금까지 persistMatch()가 P2022(컬럼 없음)로 전부 실패했고, 에러는 match.ts에서 무시됨
---         (온라인 매치가 DB에 한 건도 저장되지 않던 버그의 근본 원인).
+-- game_match schema fix (see docs/AUTH.md §4)
+-- Cause: the 0_init migration was generated against the ERD v1 draft (game_id + player1/2_id + P1_WIN enum),
+--       but then schema.prisma changed to the slot model (player_a/b_id + A_WIN enum + separate game_round),
+--       and the migration was never regenerated, so the DB and the Prisma client drifted apart.
+--       → Until now persistMatch() failed every time with P2022 (missing column), and the error was swallowed in match.ts
+--         (the root cause of the bug where not a single online match was ever saved to the DB).
 
--- 구버전 구조의 기존 행은 신뢰할 수 없는 테스트 데이터 — 비우고 시작 (FK/NOT NULL 추가 충돌 방지)
+-- Existing rows in the old structure are untrustworthy test data — wipe and start fresh (avoids FK/NOT NULL add conflicts)
 DELETE FROM `match_edit_history`;
 DELETE FROM `game_match`;
 

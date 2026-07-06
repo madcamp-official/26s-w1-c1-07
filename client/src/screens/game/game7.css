@@ -1,7 +1,7 @@
 /**
- * 게임8 · 마그마 총격 듀얼 전용 스타일 (game7 에이전트 소유).
- * 공용 theme.css 유틸(글로우 공식·CRT 베젤·vanish-grid·폰트) 위에 레이아웃만 얹는다.
- * 토큰/글로우는 PLAN §1 준수. design-lab 참조·import 없음.
+ * Game 8 · Magma Gunfight Duel-specific styles (owned by the game7 agent).
+ * On top of the shared theme.css utilities (glow formula · CRT bezel · vanish-grid · fonts) only layout is layered.
+ * Tokens/glow follow PLAN §1. No design-lab references or imports.
  */
 
 .g7-screen {
@@ -31,10 +31,10 @@
   width: min(1020px, 100%);
 }
 
-/* CRT 스테이지 — 베젤은 theme.css .crt-bezel, 여기선 크기만.
-   세 번째 항: 뷰포트 높이 기반 캡(하단 키캡 잘림 방지).
-   상하 고정 크롬(topbar+HUD+키캡+gap+padding) ≈ 310px, 베젤 테두리 28px,
-   캔버스 16:9 → 스테이지 폭 ≤ (100vh − 크롬) × 16/9 + 28px */
+/* CRT stage — the bezel comes from theme.css .crt-bezel, here only the size.
+   Third term: a viewport-height-based cap (prevents the bottom keycaps from being clipped).
+   Fixed top/bottom chrome (topbar+HUD+keycaps+gap+padding) ≈ 310px, bezel border 28px,
+   canvas 16:9 → stage width ≤ (100vh − chrome) × 16/9 + 28px */
 .g7-stage {
   width: min(1020px, 100%, calc((100vh - 310px) * 16 / 9 + 28px));
 }
@@ -45,7 +45,7 @@
   aspect-ratio: 16 / 9;
 }
 
-/* ─── 위험 안내 배지(좌상단, 무발광 캡션 — 발광요소 예산 밖) ─── */
+/* ─── Hazard warning badge (top-left, non-glowing caption — outside the glow-element budget) ─── */
 .g7-hazard {
   position: absolute;
   top: 10px;
@@ -71,7 +71,7 @@
   color: var(--accent);
 }
 
-/* ─── 라운드 인트로 — sign-on 플리커 후 소등(steps, fade 금지 §1.4) ─── */
+/* ─── Round intro — sign-on flicker then blackout (steps, no fade §1.4) ─── */
 .g7-round-intro {
   position: absolute;
   inset: 0;
@@ -109,11 +109,11 @@
 @media (prefers-reduced-motion: reduce) {
   .g7-round-intro {
     animation: none;
-    opacity: 0; /* HUD의 ROUND n/m 캡션이 정보 정본 — 인트로는 장식이라 생략 */
+    opacity: 0; /* the HUD's ROUND n/m caption is the source of truth — the intro is decorative, so it is omitted */
   }
 }
 
-/* ─── 하단 키캡 열 — 좌 P1(시안) / 우 P2(핑크), 실제 배정 키 표기(SPEC Q2) ─── */
+/* ─── Bottom keycap row — left P1 (cyan) / right P2 (pink), showing the actual assigned keys (SPEC Q2) ─── */
 .g7-keys {
   width: min(1020px, 100%);
   display: flex;

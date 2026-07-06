@@ -1,4 +1,4 @@
-/* Button / CoinButton 스타일 (아키텍트 소유) — PLAN §1.5 + §1.4 호버 플리커 */
+/* Button / CoinButton styles (owned by the architect) — PLAN §1.5 + §1.4 hover flicker */
 
 .nc-btn {
   --btn-color: var(--p1);
@@ -9,7 +9,7 @@
   padding: 12px 26px;
   background: var(--surface);
   border: 2px solid var(--btn-color);
-  border-radius: 0; /* 각진 사각 (§1.3) */
+  border-radius: 0; /* sharp square (§1.3) */
   color: var(--btn-color);
   font-size: 16px;
   letter-spacing: 0.06em;
@@ -39,7 +39,7 @@
   padding: 8px 14px;
 }
 
-/* 호버 플리커: 80ms 1회 플리커 후 밝기 1.4배 유지 (§1.4) */
+/* hover flicker: one 80ms flicker, then hold brightness at 1.4x (§1.4) */
 @keyframes btn-flicker {
   0% { filter: brightness(1.4); }
   49% { filter: brightness(1.4); }
@@ -60,7 +60,7 @@
   filter: none;
 }
 
-/* press: 글로우 소멸 + 안쪽으로 눌린 톤 120ms (§1.4) */
+/* press: glow fades out + inward pressed tone for 120ms (§1.4) */
 .nc-btn:active:not(:disabled) {
   background: var(--surface-deep);
   box-shadow: none;
@@ -91,7 +91,7 @@
   line-height: 1;
 }
 
-/* ---- CoinButton: 원형 네온 링 (§1.5) ---- */
+/* ---- CoinButton: circular neon ring (§1.5) ---- */
 .nc-coinbtn {
   --ring-color: var(--accent2);
   display: inline-flex;
@@ -101,13 +101,13 @@
   height: 44px;
   flex: none;
   border-radius: 0;
-  background: transparent; /* 원 배경 제거 */
-  border: none; /* 바깥 동그라미(링) 제거 */
+  background: transparent; /* remove the circular background */
+  border: none; /* remove the outer circle (ring) */
   color: var(--ring-color);
-  font-size: 30px; /* 톱니 글리프 확대 (18→30) */
+  font-size: 30px; /* enlarge the gear glyph (18→30) */
   line-height: 1;
   text-shadow:
-    /* 링 대신 글리프 자체에 네온 글로우 */
+    /* neon glow on the glyph itself instead of a ring */
     0 0 6px var(--ring-color),
     0 0 16px color-mix(in srgb, var(--ring-color) 55%, transparent);
 }

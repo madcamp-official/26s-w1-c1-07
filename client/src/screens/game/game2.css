@@ -1,10 +1,10 @@
 /**
- * S12 게임3 — 펜싱 전용 스타일 (game2 에이전트 소유).
- * PLAN §2-S12 + §3.3 "그리드 피스트와 와이어프레임 바다".
- * 공용 theme.css 토큰/유틸만 참조 — 공용 파일은 건드리지 않는다.
+ * S12 Game 3 — Tide Fencing-only styles (owned by the game2 agent).
+ * PLAN §2-S12 + §3.3 "grid piste and wireframe sea".
+ * Reference only the shared theme.css tokens/utilities — do not touch shared files.
  */
 
-/* ---------------------------------------------------------------- 레이아웃 */
+/* ---------------------------------------------------------------- layout */
 .g2-root {
   min-height: 100vh;
   position: relative;
@@ -35,7 +35,7 @@
   min-width: 0;
 }
 
-/* ---------------------------------------------------------------- 스테이지 */
+/* ---------------------------------------------------------------- stage */
 .g2-stage {
   position: relative;
   flex: 1;
@@ -45,14 +45,14 @@
 .g2-arena {
   position: absolute;
   inset: 0;
-  /* 플랫폼 상판의 y (바닥 기준) — 검객 발 위치 계산의 정본 */
+  /* the y of the platform's top surface (relative to the floor) — source of truth for computing the fencer's foot position */
   --deck-bottom: 15%;
   --deck-height: 24%;
   --sea-w: 14%;
   --plat-w: 72%;
 }
 
-/* 승패 순간 글리치 — 크로마틱 어버레이션 1~2프레임 (§1.4) */
+/* win/loss-moment glitch — chromatic aberration for 1~2 frames (§1.4) */
 @keyframes g2-glitch {
   0%, 34% {
     filter: drop-shadow(2px 0 var(--p1)) drop-shadow(-2px 0 var(--p2));
@@ -68,7 +68,7 @@
   animation: g2-glitch 240ms steps(2, end) both;
 }
 
-/* ---------------------------------------------------------------- 틱 미터 (1초 판정 진행) */
+/* ---------------------------------------------------------------- tick meter (1-second judgment progress) */
 .g2-tickmeter {
   position: absolute;
   top: 10px;
@@ -101,7 +101,7 @@
   border-color: var(--accent2);
 }
 
-/* ---------------------------------------------------------------- 남은 칸 램프 (프로필 아래 병기 — §3.3) */
+/* ---------------------------------------------------------------- remaining-cell lamps (shown alongside, below the profile — §3.3) */
 @keyframes g2-safe-flick {
   0% { opacity: 0; }
   19% { opacity: 0; }
@@ -138,7 +138,7 @@
   flex-direction: row-reverse;
 }
 
-/* ---------------------------------------------------------------- 바다 (와이어프레임 파도) */
+/* ---------------------------------------------------------------- sea (wireframe waves) */
 .g2-sea {
   position: absolute;
   bottom: 9%;
@@ -163,7 +163,7 @@
   vector-effect: non-scaling-stroke;
 }
 
-/* steps(2)로 어긋나게 출렁 (§3.3) */
+/* sway offset via steps(2) (§3.3) */
 @keyframes g2-wave-a {
   0%, 49% { transform: translateX(0); }
   50%, 100% { transform: translateX(6px); }
@@ -178,7 +178,7 @@
 .g2-wave--2 { opacity: 0.4; animation: g2-wave-b 1.5s steps(2, end) infinite; }
 .g2-wave--3 { opacity: 0.2; animation: g2-wave-a 1.9s steps(2, end) infinite; }
 
-/* 링아웃 스플래시 — 시안 라인 방사 (§3.3) */
+/* ring-out splash — radiating cyan lines (§3.3) */
 @keyframes g2-splash-ray {
   0% { height: 0; opacity: 0; }
   10% { height: 26px; opacity: 1; }
@@ -206,7 +206,7 @@
   animation: g2-splash-ray 700ms steps(4, end) both;
 }
 
-/* ---------------------------------------------------------------- 플랫폼 (그리드 피스트) */
+/* ---------------------------------------------------------------- platform (grid piste) */
 .g2-deck {
   position: absolute;
   left: var(--sea-w);
@@ -229,7 +229,7 @@
   height: 34px;
   border: 1px solid var(--hairline);
   border-bottom: none;
-  /* 소실점 그리드 질감의 발광 상판 (§3.3) */
+  /* glowing top surface with a vanishing-point grid texture (§3.3) */
   background:
     repeating-linear-gradient(
       to bottom,
@@ -257,7 +257,7 @@
   border-right: none;
 }
 
-/* 끝단 칸 — "여기서 떨어지면 끝" 즉독 (§3.3) */
+/* edge cell — instantly reads as "fall off here and it's over" (§3.3) */
 .g2-cell--edge {
   box-shadow: inset 0 0 0 1px var(--error);
   animation: hard-blink 1s steps(1, end) infinite;
@@ -283,7 +283,7 @@
   box-shadow: 0 0 6px var(--p2);
 }
 
-/* 옆면 — #000 (§3.3) */
+/* side face — #000 (§3.3) */
 .g2-deck-face {
   flex: 1;
   background: #000;
@@ -291,14 +291,14 @@
   border-top: none;
 }
 
-/* ---------------------------------------------------------------- 검객 */
+/* ---------------------------------------------------------------- fencer */
 .g2-fighter {
   position: absolute;
   bottom: calc(var(--deck-bottom) + var(--deck-height) - 2px);
   width: 96px;
   height: 108px;
-  margin-left: -48px; /* left = 칸 중심 */
-  transition: left 120ms steps(2, end); /* 1칸 하드 스텝 후퇴 (§3.3) */
+  margin-left: -48px; /* left = cell center */
+  transition: left 120ms steps(2, end); /* one-cell hard-step retreat (§3.3) */
   pointer-events: none;
 }
 
@@ -316,7 +316,7 @@
   filter: drop-shadow(0 0 4px currentColor);
 }
 
-/* 우측 검객은 좌우 반전 */
+/* the right-side fencer is horizontally flipped */
 .g2-fighter--p2 .g2-fencer {
   transform: scaleX(-1);
 }
@@ -326,7 +326,7 @@
   stroke: none;
 }
 
-/* 중립 겨눔 — 느린 idle 미세 흔들림 (§3.3) */
+/* neutral guard — slow idle micro-sway (§3.3) */
 @keyframes g2-idle {
   0%, 49% { transform: translateY(0); }
   50%, 100% { transform: translateY(1.5px); }
@@ -337,10 +337,10 @@
 }
 
 .g2-fighter--p2 .g2-fencer--neutral g {
-  animation-duration: 1.9s; /* 양쪽 위상 어긋나게 */
+  animation-duration: 1.9s; /* offset the two sides' phases */
 }
 
-/* 링아웃 낙하 — 스텝 프레임 회전 낙하 (§3.3) */
+/* ring-out fall — stepped-frame rotating fall (§3.3) */
 @keyframes g2-fall {
   0% { transform: rotate(0) translateY(0); opacity: 1; }
   33% { transform: rotate(40deg) translateY(24px); opacity: 1; }
@@ -353,7 +353,7 @@
   animation: g2-fall 900ms steps(3, end) both;
 }
 
-/* ---------------------------------------------------------------- 행동 칩 (머리 위 동시 공개) */
+/* ---------------------------------------------------------------- action chips (revealed simultaneously above the head) */
 @keyframes g2-chip-show {
   0% { opacity: 1; }
   87% { opacity: 1; }
@@ -376,10 +376,10 @@
 }
 
 .g2-chip--hold {
-  animation: none; /* 라운드 종료 순간의 칩은 유지 */
+  animation: none; /* the chip at the round-end moment is kept */
 }
 
-/* 발밑 스파크 2개 (§3.3) */
+/* two sparks at the feet (§3.3) */
 @keyframes g2-spark {
   0% { transform: translate(0, 0); opacity: 1; }
   100% { transform: translate(var(--sx), -14px); opacity: 0; }
@@ -405,7 +405,7 @@
 .g2-sparks i:nth-child(1) { --sx: -16px; }
 .g2-sparks i:nth-child(2) { --sx: 16px; }
 
-/* ---------------------------------------------------------------- 판정 캡션 */
+/* ---------------------------------------------------------------- judgment caption */
 @keyframes g2-callout-show {
   0% { opacity: 1; }
   84% { opacity: 1; }
@@ -427,7 +427,7 @@
   color: var(--text);
 }
 
-/* 라운드 종료 대형 캡션 (RING OUT! / TIME UP!) */
+/* large round-end caption (RING OUT! / TIME UP!) */
 .g2-endcap {
   position: absolute;
   top: 26%;
@@ -438,7 +438,7 @@
   pointer-events: none;
 }
 
-/* 라운드 시작 사인 (FIGHT!) — 점등 후 소등, 게임 비차단 */
+/* round-start sign (FIGHT!) — lights up then out, does not block the game */
 @keyframes g2-intro-show {
   0% { opacity: 0; }
   9% { opacity: 0; }
@@ -462,7 +462,7 @@
   animation: g2-intro-show 1600ms steps(1, end) both;
 }
 
-/* ---------------------------------------------------------------- 하단 컨트롤 (키캡 + 스탠스) */
+/* ---------------------------------------------------------------- bottom controls (keycaps + stance) */
 .g2-controls {
   display: flex;
   align-items: flex-start;
@@ -504,7 +504,7 @@
   text-align: center;
 }
 
-/* ---------------------------------------------------------------- 모션 축소 대응 */
+/* ---------------------------------------------------------------- reduced-motion handling */
 @media (prefers-reduced-motion: reduce) {
   .g2-arena--glitch,
   .g2-safe,
@@ -537,19 +537,19 @@
 }
 
 
-/* ── 새 메커니즘 UI (로직 포팅) ── */
+/* ── new mechanic UI (logic port) ── */
 
 /* ============================================================
-   게임3 — 실시간 넉백 코어용 추가 UI (neon-coinop 톤 유지, 새 요소 전용).
-   기존 클래스 재정의 없음 — g3a-* 신규 + g2-fighter 실시간 모디파이어만.
+   Game 3 — additional UI for the real-time knockback core (keeps the neon-coinop tone, for new elements only).
+   No redefinition of existing classes — only new g3a-* + g2-fighter real-time modifiers.
    ============================================================ */
 
-/* 실시간 이동: 넉백 점프를 부드럽게 (1초 틱 하드스텝 → 실시간 선형) */
+/* real-time movement: smooth the knockback jump (1-second tick hard-step → real-time linear) */
 .g2-fighter.g2-fighter--rt {
   transition: left 110ms linear;
 }
 
-/* ---------------------------------------------------------------- 우세 미터(momentum) */
+/* ---------------------------------------------------------------- advantage meter (momentum) */
 .g3a-advbar {
   position: absolute;
   top: 10px;
@@ -610,7 +610,7 @@
   letter-spacing: 0.04em;
 }
 
-/* ---------------------------------------------------------------- 밀물(TIDE): 안쪽으로 차오르는 물 */
+/* ---------------------------------------------------------------- rising tide (TIDE): water rising inward */
 .g3a-tide {
   position: absolute;
   bottom: calc(var(--deck-bottom) + var(--deck-height) - 34px);
@@ -634,7 +634,7 @@
   right: var(--sea-w);
 }
 
-/* ---------------------------------------------------------------- 판정 플래시 (HIT/PARRY/WHIFF) */
+/* ---------------------------------------------------------------- judgment flash (HIT/PARRY/WHIFF) */
 @keyframes g3a-flash-show {
   0% { opacity: 0; transform: translate(-50%, 8px) scale(0.8); }
   14% { opacity: 1; transform: translate(-50%, 0) scale(1.08); }
@@ -653,7 +653,7 @@
   animation: g3a-flash-show 850ms ease-out both;
 }
 
-/* ---------------------------------------------------------------- 콤보 배지 (검객 머리 위) */
+/* ---------------------------------------------------------------- combo badge (above the fencer's head) */
 .g3a-combo {
   position: absolute;
   top: -44px;
@@ -669,7 +669,7 @@
   box-shadow: 0 0 6px currentColor;
 }
 
-/* ---------------------------------------------------------------- 리포스트 준비 (성공 패링 직후 반격창) */
+/* ---------------------------------------------------------------- riposte ready (counterattack window right after a successful parry) */
 .g3a-rip-badge {
   position: absolute;
   top: -60px;
@@ -686,7 +686,7 @@
   filter: drop-shadow(0 0 3px currentColor) drop-shadow(0 0 8px var(--accent));
 }
 
-/* ---------------------------------------------------------------- 모션 축소 대응 (신규 요소) */
+/* ---------------------------------------------------------------- reduced-motion handling (new elements) */
 @media (prefers-reduced-motion: reduce) {
   .g2-fighter.g2-fighter--rt {
     transition: none;

@@ -1,100 +1,100 @@
 # 26s-w1-c1-07
 
-## 공통과제 I : 웹 기반 프로젝트 (2인 1팀)
+## Common Assignment I: Web-based Project (teams of 2)
 
-**목적:** 공통 과제를 함께 수행하며 웹 개발의 전체 흐름을 빠르게 익히고 협업에 적응하기
+**Goal:** Work through a common assignment together to quickly learn the full flow of web development and adapt to collaboration
 
-**결과물:** 기획부터 배포까지 완료된 웹 서비스와 관련 문서 일체
+**Deliverables:** A web service completed from planning through deployment, plus all related documents
 
 ---
 
-## 팀원
+## Team
 
-| 이름 | GitHub | 역할 |
+| Name | GitHub | Role |
 |---|---|---|
-| 박준서 | bjsbest |  |
-| 이종혁 | jonghklee |  |
+| Park Junseo | bjsbest |  |
+| Lee Jonghyeok | jonghklee |  |
 
 ---
 
-## 기획안
+## Proposal
 
-> 프로젝트 주제, 목적, 핵심 기능, 예상 사용자, 팀원별 역할 등 정리
+> Summarize the project topic, goal, core features, expected users, per-member roles, etc.
 
-- **주제:**
-- **목적:**
-- **핵심 기능:**
-- **예상 사용자:**
+- **Topic:**
+- **Goal:**
+- **Core features:**
+- **Expected users:**
 
 ---
 
-## 기능 명세서
+## Feature Specification
 
-> 구현할 기능을 사용자 관점에서 정리하고, 필수 기능과 선택 기능을 구분
+> Organize the features to implement from the user's perspective, and distinguish required from optional features
 
-### 필수 기능
+### Required features
 
 - [ ]
 
-### 선택 기능
+### Optional features
 
 - [ ]
 
 ---
 
-## IA 및 화면 설계서
+## IA and Screen Design
 
-> 서비스의 전체 페이지 구조와 페이지 간 이동 흐름; 각 페이지의 주요 UI 구성, 입력 요소, 버튼, 사용자 행동 흐름 등을 간단한 와이어프레임 형태로 정리
+> The overall page structure of the service and the navigation flow between pages; summarize each page's main UI composition, input elements, buttons, and user action flow as a simple wireframe
 
-<!-- Figma 링크 또는 이미지 첨부 -->
+<!-- Attach a Figma link or image -->
 
 ---
 
-## DB 스키마
+## DB Schema
 
-> 필요한 테이블, 주요 필드, 데이터 타입, 테이블 간 관계를 정리
+> Summarize the needed tables, main fields, data types, and relationships between tables
 
-- **엔진/구성**: MySQL 8 (KAIST VM 내부 `localhost:3306`, `utf8mb4`), Prisma로 관리.
-- **테이블 7개**: `user_group`(분반) · `app_user`(구글 유저) · `admin_account`(관리자) · `game`(게임 사전) · `game_match`(매치 결과) · `match_edit_history`(수정 감사) · `score_config`(점수 설정).
-- **핵심 규칙**: 온라인 매치만 기록 · soft delete(`deleted_at`) · 점수/랭킹은 저장 안 하고 조회 시 집계 · 매치 결과는 `ENUM('P1_WIN','P2_WIN','DRAW')`.
+- **Engine/setup**: MySQL 8 (inside the KAIST VM at `localhost:3306`, `utf8mb4`), managed with Prisma.
+- **7 tables**: `user_group` (class) · `app_user` (Google user) · `admin_account` (admin) · `game` (game dictionary) · `game_match` (match result) · `match_edit_history` (edit audit) · `score_config` (score settings).
+- **Core rules**: record online matches only · soft delete (`deleted_at`) · scores/rankings are not stored but aggregated at query time · match result is `ENUM('P1_WIN','P2_WIN','DRAW')`.
 
-📄 상세: **[docs/DATABASE.md](docs/DATABASE.md)** (구현·접속·조회) · **[docs/ERD.md](docs/ERD.md)** (설계 정본·근거)
+📄 Details: **[docs/DATABASE.md](docs/DATABASE.md)** (implementation, access, queries) · **[docs/ERD.md](docs/ERD.md)** (canonical design, rationale)
 
 ```bash
-# 스키마 적용 + 시드 (SSH 터널로 VM DB 사용 시)
-ssh -N -L 3306:localhost:3306 kaistvm &        # 터널
+# Apply schema + seed (when using the VM DB via SSH tunnel)
+ssh -N -L 3306:localhost:3306 kaistvm &        # tunnel
 npm --workspace @madpump/server run migrate:deploy
 npm --workspace @madpump/server run db:seed
 ```
 
 ---
 
-## API 문서
+## API Documentation
 
-> API 주소, 요청 방식, 요청값, 응답값, 에러 상황을 정리
+> Summarize the API address, request method, request values, response values, and error cases
 
-| Method | Endpoint | 설명 | 요청 | 응답 |
+| Method | Endpoint | Description | Request | Response |
 |---|---|---|---|---|
 |  |  |  |  |  |
 
 ---
 
-## 배포 결과물
+## Deployment Deliverable
 
-> 접속 가능한 링크, 실행 방법, 주요 구현 내용
+> An accessible link, how to run it, and the main implementation details
 
-- **서비스 URL:**
-- **실행 방법:**
+- **Service URL:**
+- **How to run:**
 
 ```bash
-# 실행 방법 작성
+# Write how to run it here
 ```
 
 ---
 
-## 회고 문서
+## Retrospective
 
-> 개발 과정에서의 어려움, 해결 방법, 역할 분담, 다음에 개선할 점 (KPT 방법론 참고)
+> Difficulties during development, how they were solved, role distribution, and what to improve next time (see the KPT methodology)
 
 ### Keep
 
@@ -104,15 +104,15 @@ npm --workspace @madpump/server run db:seed
 
 ---
 
-## 참고 자료
+## References
 
-- [SDD(스펙 주도 개발) 이해하기](https://news.hada.io/topic?id=21338)
+- [Understanding SDD (Spec-Driven Development)](https://news.hada.io/topic?id=21338)
 - [Software Design Document Best Practices](https://www.atlassian.com/work-management/project-management/design-document)
-- [IA 정보구조도 작성 방법](https://brunch.co.kr/@nyonyo/7)
-- [기획자 화면설계서 작성법](https://brunch.co.kr/@soup/10)
-- [Figma 와이어프레임 가이드](https://www.figma.com/ko-kr/resource-library/what-is-wireframing/)
-- [무료 Figma 와이어프레임 키트](https://www.figma.com/ko-kr/templates/wireframe-kits/)
-- [ERD/DB 설계 총정리](https://inpa.tistory.com/entry/DB-%F0%9F%93%9A-%EB%8D%B0%EC%9D%B4%ED%84%B0-%EB%AA%A8%EB%8D%B8%EB%A7%81-%EA%B0%9C%EB%85%90-ERD-%EB%8B%A4%EC%9D%B4%EC%96%B4%EA%B7%B8%EB%9E%A8)
-- [API 명세서 작성 가이드라인](https://velog.io/@sebinChu/BackEnd-API-%EB%AA%85%EC%84%B8%EC%84%9C-%EC%9E%91%EC%84%B1-%EA%B0%80%EC%9D%B4%EB%93%9C-%EB%9D%BC%EC%9D%B8)
-- [좋은 README 작성하는 방법](https://velog.io/@sabo/good-readme)
-- [단기 프로젝트 회고 KPT 방법론](https://velog.io/@habwa/%EB%8B%A8%EA%B8%B0-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%ED%9A%8C%EA%B3%A0-KPT-%EB%B0%A9%EB%B2%95%EB%A1%A0)
+- [How to write an IA information architecture diagram](https://brunch.co.kr/@nyonyo/7)
+- [How a planner writes a screen design document](https://brunch.co.kr/@soup/10)
+- [Figma wireframe guide](https://www.figma.com/ko-kr/resource-library/what-is-wireframing/)
+- [Free Figma wireframe kit](https://www.figma.com/ko-kr/templates/wireframe-kits/)
+- [ERD/DB design roundup](https://inpa.tistory.com/entry/DB-%F0%9F%93%9A-%EB%8D%B0%EC%9D%B4%ED%84%B0-%EB%AA%A8%EB%8D%B8%EB%A7%81-%EA%B0%9C%EB%85%90-ERD-%EB%8B%A4%EC%9D%B4%EC%96%B4%EA%B7%B8%EB%9E%A8)
+- [API specification writing guidelines](https://velog.io/@sebinChu/BackEnd-API-%EB%AA%85%EC%84%B8%EC%84%9C-%EC%9E%91%EC%84%B1-%EA%B0%80%EC%9D%B4%EB%93%9C-%EB%9D%BC%EC%9D%B8)
+- [How to write a good README](https://velog.io/@sabo/good-readme)
+- [Short-project retrospective KPT methodology](https://velog.io/@habwa/%EB%8B%A8%EA%B8%B0-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%ED%9A%8C%EA%B3%A0-KPT-%EB%B0%A9%EB%B2%95%EB%A1%A0)

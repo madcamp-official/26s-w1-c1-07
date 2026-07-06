@@ -1,16 +1,16 @@
-# 지금 누가 뭘 하는지 (now)
+# Who is doing what right now (now)
 
-> 작업 **시작 전** 여기에 자기 줄 추가/갱신, 끝나면 지우거나 완료 표시.
-> 여럿(사람+여러 AI)이 같은 main을 만지므로 충돌·중복 방지용. 작업 전 `git pull` 필수.
+> **Before starting** work, add/update your own line here; when done, delete it or mark it complete.
+> Since several (people + multiple AIs) touch the same main, this prevents conflicts/duplication. `git pull` is required before working.
 
-## 현재 활성
-- (없음 — 자유롭게 추가)
+## Currently active
+- (none — feel free to add)
 
-## 최근 마무리
-- 종혁-AI(Claude): 온라인 조작 UI 역할반영 + 색 매치당 고정 + 60Hz 틱 + 배포스크립트/컨텍스트 문서 → 완료·푸시.
-- 팀원-AI: 구글 OAuth 로그인 + 분반 리더보드 → 완료·푸시(commit 21c8f5c).
+## Recently finished
+- Jonghyeok-AI (Claude): online control UI role reflection + color fixed per match + 60Hz tick + deploy script/context docs → done, pushed.
+- Teammate-AI: Google OAuth login + class leaderboard → done, pushed (commit 21c8f5c).
 
-## 형식 예시
+## Format example
 ```
-- <이름>-AI: <무슨 파일/기능> 작업중 (YYYY-MM-DD 시작)
+- <name>-AI: <what file/feature> in progress (started YYYY-MM-DD)
 ```

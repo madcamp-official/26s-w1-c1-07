@@ -1,21 +1,21 @@
 /**
- * S12 게임3 — 펜싱 (scr-game2). 담당: game2 에이전트.
+ * S12 Game 3 — Fencing (scr-game2). Owner: game2 agent.
  *
- * 화면(UI/컴포넌트/CSS 클래스/연출)은 neon-coinop 시안 그대로 유지하고,
- * 게임 로직만 game-test 튜닝 코어(@madpump/shared `game2`)로 교체했다.
+ * The screen (UI/components/CSS classes/effects) is kept exactly as the neon-coinop mockup,
+ * and only the game logic is swapped for the game-test tuning core (@madpump/shared `game2`).
  *
- * 새 코어는 1초 틱 가위바위보가 아니라 "실시간 넉백 펜싱"이다:
- *   · c(-EDGE..+EDGE) = 두 검객의 클래시 위치. +쪽=P1 우세(오른쪽으로 밀림), -쪽=P2 우세.
- *   · KeyQ/KeyU=공격(랜덤 시동 후 판정), KeyW/KeyI=회피(무적창).
- *   · 회피로 막으면 공격자 넉백(PARRY), 못 막으면 피해자 넉백(HIT), 헛회피는 WHIFF 넉백.
- *   · waterLevel(밀물)로 낙사선이 안쪽으로 좁아진다. 링 밖으로 밀리면 낙사.
- *   · 10초 종료 시 c 부호로 승패, 동률 DRAW.
+ * The new core is not 1-second-tick rock-paper-scissors but "real-time knockback fencing":
+ *   · c(-EDGE..+EDGE) = clash position of the two fencers. + side = P1 advantage (pushed right), - side = P2 advantage.
+ *   · KeyQ/KeyU = attack (judged after a random windup), KeyW/KeyI = dodge (invincibility window).
+ *   · Blocking with a dodge knocks the attacker back (PARRY); failing to block knocks the victim back (HIT); a missed dodge is a WHIFF knockback.
+ *   · waterLevel (rising tide) narrows the fall line inward. Pushed off the ring = falls out.
+ *   · At the 10-second end, the sign of c decides win/loss; a tie is DRAW.
  *
- * 배선:
- *   - game2.create(Math.random) / game2.step(state, events, dt초) — 판정 재구현 금지
- *   - attachLocalKeyboard(now=라운드경과초, push) — KeyQ/W/U/I만
- *   - state.result('P1'|'P2'|'DRAW') → MatchResult 매핑 후 reportRoundEnd (라운드당 1회)
- *   - 온라인 모드: P2는 봇 — 로컬 u/i 무시, 휴리스틱 입력을 큐에 push
+ * Wiring:
+ *   - game2.create(Math.random) / game2.step(state, events, dt seconds) — do not reimplement judging
+ *   - attachLocalKeyboard(now = round elapsed seconds, push) — KeyQ/W/U/I only
+ *   - state.result('P1'|'P2'|'DRAW') → map to MatchResult then reportRoundEnd (once per round)
+ *   - Online mode: P2 is a bot — ignore local u/i, push heuristic input onto the queue
  */
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
@@ -44,15 +44,15 @@ import { isRoundIntroActive } from '../../state/roundIntroGate';
 import { sfx } from '@/audio';
 import './game2.css';
 
-// 연출 상수 (로직 비침범 — 판정은 전부 @madpump/shared 코어)
-const RINGOUT_FX_MS = 1400; // 낙하+스플래시 연출 후 결과 오버레이
-const TIMEUP_FX_MS = 1000; // TIME UP! 캡션 후 결과 오버레이
-const SAFE_SEGS = 5; // 낙사선까지 남은 여유 램프 개수
+// Effect constants (non-invasive to logic — all judging is in the @madpump/shared core)
+const RINGOUT_FX_MS = 1400; // result overlay after the fall + splash effect
+const TIMEUP_FX_MS = 1000; // result overlay after the TIME UP! caption
+const SAFE_SEGS = 5; // number of safety lamps left until the fall line
 
-// 좌표 매핑 — 아레나 데크(--sea-w 14% ~ 86%)에 pos[-EDGE..EDGE]를 얹는다.
+// Coordinate mapping — lay pos[-EDGE..EDGE] onto the arena deck (--sea-w 14% ~ 86%).
 const EDGE = G2.EDGE; // 1.0
 const HALF_GAP = G2.HALF_GAP; // 0.06
-const HALF_TRACK = 36; // %/EDGE단위 (데크폭 72% ÷ 2)
+const HALF_TRACK = 36; // in %/EDGE units (deck width 72% ÷ 2)
 
 type Pose = 'NEUTRAL' | 'ATTACK' | 'DODGE';
 
@@ -62,18 +62,18 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 const clamp01 = (v: number) => clamp(v, 0, 1);
 
 /**
- * 플레이어 색('blue'|'red') → 기존 역할 CSS 변수. 색은 플레이어 종속(역할 아님):
- * 'blue' = 기존 P1색(--p1 시안), 'red' = 기존 P2색(--p2 핑크).
+ * Player color ('blue'|'red') → existing role CSS variable. Color is player-bound (not role-bound):
+ * 'blue' = existing P1 color (--p1 cyan), 'red' = existing P2 color (--p2 pink).
  */
 const colorVar = (c: 'blue' | 'red') => (c === 'blue' ? 'var(--p1)' : 'var(--p2)');
 
-/** pos(-EDGE..EDGE) → 아레나 가로 % */
+/** pos(-EDGE..EDGE) → arena horizontal % */
 const posToPct = (pos: number) => 50 + clamp(pos, -1.14, 1.14) * HALF_TRACK;
 
-/** 현재 밀물에 따른 유효 낙사선(코어와 동일 식) */
+/** Effective fall line for the current tide (same formula as the core) */
 const effEdgeOf = (waterLevel: number) => Math.max(EDGE - waterLevel, HALF_GAP + 0.02);
 
-/** 검객 포즈 — 공격/회피 창을 짧은 시각 홀드까지 포함해 판정 */
+/** Fencer pose — judged including a short visual hold of the attack/dodge window */
 function poseOf(f: FencerState | undefined, now: number): Pose {
   if (!f || !f.attacks || !f.dodges) return 'NEUTRAL';
   let atk = -Infinity;
@@ -85,7 +85,7 @@ function poseOf(f: FencerState | undefined, now: number): Pose {
 }
 
 // ---------------------------------------------------------------------------
-// 네온 스틱 검객 (2px 스트로크 아웃라인 — §3.3) — 시안 그대로 재사용
+// Neon stick fencer (2px stroke outline — §3.3) — reused as-is from the mockup
 // ---------------------------------------------------------------------------
 
 function FencerSvg({ pose }: { pose: Pose }) {
@@ -93,7 +93,7 @@ function FencerSvg({ pose }: { pose: Pose }) {
     <svg viewBox="0 0 110 120" className={`g2-fencer g2-fencer--${pose.toLowerCase()}`} aria-hidden>
       {pose === 'ATTACK' && (
         <g>
-          {/* 런지: 전방 기울임 + 검 수평 돌출 + 검끝 광점 */}
+          {/* Lunge: forward lean + horizontal sword thrust + glowing sword tip */}
           <circle cx="52" cy="30" r="9" />
           <line x1="52" y1="39" x2="42" y2="74" />
           <line x1="42" y1="74" x2="62" y2="100" />
@@ -107,7 +107,7 @@ function FencerSvg({ pose }: { pose: Pose }) {
       )}
       {pose === 'DODGE' && (
         <g>
-          {/* 상체 후퇴 + 방패 원호 전개 */}
+          {/* Upper body retreat + shield arc deployment */}
           <circle cx="34" cy="34" r="9" />
           <line x1="34" y1="43" x2="42" y2="78" />
           <line x1="42" y1="78" x2="30" y2="102" />
@@ -120,7 +120,7 @@ function FencerSvg({ pose }: { pose: Pose }) {
       )}
       {pose === 'NEUTRAL' && (
         <g>
-          {/* 중립 겨눔 */}
+          {/* Neutral guard */}
           <circle cx="42" cy="26" r="9" />
           <line x1="42" y1="35" x2="40" y2="72" />
           <line x1="40" y1="72" x2="30" y2="100" />
@@ -136,7 +136,7 @@ function FencerSvg({ pose }: { pose: Pose }) {
 }
 
 // ---------------------------------------------------------------------------
-// 와이어프레임 바다 (시안 지그재그 2~3겹, steps 출렁 — §3.3) — 시안 그대로 재사용
+// Wireframe sea (mockup zigzag 2~3 layers, steps sway — §3.3) — reused as-is from the mockup
 // ---------------------------------------------------------------------------
 
 function zigzag(y: number): string {
@@ -165,7 +165,7 @@ function Sea({ side, splashKey }: { side: 'left' | 'right'; splashKey: number | 
 }
 
 // ---------------------------------------------------------------------------
-// 메인 화면
+// Main screen
 // ---------------------------------------------------------------------------
 
 export default function Game2() {
@@ -173,22 +173,22 @@ export default function Game2() {
   const flow = useFlow();
   const navigate = useNavigate();
 
-  // 초기 상태를 유효한 create()로 둔다(온라인 카운트다운 등 첫 서버 스냅샷 전에도 feed/p1/p2가 존재).
+  // Seed the initial state with a valid create() (feed/p1/p2 exist even before the first server snapshot, e.g. during the online countdown).
   const [game, setGame] = useState<Game2State | null>(() => game2.create(Math.random));
 
-  // SFX 전이 감지용 이전값 스냅샷(스칼라만 저장 — 코어는 동일 객체를 in-place 변경하므로
-  // 객체참조 diff가 불가하다). 오프라인 rAF step / 온라인 onSnapshot 양쪽에서 공유 호출한다.
+  // Previous-value snapshot for detecting SFX transitions (stores scalars only — the core mutates the
+  // same object in-place, so an object-reference diff isn't possible). Shared by both the offline rAF step and the online onSnapshot.
   const sfxRef = useRef({
     feedT: -Infinity,
     ripPress: { P1: -Infinity, P2: -Infinity } as Record<'P1' | 'P2', number>,
     combo: { P1: 0, P2: 0 } as Record<'P1' | 'P2', number>,
     ended: false,
   });
-  // 새 게임 상태(오프라인 next / 온라인 서버 스냅샷)마다 1회 호출 — 이전값 대비 '이번에 처음
-  // 바뀐 순간'에만 sfx를 울린다(매 프레임 스팸 금지). 부작용만 — 상태/렌더는 건드리지 않는다.
+  // Called once per new game state (offline next / online server snapshot) — rings sfx only at the moment
+  // something first changes versus the previous value (no per-frame spam). Side effects only — never touches state/render.
   const playTransitionSfx = (s: Game2State) => {
     const g = sfxRef.current;
-    // feed: parry 성공 → g2-parry, 피격 넉백(hit) → g2-knockback (whiff는 무음). t 단조증가 가드.
+    // feed: parry success → g2-parry, taking a knockback hit → g2-knockback (whiff is silent). Monotonic-t guard.
     let maxT = g.feedT;
     for (const ev of s.feed) {
       if (ev.t > g.feedT) {
@@ -198,7 +198,7 @@ export default function Game2() {
       if (ev.t > maxT) maxT = ev.t;
     }
     g.feedT = maxT;
-    // riposte(반격창) 발동 = riposte 플래그가 붙은 공격이 생성된 순간. press 단조증가 가드(플레이어별).
+    // riposte (counter window) trigger = the moment an attack with the riposte flag is created. Monotonic-press guard (per player).
     for (const name of ['P1', 'P2'] as const) {
       const f = name === 'P1' ? s.p1 : s.p2;
       let maxPress = g.ripPress[name];
@@ -208,12 +208,12 @@ export default function Game2() {
       }
       g.ripPress[name] = maxPress;
     }
-    // combo: 콤보 카운트가 증가한 순간(≥2 = 가시 COMBO 배지 기준). 나쁜 결과 시 코어가 0으로 리셋.
+    // combo: the moment the combo count increases (≥2 = threshold for the visible COMBO badge). The core resets it to 0 on a bad outcome.
     if (s.p1.combo > g.combo.P1 && s.p1.combo >= 2) sfx('g2-combo');
     if (s.p2.combo > g.combo.P2 && s.p2.combo >= 2) sfx('g2-combo');
     g.combo.P1 = s.p1.combo;
     g.combo.P2 = s.p2.combo;
-    // ringout: 링 밖 탈락 순간(1회). 시간종료(TIME UP) 승패는 전역 팡파레 담당 → 여기선 무음.
+    // ringout: the moment of a ring-out elimination (once). TIME UP win/loss is handled by the global fanfare → silent here.
     if (s.result !== null && !g.ended) {
       g.ended = true;
       const eff = effEdgeOf(s.waterLevel);
@@ -224,16 +224,16 @@ export default function Game2() {
     }
   };
 
-  // 온라인 렌더 훅(성능 구조 표준) — 활성/역할만 '선택 구독'하고 서버 스냅샷은 stateRef로 미러링한다
-  // (스토어 전체 구독/effect churn 제거). truthy(isOnline)면 로컬 시뮬/봇을 끄고 서버 상태를 렌더 +
-  // 내 입력만 전송한다. 이 화면은 canvas가 아니라 DOM/SVG를 game state로 그리므로, per-snapshot 작업
-  // (= 이 게임의 'draw')은 onSnapshot에서 setGame으로 수행한다(새 스냅샷 참조에서만 실제 리렌더).
+  // Online render hook (standard performance structure) — 'selective subscription' to only active/role, mirroring the server
+  // snapshot into stateRef (removes full-store subscription / effect churn). When truthy (isOnline), turn off the local
+  // sim/bot, render server state, and only send my input. This screen draws DOM/SVG from game state rather than canvas, so the
+  // per-snapshot work (= this game's 'draw') is done via setGame in onSnapshot (an actual re-render only on a new snapshot reference).
   const { isOnline, myRole, stateRef } = useOnlineRender<Game2State>(2, (s) => {
-    setGame(s); // 서버 권위 스냅샷을 DOM/SVG로 렌더(=draw)
+    setGame(s); // render the server-authoritative snapshot to DOM/SVG (= draw)
     setDebugGame(s);
-    playTransitionSfx(s); // 온라인: 서버 스냅샷 전이에서 액션 sfx (rAF 루프는 온라인이면 정지)
+    playTransitionSfx(s); // online: action sfx on server-snapshot transitions (the rAF loop is stopped when online)
   });
-  // 입력 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref.
+  // Ref that lets the input handler (stable closure) see the latest 'online active?' value.
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
   const queueRef = useRef<GameInputEvent[]>([]);
@@ -241,7 +241,7 @@ export default function Game2() {
   const reportTimerRef = useRef<number | null>(null);
   const botRef = useRef<{ nextAt: number } | null>(null);
 
-  // 키캡 램프 (입력 순간 80ms 점등 — §1.4)
+  // Keycap lamp (lights for 80ms at the moment of input — §1.4)
   const [litP1Atk, flashP1Atk] = useKeyLamp();
   const [litP1Dod, flashP1Dod] = useKeyLamp();
   const [litP2Atk, flashP2Atk] = useKeyLamp();
@@ -255,8 +255,8 @@ export default function Game2() {
     P2: { key1: flashP2Atk, key2: flashP2Dod },
   };
 
-  // direct-URL 복구: 매치 컨텍스트가 없으면 오프라인 게임3으로 (§3.3).
-  // 단, 실서버 온라인(online) 매치면 오프라인 flow로 오염시키지 않는다.
+  // direct-URL recovery: with no match context, fall back to offline Game 3 (§3.3).
+  // However, for a real-server online match, don't pollute it with the offline flow.
   useEffect(() => {
     if (isOnline) return;
     const f = getFlow();
@@ -264,7 +264,7 @@ export default function Game2() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 라운드 (재)시작 — currentRound 변화마다 새 @madpump/shared state 생성
+  // Round (re)start — create new @madpump/shared state on every currentRound change
   useEffect(() => {
     const f = getFlow();
     if (f.gameId !== 2 || f.currentRound < 1) return;
@@ -279,14 +279,14 @@ export default function Game2() {
       combo: { P1: 0, P2: 0 },
       ended: false,
     };
-    setGame({ ...st }); // 코어는 동일 객체를 반환하므로 clone으로 새 참조 강제(리렌더)
+    setGame({ ...st }); // the core returns the same object, so clone to force a new reference (re-render)
     setDebugGame(st);
   }, [flow.gameId, flow.currentRound]);
 
-  // 온라인(실서버) 스냅샷 미러링은 위 useOnlineRender의 onSnapshot이 담당한다(setGame=draw).
-  // 이 화면은 DOM/SVG를 game state로 렌더하므로 onSnapshot의 setGame이 곧 매 스냅샷의 "draw"다.
+  // Online (real-server) snapshot mirroring is handled by the onSnapshot of useOnlineRender above (setGame = draw).
+  // Since this screen renders DOM/SVG from game state, onSnapshot's setGame is effectively the "draw" of each snapshot.
 
-  // 키보드: KeyQ/KeyU=공격(key1), KeyW/KeyI=회피(key2). now=라운드 경과초.
+  // Keyboard: KeyQ/KeyU = attack (key1), KeyW/KeyI = dodge (key2). now = round elapsed seconds.
   useEffect(() => {
     const detach = attachLocalKeyboard(
       () => stateRef.current?.elapsed ?? 0,
@@ -295,45 +295,45 @@ export default function Game2() {
         const role: PlayerRole = isP1 ? 'P1' : 'P2';
         const key: 'key1' | 'key2' = e.code === 'KeyQ' || e.code === 'KeyU' ? 'key1' : 'key2';
 
-        // 실서버 온라인: 로컬 큐/봇을 쓰지 않고 서버로만 전송(down/up 모두).
-        // 슬롯 A=주키(Q/U), B=보조키(W/I). 내가 어느 role이든 서버가 slot으로 재기입하므로
-        // 로컬 4키(Q/W/U/I) 아무거나 눌러도 내 슬롯 입력으로 전송된다.
+        // Real-server online: don't use the local queue/bot, send to the server only (both down/up).
+        // Slot A = primary key (Q/U), B = secondary key (W/I). Whatever role I am, the server rewrites by slot, so
+        // pressing any of the local 4 keys (Q/W/U/I) is sent as my slot input.
         if (isOnlineRef.current) {
-          // 온라인은 U/I 두 키만(요구사항). U=주키(slotA), I=보조키(slotB). Q/W는 무시.
+          // Online uses only the two U/I keys (requirement). U = primary key (slotA), I = secondary key (slotB). Q/W ignored.
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
-          flashRef.current[role][key](); // 램프 점등은 유지(U/I → P2측)
-          if (e.type === 'down' && slot === 'A') sfx('g2-clash'); // 공격(U) keydown
+          flashRef.current[role][key](); // keep the lamp lit (U/I → P2 side)
+          if (e.type === 'down' && slot === 'A') sfx('g2-clash'); // attack (U) keydown
           onlineSendInput(slot, e.type, e.t ?? performance.now() / 1000);
           return;
         }
 
-        // ── 오프라인 경로(기존과 100% 동일) ──
-        if (e.type !== 'down') return; // 코어는 down만 판정
+        // ── Offline path (100% identical to before) ──
+        if (e.type !== 'down') return; // the core judges down only
         const f = getFlow();
-        // 오프라인 mock 봇 모드(flow.mode==='online')에선 P2 자리(u/i)는 봇 전용 — 로컬 키 입력 무시
+        // In offline mock bot mode (flow.mode==='online'), the P2 slot (u/i) is bot-only — ignore local key input
         if (f.mode === 'online' && role === 'P2') return;
         flashRef.current[role][key]();
         if (f.phase !== 'playing') return;
-        if (key === 'key1') sfx('g2-clash'); // 공격(Q/U) keydown — 입력 즉시 클래시음
+        if (key === 'key1') sfx('g2-clash'); // attack (Q/U) keydown — clash sound immediately on input
         queueRef.current.push(e);
       },
     );
     return detach;
   }, []);
 
-  // 게임 루프 — rAF(전경) + interval 워치독(백그라운드 탭 대비). 공유 시계(last)로 이중진행 방지.
+  // Game loop — rAF (foreground) + interval watchdog (for backgrounded tabs). A shared clock (last) prevents double-stepping.
   useEffect(() => {
-    // 온라인(실서버): 로컬 step/봇/결과보고를 돌리지 않는다.
-    // 이 화면은 canvas가 없고 DOM/SVG를 game state로 렌더 → onSnapshot의 setGame이
-    // 매 서버 스냅샷마다 리렌더(=draw)를 구동하므로 별도 draw 루프가 필요 없다.
+    // Online (real server): don't run the local step/bot/result-reporting.
+    // This screen has no canvas and renders DOM/SVG from game state → onSnapshot's setGame drives a
+    // re-render (= draw) on every server snapshot, so no separate draw loop is needed.
     if (isOnline) return;
 
     let raf = 0;
     let last = performance.now();
 
     const step = (now: number) => {
-      // 라운드 인트로 중엔 시뮬 정지(코어 step 스킵) + last 갱신으로 재개 시 dt 점프 방지
+      // During the round intro, pause the sim (skip the core step) + update last to avoid a dt jump on resume
       if (isRoundIntroActive()) {
         last = now;
         return;
@@ -344,7 +344,7 @@ export default function Game2() {
       if (!st || st.result !== null) return;
       const dt = dtMs / 1000;
 
-      // 봇(온라인 mock): 실시간 휴리스틱 — 위협(P1 임박 공격) 감지 시 회피, 아니면 확률적 공격/회피
+      // Bot (online mock): real-time heuristic — dodge when a threat (imminent P1 attack) is detected, otherwise probabilistic attack/dodge
       if (getFlow().mode === 'online') {
         const t = st.elapsed;
         if (botRef.current === null) botRef.current = { nextAt: t + 0.25 + Math.random() * 0.3 };
@@ -365,12 +365,12 @@ export default function Game2() {
       queueRef.current = [];
       const next = game2.step(st, inputs, dt);
       stateRef.current = next;
-      setGame({ ...next }); // 코어는 동일 객체를 반환 → clone으로 새 참조 강제(매 프레임 리렌더)
+      setGame({ ...next }); // the core returns the same object → clone to force a new reference (re-render every frame)
       setDebugGame(next);
-      playTransitionSfx(next); // 오프라인: 코어 step 전이에서 액션 sfx (이전값 가드로 1회씩)
+      playTransitionSfx(next); // offline: action sfx on core step transitions (once each, guarded by previous value)
 
-      // 승패 확정 → 링아웃/타임업 연출 후 라운드 결과 보고 (라운드당 1회)
-      // 온라인은 서버가 round:end 를 구동하므로 화면은 결과 보고에 관여하지 않는다.
+      // Win/loss decided → report the round result after the ring-out/time-up effect (once per round)
+      // Online: the server drives round:end, so the screen doesn't participate in result reporting.
       if (isOnlineRef.current) return;
       if (next.result !== null && !reportedRef.current) {
         reportedRef.current = true;
@@ -397,7 +397,7 @@ export default function Game2() {
     };
   }, [isOnline, myRole]);
 
-  // 언마운트 정리
+  // Unmount cleanup
   useEffect(
     () => () => {
       if (reportTimerRef.current !== null) clearTimeout(reportTimerRef.current);
@@ -406,9 +406,9 @@ export default function Game2() {
     [],
   );
 
-  // ------------------------------------------------------------------ 파생값
-  // 레거시 오프라인 mock 봇 모드(flow.mode==='online') — P2 라벨을 'CPU'로 표기.
-  // 실서버 온라인은 위쪽 useOnlineRender(3) 훅(isOnline/myRole)이 담당한다.
+  // ------------------------------------------------------------------ Derived values
+  // Legacy offline mock bot mode (flow.mode==='online') — label P2 as 'CPU'.
+  // Real-server online is handled by the useOnlineRender(3) hook above (isOnline/myRole).
   const flowOnline = flow.mode === 'online';
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
@@ -421,12 +421,12 @@ export default function Game2() {
   const p2 = game?.p2;
   const result = game?.result ?? null;
 
-  // 색은 플레이어 종속(역할 아님) — P1/P2 기능 엔티티의 실제 플레이어 색으로 칠한다.
-  // 오프라인/정보없음이면 기본 {p1:'blue', p2:'red'} → 기존(P1 시안 / P2 핑크)과 동일.
+  // Color is player-bound (not role-bound) — paint with the actual player color of the P1/P2 functional entities.
+  // Offline/no-info defaults to {p1:'blue', p2:'red'} → same as before (P1 cyan / P2 pink).
   const fc = functionColors();
-  const p1Color = colorVar(fc.p1); // P1 엔티티(공격측 자리) 색
-  const p2Color = colorVar(fc.p2); // P2 엔티티(회피측 자리) 색
-  // 온라인 하단 컨트롤(YOU)은 내 역할이 어느 색인지로 표기.
+  const p1Color = colorVar(fc.p1); // color of the P1 entity (attacker's slot)
+  const p2Color = colorVar(fc.p2); // color of the P2 entity (dodger's slot)
+  // The online bottom control (YOU) is labeled by which color my role is.
   const myPlayerColor = myRole === 'P1' ? fc.p1 : fc.p2;
   const myColorVar = colorVar(myPlayerColor);
 
@@ -445,10 +445,10 @@ export default function Game2() {
     game !== null ? Math.max(0, GAME_DURATION - now) * 1000 : GAME_DURATION * 1000;
   const urgent = game !== null && result === null && timeRemainingMs <= 5000;
 
-  // 밀물 폭(양끝) — waterLevel(EDGE단위)을 데크 % 로
+  // Tide width (both ends) — waterLevel (in EDGE units) as deck %
   const tideW = (waterLevel * HALF_TRACK).toFixed(2);
 
-  // 낙사선까지 남은 여유 램프 (자기 낭떠러지 기준)
+  // Safety lamps left until the fall line (relative to one's own cliff)
   const safeLit = (pos: number, ownCliff: number, fell: boolean) => {
     if (fell) return 0;
     const frac = clamp01(Math.abs(pos - ownCliff) / (2 * effEdge));
@@ -457,9 +457,9 @@ export default function Game2() {
   const litSafeP1 = safeLit(p1Pos, -effEdge, p1Fell);
   const litSafeP2 = safeLit(p2Pos, effEdge, p2Fell);
 
-  // 우세 바 (momentum) — c 부호 방향으로 중앙에서 채운다. 오른쪽=P1, 왼쪽=P2.
+  // Advantage bar (momentum) — fills from the center in the direction of c's sign. Right = P1, left = P2.
   const advFrac = clamp(c / EDGE, -1, 1); // -1..1
-  const advPct = Math.abs(advFrac) * 50; // 절반폭 대비
+  const advPct = Math.abs(advFrac) * 50; // relative to half width
   const advFillLeft = advFrac >= 0 ? 50 : 50 - advPct;
   const advColor = advFrac >= 0 ? p1Color : p2Color;
   const advMarkerLeft = 50 + advFrac * 50;
@@ -472,7 +472,7 @@ export default function Game2() {
   const riposte1 = result === null && !!p1 && now < p1.riposteUntil;
   const riposte2 = result === null && !!p2 && now < p2.riposteUntil;
 
-  // 최신 피드 이벤트 (HIT/PARRY/WHIFF 네온 플래시)
+  // Latest feed event (HIT/PARRY/WHIFF neon flash)
   const lastFeed = game && game.feed && game.feed.length ? game.feed[game.feed.length - 1] : null;
   const feedFresh = lastFeed !== null && now - lastFeed.t < 0.9 && result === null;
   const feedText = lastFeed
@@ -496,7 +496,7 @@ export default function Game2() {
   const endcapColor =
     result === 'P1' ? p1Color : result === 'P2' ? p2Color : 'var(--accent2)';
 
-  // 검객 옆 부가 연출(콤보/리포스트/피격 스파크)
+  // Extra effects beside the fencer (combo/riposte/hit sparks)
   const fighterFx = (role: PlayerRole) => {
     const combo = role === 'P1' ? combo1 : combo2;
     const riposte = role === 'P1' ? riposte1 : riposte2;
@@ -519,7 +519,7 @@ export default function Game2() {
     );
   };
 
-  // ------------------------------------------------------------------ 렌더
+  // ------------------------------------------------------------------ Render
   return (
     <main data-testid="scr-game2" className="g2-root">
       <div className="vanish-grid dim" aria-hidden />
@@ -533,7 +533,7 @@ export default function Game2() {
               navigate('/');
             }}
           >
-            ◀ 나가기
+            ◀ Exit
           </Button>
           <div className="g2-hud">
             <HudFrame
@@ -549,7 +549,7 @@ export default function Game2() {
 
         <section data-testid="game-stage" className={`g2-stage crt-bezel ${urgent ? 'urgent' : ''}`}>
           <div className={`g2-arena ${result !== null ? 'g2-arena--glitch' : ''}`}>
-            {/* 우세 미터 — c 부호/크기(momentum) 표시 */}
+            {/* Advantage meter — shows c's sign/magnitude (momentum) */}
             <div className="g3a-advbar" aria-hidden>
               <div className="g3a-advbar__track">
                 <span className="g3a-advbar__mid" />
@@ -573,7 +573,7 @@ export default function Game2() {
               </div>
             </div>
 
-            {/* 남은 여유 램프 (자기 낭떠러지까지 — §3.3 톤 재사용) */}
+            {/* Safety lamps left (until one's own cliff — §3.3 tone reused) */}
             <div className="g2-safe g2-safe--p1">
               <span className="g2-safe__label font-arcade" style={{ color: p1Color }}>P1 SAFE</span>
               <span className="lamps">
@@ -599,11 +599,11 @@ export default function Game2() {
               </span>
             </div>
 
-            {/* 바다 (양끝 낭떠러지 밖 깊은 물) */}
+            {/* Sea (deep water beyond the cliffs at both ends) */}
             <Sea side="left" splashKey={p1Fell ? Math.floor(now * 10) : null} />
             <Sea side="right" splashKey={p2Fell ? Math.floor(now * 10) : null} />
 
-            {/* 플랫폼: 그리드 상판(칸 눈금 + 끝단 경고) + #000 옆면 */}
+            {/* Platform: grid top (cell ticks + edge warning) + #000 side face */}
             <div className="g2-deck" aria-hidden>
               <div className="g2-deck-top">
                 {Array.from({ length: 12 }, (_, i) => (
@@ -616,16 +616,16 @@ export default function Game2() {
               <div className="g2-deck-face" />
             </div>
 
-            {/* 밀물 — waterLevel로 안쪽으로 차오르는 물 (링 축소 표시) */}
+            {/* Tide — water rising inward with waterLevel (shows the shrinking ring) */}
             <div className="g3a-tide g3a-tide--left" style={{ width: `${tideW}%` }} aria-hidden />
             <div className="g3a-tide g3a-tide--right" style={{ width: `${tideW}%` }} aria-hidden />
 
-            {/* 검객 — 색은 플레이어 종속(역할 아님). P1/P2 엔티티의 실제 플레이어 색으로.
-                내부 SVG/스파크/콤보는 currentColor라 검객의 color만 정하면 자동 반영. */}
+            {/* Fencers — color is player-bound (not role-bound). Use the actual player color of the P1/P2 entities.
+                Inner SVG/sparks/combo use currentColor, so setting the fencer's color alone is reflected automatically. */}
             <div
               className={`g2-fighter g2-fighter--rt g2-fighter--p1 ${p1Fell ? 'g2-fighter--fall' : ''} ${riposte1 ? 'g3a-riposte' : ''}`}
               style={{ left: `${posToPct(p1Pos)}%`, color: p1Color }}
-              aria-label={`P1 위치: 낙사선까지 여유 ${litSafeP1}칸`}
+              aria-label={`P1 position: ${litSafeP1} cells of margin until the fall line`}
             >
               <FencerSvg pose={pose1} />
               {fighterFx('P1')}
@@ -633,13 +633,13 @@ export default function Game2() {
             <div
               className={`g2-fighter g2-fighter--rt g2-fighter--p2 ${p2Fell ? 'g2-fighter--fall' : ''} ${riposte2 ? 'g3a-riposte' : ''}`}
               style={{ left: `${posToPct(p2Pos)}%`, color: p2Color }}
-              aria-label={`P2 위치: 낙사선까지 여유 ${litSafeP2}칸`}
+              aria-label={`P2 position: ${litSafeP2} cells of margin until the fall line`}
             >
               <FencerSvg pose={pose2} />
               {fighterFx('P2')}
             </div>
 
-            {/* 판정 플래시 (HIT/PARRY/WHIFF) — 피해자 위치에 네온 캡션 */}
+            {/* Judgment flash (HIT/PARRY/WHIFF) — neon caption at the victim's position */}
             {feedFresh && lastFeed && (
               <div
                 key={`fd-${lastFeed.kind}-${lastFeed.victim}-${lastFeed.t.toFixed(3)}`}
@@ -651,7 +651,7 @@ export default function Game2() {
               </div>
             )}
 
-            {/* 라운드 종료 캡션: 링아웃 승패 / 시간 종료 판정 (오버레이 직전 연출) */}
+            {/* Round-end caption: ring-out win/loss / time-up judgment (effect just before the overlay) */}
             {game !== null && result !== null && flow.phase === 'playing' && (
               <div
                 className="g2-endcap font-arcade glow-text anim-sign-on"
@@ -663,19 +663,19 @@ export default function Game2() {
 
           </div>
 
-          {/* 기본 종료 플래시 — result 확정 순간 흰 섬광 (스테이지 relative 컨테이너 기준 오버레이) */}
+          {/* Base end flash — white flash the instant result is decided (overlay relative to the stage container) */}
           <EndFlash active={game?.result != null} />
         </section>
 
-        {/* 하단: 온스크린 키캡(실제 배정 키 표기 — SPEC Q2) + 스탠스 피드백 */}
+        {/* Bottom: on-screen keycaps (showing the actual assigned keys — SPEC Q2) + stance feedback */}
         {isOnline ? (
-          // 온라인: 로컬 플레이어(내 역할)의 U/I 컨트롤만, 내 색으로 표기.
-          // 펜싱은 대칭 게임(P1/P2 동작 동일: U=공격, I=회피)이라 아이콘/라벨은 역할과 무관.
+          // Online: only the local player's (my role's) U/I controls, labeled in my color.
+          // Fencing is a symmetric game (P1/P2 act identically: U=attack, I=dodge), so icons/labels are role-independent.
           <footer className="g2-controls g2-controls--online">
             <div className={`g2-pad ${myPlayerColor === 'blue' ? 'g2-pad--p1' : 'g2-pad--p2'}`}>
               <div className="g2-stance" style={{ color: myColorVar }}>
                 <span className="g2-stance__label">
-                  YOU · {myPlayerColor === 'blue' ? '파랑' : '빨강'}
+                  YOU · {myPlayerColor === 'blue' ? 'BLUE' : 'RED'}
                 </span>
                 <span className="g2-stance__icon">
                   {POSE_ICON[myRole === 'P1' ? pose1 : pose2]}
@@ -685,49 +685,49 @@ export default function Game2() {
                 role={myPlayerColor === 'blue' ? 'P1' : 'P2'}
                 keyChar="U"
                 icon="⚔"
-                label="공격"
+                label="Attack"
                 lit={litP2Atk}
               />
               <KeyCap
                 role={myPlayerColor === 'blue' ? 'P1' : 'P2'}
                 keyChar="I"
                 icon="🛡"
-                label="회피"
+                label="Dodge"
                 lit={litP2Dod}
               />
             </div>
             <div className="g2-hint c-muted">
-              실시간 넉백 — 공격(⚔)은 상대를 밀고, 회피(🛡)로 막으면 되받아친다 · 밀물이 링을 조인다 ·
-              링 밖으로 밀리면 낙사
+              Real-time knockback — attack (⚔) pushes the opponent, and blocking with a dodge (🛡) counters back · the tide tightens the ring ·
+              pushed off the ring means falling out
             </div>
           </footer>
         ) : (
           <footer className="g2-controls">
             <div className="g2-pad g2-pad--p1">
-              <KeyCap role="P1" keyChar="Q" icon="⚔" label="공격" lit={litP1Atk} />
-              <KeyCap role="P1" keyChar="W" icon="🛡" label="회피" lit={litP1Dod} />
+              <KeyCap role="P1" keyChar="Q" icon="⚔" label="Attack" lit={litP1Atk} />
+              <KeyCap role="P1" keyChar="W" icon="🛡" label="Dodge" lit={litP1Dod} />
               <div className="g2-stance c-p1">
                 <span className="g2-stance__label">STANCE</span>
                 <span className="g2-stance__icon">{POSE_ICON[pose1]}</span>
               </div>
             </div>
             <div className="g2-hint c-muted">
-              실시간 넉백 — 공격(⚔)은 상대를 밀고, 회피(🛡)로 막으면 되받아친다 · 밀물이 링을 조인다 ·
-              링 밖으로 밀리면 낙사
+              Real-time knockback — attack (⚔) pushes the opponent, and blocking with a dodge (🛡) counters back · the tide tightens the ring ·
+              pushed off the ring means falling out
             </div>
             <div className="g2-pad g2-pad--p2">
               <div className="g2-stance c-p2">
                 <span className="g2-stance__label">{flowOnline ? 'CPU' : 'STANCE'}</span>
                 <span className="g2-stance__icon">{POSE_ICON[pose2]}</span>
               </div>
-              <KeyCap role="P2" keyChar="U" icon="⚔" label="공격" lit={litP2Atk} />
-              <KeyCap role="P2" keyChar="I" icon="🛡" label="회피" lit={litP2Dod} />
+              <KeyCap role="P2" keyChar="U" icon="⚔" label="Attack" lit={litP2Atk} />
+              <KeyCap role="P2" keyChar="I" icon="🛡" label="Dodge" lit={litP2Dod} />
             </div>
           </footer>
         )}
       </div>
 
-      {/* 라운드/매치 결과 오버레이 (game1 소유 공용 — import만) */}
+      {/* Round/match result overlay (shared, owned by game1 — import only) */}
       <ResultOverlay />
       <RoundIntro />
     </main>

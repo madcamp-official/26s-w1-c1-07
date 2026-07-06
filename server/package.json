@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Fastify + Socket.IO + Prisma 서버 (온라인 매칭·서버권위 게임루프).",
+  "description": "Fastify + Socket.IO + Prisma server (online matchmaking · server-authoritative game loop).",
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },

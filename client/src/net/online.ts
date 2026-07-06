@@ -1,7 +1,7 @@
 /**
- * 온라인 매치 클라 스토어 — 소켓 연결 + 서버 이벤트 수신 + 액션.
- * 진짜 멀티플레이: 서버가 게임을 계산하고(권위), 클라는 game:state를 받아 렌더 + game:input 전송.
- * (mock 봇 대체 — flow.mode는 offline 전용으로 남고, 온라인은 이 스토어가 담당)
+ * Online match client store — socket connection + server event handling + actions.
+ * True multiplayer: the server computes the game (authoritative), the client receives game:state to render + sends game:input.
+ * (replaces the mock bot — flow.mode stays offline-only, and online play is handled by this store)
  */
 import { io, type Socket } from 'socket.io-client'
 import {
@@ -23,7 +23,7 @@ export type OnlinePhase =
   | 'connecting'
   | 'queue'
   | 'room'
-  | 'slot' // match:start 수신 ~ 1라운드 round:start 사이 — 슬롯머신 + VS(베팅 공개) 인트로
+  | 'slot' // between receiving match:start and round 1 round:start — slot machine + VS (bet reveal) intro
   | 'countdown'
   | 'playing'
   | 'round-result'
@@ -42,33 +42,33 @@ export interface OnlineState {
   gameId: GameId | null
   role: Role | null
   opponent: OpponentView | null
-  /** 내 색(매치 고정, 플레이어 종속 — 역할과 독립). 렌더러가 이 색으로 칠한다. */
+  /** My color (fixed per match, tied to the player — independent of role). The renderer paints with this color. */
   myColor: PlayerColor | null
-  /** 상대 색(매치 고정) */
+  /** Opponent color (fixed per match) */
   oppColor: PlayerColor | null
-  /** 서버 game:state 최신 투영 상태 (게임 화면이 렌더) */
+  /** Latest projected state from server game:state (the game screen renders it) */
   serverState: unknown | null
   serverSeq: number
   countdownUntil: number
   lastRoundResult: GameResult | null
   matchResult: SlotResult | null
   recordedMatchId: string | null
-  /** 매치 정산으로 인한 내 코인 증감 (match:end 수신 시) */
+  /** My coin change from match settlement (on match:end) */
   coinDelta: number | null
-  /** 정산 후 내 보유 코인 */
+  /** My coin balance after settlement */
   coinBalance: number | null
-  /** 슬롯머신 3릴 결과 — 라운드 r 게임 = slotGames[(r-1) % 3] */
+  /** Slot machine 3-reel result — round r game = slotGames[(r-1) % 3] */
   slotGames: GameId[] | null
-  /** 이 매치의 베팅 (VS 화면·ALL-IN 표시) */
+  /** This match's bets (VS screen / ALL-IN display) */
   myBet: number | null
   oppBet: number | null
   myAllIn: boolean
   oppAllIn: boolean
-  /** 리벤지: 내 신청 자격 (match:end에서 패자에게만 non-null) */
+  /** Rematch: my eligibility to request (non-null only for the loser on match:end) */
   revenge: { stake: number; allIn: boolean } | null
-  /** 리벤지 하위 상태 — none / waiting(신청 후 응답 대기) / offered(승자: 수락 다이얼로그) */
+  /** Rematch sub-state — none / waiting (awaiting response after requesting) / offered (winner: accept dialog) */
   revengePhase: 'none' | 'waiting' | 'offered'
-  /** 승자가 받은 리벤지 오퍼 */
+  /** Rematch offer received by the winner */
   revengeOffer: {
     fromNickname: string
     yourStake: number
@@ -78,7 +78,7 @@ export interface OnlineState {
     timeoutMs: number
     receivedAt: number
   } | null
-  /** 리벤지 무산(거절/취소/타임아웃/불가) — 클라는 이걸 보고 메인으로 복귀 */
+  /** Rematch fell through (declined/canceled/timeout/unavailable) — the client uses this to return to main */
   revengeClosed: { reason: string } | null
   error: string | null
 }
@@ -122,46 +122,46 @@ export const useOnline = () => useStore(onlineStore)
 export const getOnline = () => onlineStore.get()
 
 /**
- * 이 라운드 P1/P2 '기능 엔티티'의 플레이어 색 (색≠역할 — 렌더러는 이 색으로 칠한다).
- * 색은 플레이어 종속(매치 고정), 역할은 매치마다 랜덤이라 P1(공격)이 파랑일 때도 빨강일 때도 있다.
- * 오프라인/색 정보 없으면 기본(P1=blue, P2=red)이라 기존 동작과 동일.
+ * Player colors of this round's P1/P2 'functional entities' (color ≠ role — the renderer paints with this color).
+ * Color is tied to the player (fixed per match); role is randomized each match, so P1 (attacker) can be blue or red.
+ * When offline / no color info, defaults (P1=blue, P2=red) match the existing behavior.
  */
 export function functionColors(): { p1: PlayerColor; p2: PlayerColor } {
   const o = onlineStore.get()
   if (!o.myColor || !o.oppColor || !o.role) return { p1: 'blue', p2: 'red' }
-  // role = 내 역할(이 매치 고정). 내가 P1이면 P1엔티티=내 색, 아니면 상대 색.
+  // role = my role (fixed this match). If I'm P1 then P1 entity = my color, otherwise the opponent's color.
   return o.role === 'P1'
     ? { p1: o.myColor, p2: o.oppColor }
     : { p1: o.oppColor, p2: o.myColor }
 }
 
 let socket: Socket | null = null
-// 호스트가 room:state 마다 roomStart를 중복 emit해 매치가 2번 시작되는 것 방지(방 코드당 1회).
+// Prevents the host from emitting roomStart on every room:state and starting the match twice (once per room code).
 let startRequestedForRoom: string | null = null
 
-/** 서버 세션(로스터 로그인 쿠키) 확인 → 소켓 연결 + 이벤트 배선 */
+/** Check the server session (roster login cookie) → connect socket + wire events */
 export async function connectOnline(): Promise<void> {
   onlineStore.set({ phase: 'connecting', error: null })
-  // 1) 세션 확인 — 로그인(분반→멤버 선택)이 선행돼야 한다
+  // 1) Check session — login (class → member select) must come first
   let hasSession = false
   try {
     const me = await fetch(`${SERVER_URL}/api/me`, { credentials: 'include' })
     if (me.ok) hasSession = (await me.json()).status === 'USER'
   } catch {
-    /* 아래에서 에러 처리 */
+    /* handled as an error below */
   }
   if (!hasSession) {
-    onlineStore.set({ phase: 'idle', error: '로그인 필요' })
+    onlineStore.set({ phase: 'idle', error: 'Login required' })
     return
   }
-  // 2) 소켓 연결 (쿠키 자동 동봉)
+  // 2) Socket connection (cookie auto-attached)
   if (socket) socket.disconnect()
   socket = io(SERVER_URL, { withCredentials: true, transports: ['websocket', 'polling'] })
   wire(socket)
   await new Promise<void>((resolve) => {
     socket!.on('connect', () => resolve())
     socket!.on('connect_error', () => {
-      onlineStore.set({ phase: 'idle', error: '소켓 인증 실패' })
+      onlineStore.set({ phase: 'idle', error: 'Socket authentication failed' })
       resolve()
     })
   })
@@ -170,13 +170,14 @@ export async function connectOnline(): Promise<void> {
 function wire(s: Socket) {
   s.on(EV.hello, (m: { me: MeInfo }) => onlineStore.set({ connected: true, me: m.me }))
   s.on(EV.roomState, (room: RoomSnapshot) => {
-    // 매치 종료/이탈 오버레이 표시 중엔 room:state로 phase를 덮지 않는다.
-    // (상대가 종료 후 접속을 끊으면 서버 leaveRoom이 남은 사람에게 room:state를 보내는데,
-    //  이게 'match-end' phase를 'room'으로 덮어써 결과 오버레이가 사라지는 버그 방지.)
+    // While a match-end/left overlay is showing, don't overwrite phase with room:state.
+    // (When the opponent disconnects after the match ends, the server's leaveRoom sends room:state to the
+    //  remaining player, which would overwrite the 'match-end' phase with 'room' and make the result overlay
+    //  vanish — this prevents that bug.)
     const cur = getOnline()
-    // 매치 진행/종료 중(슬롯 인트로·카운트다운·플레이·결과·이탈)에는 room:state 로 phase 를
-    // 덮지 않는다 — room 정보만 갱신. (코드방 자동진행 room:state 가 슬롯 인트로/인게임 phase 를
-    //  'room' 으로 덮어써 화면이 번쩍하고 사라지는 버그 방지)
+    // During a match (slot intro / countdown / play / result / left), don't overwrite phase with room:state —
+    // only refresh the room info. (Prevents the bug where a code-room auto-advance room:state overwrites the
+    //  slot intro / in-game phase with 'room', making the screen flash and disappear.)
     if (
       cur.phase === 'slot' ||
       cur.phase === 'countdown' ||
@@ -188,7 +189,7 @@ function wire(s: Socket) {
       return
     }
     onlineStore.set({ room, phase: 'room' })
-    // 코드방 자동 진행: 2명 모이면 각자 ready, 방장이 시작 (수동 ready/start UI 생략)
+    // Code-room auto-advance: once 2 players gather, each readies up and the host starts (no manual ready/start UI)
     const meId = getOnline().me?.id
     if (room.members.length < 2 || !meId) return
     const mine = room.members.find((m) => m.userId === meId)
@@ -238,12 +239,12 @@ function wire(s: Socket) {
         revengePhase: 'none',
         revengeOffer: null,
         revengeClosed: null,
-        phase: 'slot', // 슬롯머신 + VS 인트로 (round:start가 countdown으로 전환)
+        phase: 'slot', // slot machine + VS intro (round:start switches to countdown)
       }),
   )
-  // 종료 상태(aborted/match-end)면 이후 라운드 이벤트를 무시한다.
-  // 서버는 상대 이탈 후에도 매치를 끝까지 연산해 game:state/round:start를 계속 보내는데,
-  // 이걸 반영하면 'aborted'(OPPONENT LEFT) 오버레이가 게임 화면으로 되살아나 버림.
+  // In a terminal state (aborted/match-end), ignore subsequent round events.
+  // The server keeps computing the match to the end even after the opponent leaves and keeps sending
+  // game:state/round:start; reflecting these would revive the 'aborted' (OPPONENT LEFT) overlay back into the game screen.
   const isTerminal = () => {
     const p = getOnline().phase
     return p === 'aborted' || p === 'match-end'
@@ -263,7 +264,7 @@ function wire(s: Socket) {
   })
   s.on(EV.gameState, (m: { seq: number; state: unknown }) => {
     if (isTerminal()) return
-    if (m.seq <= getOnline().serverSeq) return // 순서 역전 무시
+    if (m.seq <= getOnline().serverSeq) return // ignore out-of-order
     onlineStore.set({ serverState: m.state, serverSeq: m.seq, phase: 'playing' })
   })
   s.on(EV.roundEnd, (m: { result: GameResult }) => {
@@ -279,7 +280,7 @@ function wire(s: Socket) {
       coinBalance?: number
       revenge?: { stake: number; allIn: boolean } | null
     }) => {
-      startRequestedForRoom = null // 같은 방 재대결 허용
+      startRequestedForRoom = null // allow a rematch in the same room
       onlineStore.set({
         phase: 'match-end',
         matchResult: m.result,
@@ -293,7 +294,7 @@ function wire(s: Socket) {
       })
     },
   )
-  // ── 리벤지 (docs/ONLINE_MATCH.md) ──
+  // ── Rematch (docs/ONLINE_MATCH.md) ──
   s.on(
     EV.revengeOffer,
     (m: {
@@ -311,7 +312,7 @@ function wire(s: Socket) {
   )
   s.on(EV.revengeResult, (m: { accepted: boolean; reason?: string }) => {
     if (m.accepted) {
-      // 수락 — 곧바로 match:start(슬롯 인트로)가 이어지므로 하위 상태만 정리
+      // accepted — match:start (slot intro) follows immediately, so just clear the sub-state
       onlineStore.set({ revengePhase: 'none', revengeOffer: null, revengeClosed: null })
     } else {
       onlineStore.set({
@@ -328,10 +329,10 @@ function wire(s: Socket) {
   s.on('disconnect', () => onlineStore.set({ connected: false }))
 }
 
-// ── 액션 (bet: 이 매치에 거는 코인 — 서버가 보유량 재검증) ──
+// ── Actions (bet: coins wagered on this match — the server re-validates the balance) ──
 export function joinQueue(bet: number): Promise<{ ok: boolean; message?: string }> {
   return new Promise((resolve) => {
-    if (!socket) return resolve({ ok: false, message: '연결 안 됨' })
+    if (!socket) return resolve({ ok: false, message: 'Not connected' })
     socket.emit(EV.queueJoin, { bet }, (ack: { ok: boolean; message?: string }) => {
       if (ack?.ok) {
         onlineStore.set({ phase: 'queue' })
@@ -349,7 +350,7 @@ export function createRoom(
   bet: number,
 ): Promise<{ room: RoomSnapshot | null; message?: string }> {
   return new Promise((resolve) => {
-    if (!socket) return resolve({ room: null, message: '연결 안 됨' })
+    if (!socket) return resolve({ room: null, message: 'Not connected' })
     socket.emit(EV.roomCreate, { games, bet }, (ack: { ok: boolean; data?: RoomSnapshot; message?: string }) => {
       if (ack?.ok && ack.data) {
         onlineStore.set({ room: ack.data, phase: 'room' })
@@ -360,7 +361,7 @@ export function createRoom(
 }
 export function joinRoom(code: string, bet: number): Promise<{ ok: boolean; message?: string }> {
   return new Promise((resolve) => {
-    if (!socket) return resolve({ ok: false, message: '연결 안 됨' })
+    if (!socket) return resolve({ ok: false, message: 'Not connected' })
     socket.emit(EV.roomJoin, { code, bet }, (ack: { ok: boolean; data?: RoomSnapshot; message?: string }) => {
       if (ack?.ok && ack.data) {
         onlineStore.set({ room: ack.data, phase: 'room' })
@@ -382,8 +383,8 @@ export function leaveRoom(): void {
 }
 
 /**
- * 게임 입력 전송 — 슬롯(A/B)을 canonical 키로 실어 보냄. 서버가 role로 재기입.
- * cell(선택): 오목처럼 클라가 로컬 커서로 고른 칸 인덱스. 대부분 게임은 생략.
+ * Send game input — carries the slot (A/B) as a canonical key. The server remaps it by role.
+ * cell (optional): a cell index the client picked with a local cursor, as in Gomoku. Omitted for most games.
  */
 export function sendInput(slot: 'A' | 'B', type: 'down' | 'up', t: number, cell?: number): void {
   const matchId = getOnline().matchId
@@ -391,11 +392,11 @@ export function sendInput(slot: 'A' | 'B', type: 'down' | 'up', t: number, cell?
   socket.emit(EV.gameInput, { matchId, code: slot === 'A' ? 'KeyQ' : 'KeyW', type, t, cell })
 }
 
-// ── 리벤지 액션 ──
-/** 패자 → 리벤지 신청. 실패(승자 이탈 등) 시 메시지와 함께 false — 클라는 메인으로 복귀 */
+// ── Rematch actions ──
+/** Loser → request a rematch. On failure (winner left, etc.) returns false with a message — the client returns to main */
 export function requestRevenge(): Promise<{ ok: boolean; message?: string }> {
   return new Promise((resolve) => {
-    if (!socket) return resolve({ ok: false, message: '연결 안 됨' })
+    if (!socket) return resolve({ ok: false, message: 'Not connected' })
     socket.emit(EV.revengeRequest, {}, (ack: { ok: boolean; message?: string }) => {
       if (ack?.ok) {
         onlineStore.set({ revengePhase: 'waiting', revengeClosed: null })
@@ -405,20 +406,20 @@ export function requestRevenge(): Promise<{ ok: boolean; message?: string }> {
   })
 }
 
-/** 승자 → 오퍼 응답 (수락 시 서버가 revenge:result → match:start 순으로 보낸다) */
+/** Winner → respond to the offer (on accept, the server sends revenge:result → match:start in order) */
 export function respondRevenge(accept: boolean): void {
   socket?.emit(EV.revengeRespond, { accept }, () => {})
 }
 
 /**
- * 패자 → 대기 중 신청 취소. 로컬 phase를 바꾸지 않고 서버 확정(revenge:result)을 기다린다.
- * (승자 '수락'과의 경합에서 취소가 지면 서버가 accepted:true+match:start를 보내 그대로 매치로 진입 — #1)
+ * Loser → cancel a pending request. Doesn't change the local phase; waits for the server's confirmation (revenge:result).
+ * (If the cancel loses the race against the winner's 'accept', the server sends accepted:true + match:start and the match starts as-is — #1)
  */
 export function cancelRevenge(): void {
   socket?.emit(EV.revengeCancel)
 }
 
-/** 매치 종료/이탈 후 온라인 상태 초기화(소켓은 유지) */
+/** Reset online state after a match ends/is left (keeps the socket) */
 export function resetOnline(): void {
   startRequestedForRoom = null
   onlineStore.set({ ...INITIAL, connected: getOnline().connected, me: getOnline().me })
