@@ -26,8 +26,11 @@ export default function MainLoggedOut() {
     <main data-testid="scr-main-out" className="s1-root">
       <div className="vanish-grid" aria-hidden />
 
-      {/* 우상단: 로그인 (설정은 온라인 패널 안의 톱니로만 진입) */}
+      {/* 우상단: 테마 변경(전역 프리퍼런스라 비로그인에서도 노출) + 로그인 */}
       <header className="s1-header">
+        <Button variant="tertiary" data-testid="btn-theme-shop" onClick={() => openModal('theme-shop')}>
+          🎨 테마
+        </Button>
         <Button variant="tertiary" data-testid="btn-login" onClick={() => openLoginModal()}>
           로그인
         </Button>
