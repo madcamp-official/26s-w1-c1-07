@@ -23,6 +23,7 @@ import { useDebugScreen } from '../debug';
 import { startOfflineGame } from '../state/flow';
 import { restoreSession, unlockGame, useSession } from '../state/session';
 import { openLoginModal } from '../modals/Login';
+import { FINAL_PICTOS } from './pictograms';
 import './game-select.css';
 import '../global-interaction.css';
 
@@ -99,7 +100,20 @@ function Pictogram({ id, displayNo }: { id: GameId; displayNo: number }) {
       </div>
     );
   }
-  // 그 외 게임: 표시 번호 픽토그램
+  // 대표 픽토그램 (pictograms.ts, 게임 내부 id 기준): 펌프3·라이트사이클5·공룡6·마그마7·몬스터8·오목9·줄다리기10
+  const finalPicto = FINAL_PICTOS[id];
+  if (finalPicto) {
+    return (
+      <div className="s8-picto gpic" aria-hidden>
+        <svg
+          viewBox="0 0 120 108"
+          preserveAspectRatio="xMidYMid meet"
+          dangerouslySetInnerHTML={{ __html: finalPicto }}
+        />
+      </div>
+    );
+  }
+  // 안전망: 표시 번호 픽토그램
   return (
     <div className="s8-picto s8-picto--gN" aria-hidden>
       <span className="s8-gN-num font-arcade glow-text">{displayNo}</span>

@@ -328,3 +328,24 @@
   font-size: 9px;
   color: var(--accent2);
 }
+
+/* ── 게임 픽토그램 네온 유틸 (SVG 씬 · pictograms.ts) ── */
+.gpic svg {
+  width: 88%;
+  height: 88%;
+  overflow: visible; /* 글로우가 씬 경계에서 잘리지 않도록 (스크린이 최종 클립) */
+}
+.gp-cyan { color: var(--p1); }
+.gp-pink { color: var(--p2); }
+.gp-yellow { color: var(--accent); }
+.gp-mag { color: var(--accent2); }
+.gp-green { color: var(--win); }
+.gp-dim { color: var(--text-muted); }
+.gp-white { color: var(--text); }
+.gp-fill { fill: currentColor; stroke: none; }
+.gp-stroke { fill: none; stroke: currentColor; }
+.gp-glow { filter: drop-shadow(0 0 1.5px currentColor) drop-shadow(0 0 5px currentColor); }
+.gp-dim2 { opacity: 0.4; }
+.gp-grid { opacity: 0.28; }
+.gp-faint { opacity: 0.6; }
+.gp-magma { opacity: 0.22; }
