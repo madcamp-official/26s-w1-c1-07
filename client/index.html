@@ -4,11 +4,31 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MADPUMP</title>
-    <!-- 아케이드 디스플레이 Press Start 2P + 한글 디스플레이 Gugi -->
+    <!-- 테마 FOUC 가드: 저장된 테마를 스타일시트 파싱 전에 <html>에 세팅한다.
+         기본 :root가 다크 네온이라, 저장된 라이트 테마(neo-brutal/clay/broadcast)가
+         첫 페인트에서 다크로 번쩍이는 것을 막는다. state/theme.ts와 동일 키/검증. -->
+    <script>
+      (function () {
+        var IDS = ['neon-coinop', 'neo-brutal', 'clay-toy', 'broadcast-arena', 'obsidian', 'pico8'];
+        var id = 'neon-coinop';
+        try {
+          var raw = localStorage.getItem('madpump:theme');
+          var v = raw ? (JSON.parse(raw) || {}).current : null;
+          if (IDS.indexOf(v) >= 0) id = v;
+        } catch (e) {
+          /* ignore — 차단/손상 시 기본 */
+        }
+        document.documentElement.setAttribute('data-theme', id);
+      })();
+    </script>
+    <!-- 테마별 디스플레이/모노 폰트 (design-lab 6종 컨셉).
+         neon: Press Start 2P + Gugi / neo-brutal: Black Han Sans + Space Mono /
+         clay: Jua + Baloo 2 / broadcast: Archivo + IBM Plex Sans KR /
+         obsidian: Orbitron + Noto Sans KR / pico8: Press Start 2P + Do Hyeon -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Gugi&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Gugi&family=Black+Han+Sans&family=Space+Mono:ital,wght@0,400;0,700;1,700&family=Jua&family=Baloo+2:wght@400;600;700;800&family=Archivo:ital,wght@0,400;0,600;0,800;1,600&family=Orbitron:wght@500;700;800;900&family=Do+Hyeon&family=Noto+Sans+KR:wght@400;500;700;900&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
   </head>

@@ -41,12 +41,12 @@
 
 .s1-logo-mad {
   color: var(--p2);
-  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  text-shadow: var(--text-glow);
 }
 
 .s1-logo-pump {
   color: var(--p1);
-  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  text-shadow: var(--text-glow);
 }
 
 /* 고장 램프 개그 — PUMP의 마지막 P가 간헐적으로 깜빡 (steps, 평시 대부분 점등) */

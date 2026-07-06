@@ -59,7 +59,7 @@
   font-size: clamp(20px, 3.4vw, 30px);
   line-height: 1.2;
   color: var(--ri-color);
-  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  text-shadow: var(--text-glow);
   text-wrap: balance;
   animation: ri-pulse 700ms ease-in-out 400ms 2 alternate;
 }

@@ -18,7 +18,7 @@
 .s8-g1-num {
   font-size: 30px;
   color: var(--accent);
-  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  text-shadow: var(--text-glow);
 }
 
 .s8-g1-arrow {

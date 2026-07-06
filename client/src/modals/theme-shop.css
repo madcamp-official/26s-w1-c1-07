@@ -25,8 +25,25 @@
   flex-direction: column;
   gap: 8px;
   padding: 14px;
-  background: var(--surface-deep, #100c20);
-  border: 1px solid color-mix(in srgb, var(--accent2) 40%, transparent);
+  background: var(--surface-deep);
+  border: var(--border-w) solid color-mix(in srgb, var(--accent2) 40%, transparent);
+  border-radius: var(--radius-sm);
+}
+.ts-card--active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+/* 미리보기 스와치 [bg, accent, p1, p2] */
+.ts-swatch {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: 26px;
+  border: var(--border-w) solid var(--hairline);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.ts-swatch > span {
+  display: block;
 }
 .ts-card-name {
   font-size: 16px;

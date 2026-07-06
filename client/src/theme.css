@@ -1,6 +1,10 @@
 /**
- * NEON COIN-OP — 신스웨이브 아케이드 디자인 시스템 (PLAN.md §1 정본)
+ * NEON COIN-OP — 신스웨이브 아케이드 디자인 시스템 (PLAN.md §1 정본) = 기본 테마 + 토큰 계약
  * (아키텍트 소유 — 구현 에이전트 수정 금지. 화면 전용 스타일은 각 화면 파일 옆 css로.)
+ *
+ * ★ 테마 시스템: 이 :root 블록이 "토큰 계약"이다. themes/<id>.css가 `:root[data-theme="<id>"]`로
+ *   이 계약 전체를 재정의해 앱을 통째로 리스킨한다. 새 토큰은 additive(neon 기본값)이며
+ *   화면들은 토큰만 소비한다. 상태/스왑은 state/theme.ts, 카드 UI는 modals/ThemeShop.tsx.
  *
  * 제공 유틸 클래스 카탈로그:
  *  폰트      .font-arcade(Press Start 2P) / .font-display(Gugi)  — 본문은 기본 산세리프
@@ -34,6 +38,31 @@
   --font-arcade: 'Press Start 2P', monospace;
   --font-display: 'Gugi', sans-serif;
   --font-body: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+
+  /* ── 테마 계약 확장 토큰 (테마 시스템 정본) ──────────────────────────────
+     모든 테마(themes/<id>.css)가 이 전체 계약을 재정의한다. 아래 값은 neon 기본값이며
+     기존 화면 동작을 100% 보존한다(추가 토큰은 순수 additive, 두 detokenize만 값 동일 치환). */
+  --text-dim: #6f6396;                    /* 3차 텍스트/비활성/힌트 */
+  --on-accent: #0b0616;                   /* --accent 채움 위 잉크색 */
+  --ok: var(--win);                       /* 성공 피드백(복사됨/일치) */
+  --border-col: var(--hairline);          /* 실선 보더 색(보더 강조 테마용) */
+  --border-w: 1px;                        /* 기본 보더 두께 */
+  --scanline-color: rgba(0, 0, 0, 0.22);  /* CRT 스캔라인 틴트(비-CRT 테마는 transparent) */
+  --vignette-color: rgba(0, 0, 0, 0.45);  /* 화면 가장자리 비네팅 */
+  --bezel-color: #000;                    /* 게임 스테이지 베젤/프레임 색 */
+  --bezel-w: 14px;                        /* 베젤 두께 */
+  --radius: 0px;                          /* 기본 코너 반경(네온=각짐) */
+  --radius-sm: 6px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  --shadow-sm: 0 0 6px color-mix(in srgb, var(--accent2) 45%, transparent);
+  --shadow-md: 0 0 12px color-mix(in srgb, var(--accent2) 45%, transparent);
+  --shadow-lg: 0 0 24px color-mix(in srgb, var(--accent2) 55%, transparent);
+  --ease: steps(1, end);                  /* 모션 정체성: 네온=하드 스텝 */
+  --dur-fast: 120ms;
+  --dur-base: 220ms;
+  --dur-slow: 400ms;
+  --text-glow: 0 0 4px currentColor, 0 0 18px currentColor; /* 네온 텍스트 글로우(제목/포인트) */
 }
 
 /* ---------------------------------------------------------------- 전역 */
@@ -109,7 +138,7 @@ input {
 
 /* ---------------------------------------------------------------- 글로우 §1.1 */
 .glow-text {
-  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  text-shadow: var(--text-glow);
 }
 
 /* 박스 글로우 — --glow-color(rgb triplet 아님, 색상값)와 --glow-color-a(투명 배합용) 지정.
@@ -193,7 +222,7 @@ input {
   pointer-events: none;
   background: repeating-linear-gradient(
     0deg,
-    rgba(0, 0, 0, 0.22) 0 1px,
+    var(--scanline-color) 0 1px,
     transparent 1px 3px
   );
 }
@@ -203,7 +232,7 @@ input {
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, 0.45) 100%);
+  background: radial-gradient(ellipse at center, transparent 62%, var(--vignette-color) 100%);
 }
 
 /* ---------------------------------------------------------------- 소실점 그리드 §1.3 */
@@ -358,7 +387,7 @@ input {
 .crt-bezel {
   position: relative;
   background: var(--bg-raised);
-  border: 14px solid #000;
+  border: var(--bezel-w) solid var(--bezel-color);
   border-radius: 12px; /* 베젤 모서리만 라운딩 — 브라운관 실루엣 */
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p1) 55%, transparent);
   overflow: hidden;
