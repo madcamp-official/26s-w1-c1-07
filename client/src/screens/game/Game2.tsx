@@ -41,6 +41,7 @@ import { EndFlash } from '../../game/EndFlash';
 import ResultOverlay from './ResultOverlay';
 import RoundIntro from './RoundIntro';
 import { isRoundIntroActive } from '../../state/roundIntroGate';
+import { sfx } from '@/audio';
 import './game2.css';
 
 // 연출 상수 (로직 비침범 — 판정은 전부 @madpump/shared 코어)
@@ -175,6 +176,54 @@ export default function Game2() {
   // 초기 상태를 유효한 create()로 둔다(온라인 카운트다운 등 첫 서버 스냅샷 전에도 feed/p1/p2가 존재).
   const [game, setGame] = useState<Game2State | null>(() => game2.create(Math.random));
 
+  // SFX 전이 감지용 이전값 스냅샷(스칼라만 저장 — 코어는 동일 객체를 in-place 변경하므로
+  // 객체참조 diff가 불가하다). 오프라인 rAF step / 온라인 onSnapshot 양쪽에서 공유 호출한다.
+  const sfxRef = useRef({
+    feedT: -Infinity,
+    ripPress: { P1: -Infinity, P2: -Infinity } as Record<'P1' | 'P2', number>,
+    combo: { P1: 0, P2: 0 } as Record<'P1' | 'P2', number>,
+    ended: false,
+  });
+  // 새 게임 상태(오프라인 next / 온라인 서버 스냅샷)마다 1회 호출 — 이전값 대비 '이번에 처음
+  // 바뀐 순간'에만 sfx를 울린다(매 프레임 스팸 금지). 부작용만 — 상태/렌더는 건드리지 않는다.
+  const playTransitionSfx = (s: Game2State) => {
+    const g = sfxRef.current;
+    // feed: parry 성공 → g2-parry, 피격 넉백(hit) → g2-knockback (whiff는 무음). t 단조증가 가드.
+    let maxT = g.feedT;
+    for (const ev of s.feed) {
+      if (ev.t > g.feedT) {
+        if (ev.kind === 'parry') sfx('g2-parry');
+        else if (ev.kind === 'hit') sfx('g2-knockback');
+      }
+      if (ev.t > maxT) maxT = ev.t;
+    }
+    g.feedT = maxT;
+    // riposte(반격창) 발동 = riposte 플래그가 붙은 공격이 생성된 순간. press 단조증가 가드(플레이어별).
+    for (const name of ['P1', 'P2'] as const) {
+      const f = name === 'P1' ? s.p1 : s.p2;
+      let maxPress = g.ripPress[name];
+      for (const a of f.attacks) {
+        if (a.riposte && a.press > g.ripPress[name]) sfx('g2-riposte');
+        if (a.riposte && a.press > maxPress) maxPress = a.press;
+      }
+      g.ripPress[name] = maxPress;
+    }
+    // combo: 콤보 카운트가 증가한 순간(≥2 = 가시 COMBO 배지 기준). 나쁜 결과 시 코어가 0으로 리셋.
+    if (s.p1.combo > g.combo.P1 && s.p1.combo >= 2) sfx('g2-combo');
+    if (s.p2.combo > g.combo.P2 && s.p2.combo >= 2) sfx('g2-combo');
+    g.combo.P1 = s.p1.combo;
+    g.combo.P2 = s.p2.combo;
+    // ringout: 링 밖 탈락 순간(1회). 시간종료(TIME UP) 승패는 전역 팡파레 담당 → 여기선 무음.
+    if (s.result !== null && !g.ended) {
+      g.ended = true;
+      const eff = effEdgeOf(s.waterLevel);
+      const ring =
+        (s.result === 'P2' && s.c - HALF_GAP <= -eff + 1e-4) ||
+        (s.result === 'P1' && s.c + HALF_GAP >= eff - 1e-4);
+      if (ring) sfx('g2-ringout');
+    }
+  };
+
   // 온라인 렌더 훅(성능 구조 표준) — 활성/역할만 '선택 구독'하고 서버 스냅샷은 stateRef로 미러링한다
   // (스토어 전체 구독/effect churn 제거). truthy(isOnline)면 로컬 시뮬/봇을 끄고 서버 상태를 렌더 +
   // 내 입력만 전송한다. 이 화면은 canvas가 아니라 DOM/SVG를 game state로 그리므로, per-snapshot 작업
@@ -182,6 +231,7 @@ export default function Game2() {
   const { isOnline, myRole, stateRef } = useOnlineRender<Game2State>(2, (s) => {
     setGame(s); // 서버 권위 스냅샷을 DOM/SVG로 렌더(=draw)
     setDebugGame(s);
+    playTransitionSfx(s); // 온라인: 서버 스냅샷 전이에서 액션 sfx (rAF 루프는 온라인이면 정지)
   });
   // 입력 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref.
   const isOnlineRef = useRef(isOnline);
@@ -223,6 +273,12 @@ export default function Game2() {
     queueRef.current = [];
     reportedRef.current = false;
     botRef.current = null;
+    sfxRef.current = {
+      feedT: -Infinity,
+      ripPress: { P1: -Infinity, P2: -Infinity },
+      combo: { P1: 0, P2: 0 },
+      ended: false,
+    };
     setGame({ ...st }); // 코어는 동일 객체를 반환하므로 clone으로 새 참조 강제(리렌더)
     setDebugGame(st);
   }, [flow.gameId, flow.currentRound]);
@@ -247,6 +303,7 @@ export default function Game2() {
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
           flashRef.current[role][key](); // 램프 점등은 유지(U/I → P2측)
+          if (e.type === 'down' && slot === 'A') sfx('g2-clash'); // 공격(U) keydown
           onlineSendInput(slot, e.type, e.t ?? performance.now() / 1000);
           return;
         }
@@ -258,6 +315,7 @@ export default function Game2() {
         if (f.mode === 'online' && role === 'P2') return;
         flashRef.current[role][key]();
         if (f.phase !== 'playing') return;
+        if (key === 'key1') sfx('g2-clash'); // 공격(Q/U) keydown — 입력 즉시 클래시음
         queueRef.current.push(e);
       },
     );
@@ -309,6 +367,7 @@ export default function Game2() {
       stateRef.current = next;
       setGame({ ...next }); // 코어는 동일 객체를 반환 → clone으로 새 참조 강제(매 프레임 리렌더)
       setDebugGame(next);
+      playTransitionSfx(next); // 오프라인: 코어 step 전이에서 액션 sfx (이전값 가드로 1회씩)
 
       // 승패 확정 → 링아웃/타임업 연출 후 라운드 결과 보고 (라운드당 1회)
       // 온라인은 서버가 round:end 를 구동하므로 화면은 결과 보고에 관여하지 않는다.

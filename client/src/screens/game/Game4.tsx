@@ -37,6 +37,7 @@ import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endF
 import ResultOverlay from './ResultOverlay';
 import RoundIntro from './RoundIntro';
 import { isRoundIntroActive } from '../../state/roundIntroGate';
+import { sfx } from '@/audio';
 import './game4.css';
 
 // ---------------------------------------------------------------------------
@@ -630,9 +631,15 @@ export default function Game4() {
         (o.phase === 'countdown' || o.phase === 'playing' || o.phase === 'round-result');
       if (!activeNow || !o.serverState) return;
       const s = o.serverState as Game4State;
+      const prevSnap = stateRef.current; // 덮어쓰기 전 직전 서버 스냅샷(전이 가드용)
       stateRef.current = s;
       snapAtRef.current = performance.now(); // 외삽 dt 기준점
       setDebugGame(s);
+      // 러너 HP가 이번 스냅샷에 처음 감소한 순간에만 피격/KO음(중복 억제는 엔진+이 가드).
+      if (prevSnap && s.hp < prevSnap.hp) {
+        if (s.hp > 0) sfx('g4-hit');
+        else sfx('g4-ko');
+      }
       setHp(s.hp); // 값 동일하면 React가 리렌더 생략
       const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
       setHudMs(Math.ceil(remainingMs / 1000) * 1000); // 초 양자화 → ~1/s만 리렌더
@@ -687,6 +694,9 @@ export default function Game4() {
           if (e.type === 'down') {
             if (e.code === 'KeyU') flashU();
             else flashI();
+            // 온라인 U/I는 역할 종속: 러너(P2)면 좌우 닷지, 어태커(P1)면 I=발사(U=방향전환)
+            if (myRole === 'P2') sfx('g4-dodge');
+            else if (myRole === 'P1' && e.code === 'KeyI') sfx('g4-rocket-fire');
           }
           const slot = e.code === 'KeyU' ? 'A' : 'B';
           onlineSendInput(slot, e.type, e.t ?? performance.now() / 1000);
@@ -699,13 +709,22 @@ export default function Game4() {
         if (e.code === 'KeyQ') {
           if (e.type === 'down') flashQ();
         } else if (e.code === 'KeyW') {
-          if (e.type === 'down') flashW();
+          if (e.type === 'down') {
+            flashW();
+            sfx('g4-rocket-fire'); // 발사(공격수 P1) 입력
+          }
         } else if (e.code === 'KeyU') {
           if (online) return; // 온라인 mock: P2(회피자)는 봇
-          if (e.type === 'down') flashU();
+          if (e.type === 'down') {
+            flashU();
+            sfx('g4-dodge'); // 러너 좌 이동 입력
+          }
         } else if (e.code === 'KeyI') {
           if (online) return;
-          if (e.type === 'down') flashI();
+          if (e.type === 'down') {
+            flashI();
+            sfx('g4-dodge'); // 러너 우 이동 입력
+          }
         }
         if (f.phase === 'playing') actionsRef.current.push(e);
       },
@@ -837,6 +856,7 @@ export default function Game4() {
         trailRef.current = trailRef.current.filter((tr) => now - tr.t < 260);
         // 비치명 피격(HP 감소, 아직 생존) — 파편 + 짧은 캡션
         if (s.hp < prevHp && s.hp > 0) {
+          sfx('g4-hit'); // 러너 피격(HP 감소)
           fxRef.current.push(
             { kind: 'shards', x: s.p2X, y: G4.P2_Y, t: now },
             {
@@ -883,6 +903,7 @@ export default function Game4() {
           resultAtRef.current = now;
           if (s.result === 'P1') {
             // 발사자 승 = P2 피격사
+            sfx('g4-ko'); // HP 0 — 러너 격추(죽는 소리, 승리 징글은 전역 레이어)
             fxRef.current.push(
               { kind: 'chroma', t: now },
               { kind: 'shards', x: s.p2X, y: G4.P2_Y, t: now },

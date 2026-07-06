@@ -49,6 +49,7 @@ import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endF
 import ResultOverlay from './ResultOverlay';
 import RoundIntro from './RoundIntro';
 import { isRoundIntroActive } from '../../state/roundIntroGate';
+import { sfx } from '@/audio';
 import './game3.css';
 
 // ---------------------------------------------------------------------------
@@ -644,12 +645,16 @@ export default function Game3() {
         // ---- 렌더 전용 이펙트 파생 (로직 비침범) ----
         // 정답(idx 증가) → 히트 링 + "+1"
         if (s.p1Idx > prev.p1Idx) {
+          sfx('g3-hit-correct'); // 점수 +1(정타) 순간
+          if (s.p1Idx >= SEQ_LEN && prev.p1Idx < SEQ_LEN) sfx('g3-sequence-clear'); // 스트링 완주(중간)
           fxRef.current.push(
             { kind: 'ring', side: 'P1', x: P1_X, y: HIT_Y, t: now },
             { kind: 'float', side: 'P1', x: P1_X, y: HIT_Y - 44, t: now, text: '+1', color: COL.p1 },
           );
         }
         if (s.p2Idx > prev.p2Idx) {
+          sfx('g3-hit-correct'); // 점수 +1(정타) 순간
+          if (s.p2Idx >= SEQ_LEN && prev.p2Idx < SEQ_LEN) sfx('g3-sequence-clear'); // 스트링 완주(중간)
           fxRef.current.push(
             { kind: 'ring', side: 'P2', x: P2_X, y: HIT_Y, t: now },
             { kind: 'float', side: 'P2', x: P2_X, y: HIT_Y - 44, t: now, text: '+1', color: COL.p2 },
@@ -657,9 +662,11 @@ export default function Game3() {
         }
         // 오답(점수 감소, idx 유지) → "-1"
         if (s.p1Score < prev.p1Score && s.p1Idx === prev.p1Idx) {
+          sfx('g3-hit-wrong'); // 점수 -1(오타) 순간
           fxRef.current.push({ kind: 'float', side: 'P1', x: P1_X, y: HIT_Y - 44, t: now, text: '-1', color: COL.error });
         }
         if (s.p2Score < prev.p2Score && s.p2Idx === prev.p2Idx) {
+          sfx('g3-hit-wrong'); // 점수 -1(오타) 순간
           fxRef.current.push({ kind: 'float', side: 'P2', x: P2_X, y: HIT_Y - 44, t: now, text: '-1', color: COL.error });
         }
         // 점수 변경 순간 글로우 버스트 타임스탬프

@@ -16,6 +16,7 @@ import { useDebugScreen } from '../debug';
 import { logout, restoreSession, useSession } from '../state/session';
 import { openModal } from '../state/flow';
 import { fetchLeaderboard } from '../net/leaderboard';
+import '@/audio'; // 전역 오디오(UI/플로우/코인 SFX + BGM) 자기초기화 — 잠긴 파일 미수정
 import './main-in.css';
 
 export default function MainLoggedIn() {

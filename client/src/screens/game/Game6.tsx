@@ -44,6 +44,7 @@ import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endF
 import ResultOverlay from './ResultOverlay';
 import RoundIntro from './RoundIntro';
 import { isRoundIntroActive } from '../../state/roundIntroGate';
+import { sfx } from '@/audio';
 import './game6.css';
 
 // ---------------------------------------------------------------------------
@@ -635,6 +636,10 @@ export default function Game6() {
   // 키보드 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref.
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
+  // 온라인 입력 액션음은 역할에 따라 의미가 달라짐(P1=주자→점프/숙이기, P2=스포너→장애물 생성).
+  // 키 핸들러 안정 클로저가 최신 역할을 보게 하는 ref.
+  const myRoleRef = useRef(myRole);
+  myRoleRef.current = myRole;
 
   // 내 색(매치 고정, 역할과 독립) — 키캡/HUD 색은 이 값으로. match:start에서만 바뀌므로
   // 원시값 선택 구독이라 60Hz 스냅샷엔 리렌더 없음(값 동일 시 useSyncExternalStore가 생략).
@@ -675,6 +680,9 @@ export default function Game6() {
           if (e.type === 'down') {
             if (e.code === 'KeyU') flashU();
             else flashI();
+            // 역할별 액션음: P1(주자)=U 점프/I 숙이기, P2(스포너)=U/I 장애물 생성
+            if (myRoleRef.current === 'P1') sfx(e.code === 'KeyU' ? 'g6-jump' : 'g6-duck');
+            else sfx('g6-obstacle-spawn');
           }
           // I(보조키=숙이기)는 홀드 — 로컬 시각용 ducking 반영
           if (e.code === 'KeyI') setDucking(e.type === 'down');
@@ -687,13 +695,25 @@ export default function Game6() {
         const mockOnline = f.mode === 'online';
         // KeyW(숙이기)는 홀드 — 램프는 ducking state가 담당(코어 판정 반영)하므로 flash 없음
         if (e.code === 'KeyQ') {
-          if (e.type === 'down') flashQ();
+          if (e.type === 'down') {
+            flashQ();
+            sfx('g6-jump');
+          }
+        } else if (e.code === 'KeyW') {
+          // 숙이기(홀드) — 램프는 ducking state가 담당하지만 진입 keydown에 액션음
+          if (e.type === 'down') sfx('g6-duck');
         } else if (e.code === 'KeyU') {
           if (mockOnline) return; // 온라인 mock: P2(장애물)는 봇
-          if (e.type === 'down') flashU();
+          if (e.type === 'down') {
+            flashU();
+            sfx('g6-obstacle-spawn');
+          }
         } else if (e.code === 'KeyI') {
           if (mockOnline) return;
-          if (e.type === 'down') flashI();
+          if (e.type === 'down') {
+            flashI();
+            sfx('g6-obstacle-spawn');
+          }
         }
         if (f.phase === 'playing') actionsRef.current.push(e);
       },
@@ -713,11 +733,17 @@ export default function Game6() {
         setHudMs(GAME_DURATION * 1000);
       }
       let raf = 0;
+      // 온라인은 서버 스냅샷 구동 — 충돌 임팩트음을 result 전이(null→P2) 첫 프레임에 1회.
+      let crashPlayed = false;
       const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
         const ctx = canvasRef.current?.getContext('2d');
         const s = stateRef.current;
         if (ctx && s) {
+          if (!crashPlayed && s.result === 'P2') {
+            crashPlayed = true;
+            sfx('g6-crash');
+          }
           const disp = getPlayerDisplays(getFlow());
           fxRef.current = fxRef.current.filter((f) => now - f.t < 1200);
           // 스냅샷 사이 외삽: 마지막 스냅샷을 경과 dt만큼 자기 속도로 전진(최대 50ms 캡).
@@ -824,7 +850,8 @@ export default function Game6() {
         if (s.result !== null && resultAtRef.current === 0) {
           resultAtRef.current = now;
           if (s.result === 'P2') {
-            // 공룡 충돌 = P2 승
+            // 공룡 충돌 = P2 승 (패자 임팩트음 — 승리 팡파레는 전역 레이어)
+            sfx('g6-crash');
             fxRef.current.push(
               { kind: 'chroma', t: now },
               { kind: 'shards', x: G6.DINO_X + G6.DINO_W / 2, y: G6.GROUND_Y - 24, t: now },
