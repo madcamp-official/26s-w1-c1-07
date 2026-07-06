@@ -60,7 +60,7 @@ export default function OnlineController() {
     }
     if ((o.phase === 'countdown' || o.phase === 'playing') && o.gameId) {
       closeModal()
-      const target = `/online/game/${o.gameId}` // 온라인 매치 전용 URL (오프라인 /game/N 과 구분)
+      const target = `/online/game/${o.gameId}` // online-match-only URL (distinct from offline /game/N)
       if (loc.pathname !== target) navigate(target)
     }
   }, [o.gameId, o.phase, loc.pathname, navigate])

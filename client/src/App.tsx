@@ -59,7 +59,7 @@ export default function App() {
         <Route path="/game/8" element={<Game8 />} />
         <Route path="/game/9" element={<Game9 />} />
         <Route path="/game/10" element={<Game10 />} />
-        {/* 온라인 매치 전용 URL(오프라인 /game/N 과 구분) — 라이브 컨텍스트 없으면 메인으로 */}
+        {/* Online-match-only URL (distinct from offline /game/N) — no live context → back to main */}
         <Route path="/online/game/:gameId" element={<OnlineGame />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
