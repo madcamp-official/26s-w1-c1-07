@@ -174,7 +174,16 @@ function wire(s: Socket) {
     // (상대가 종료 후 접속을 끊으면 서버 leaveRoom이 남은 사람에게 room:state를 보내는데,
     //  이게 'match-end' phase를 'room'으로 덮어써 결과 오버레이가 사라지는 버그 방지.)
     const cur = getOnline()
-    if (cur.phase === 'match-end' || cur.phase === 'aborted') {
+    // 매치 진행/종료 중(슬롯 인트로·카운트다운·플레이·결과·이탈)에는 room:state 로 phase 를
+    // 덮지 않는다 — room 정보만 갱신. (코드방 자동진행 room:state 가 슬롯 인트로/인게임 phase 를
+    //  'room' 으로 덮어써 화면이 번쩍하고 사라지는 버그 방지)
+    if (
+      cur.phase === 'slot' ||
+      cur.phase === 'countdown' ||
+      cur.phase === 'playing' ||
+      cur.phase === 'match-end' ||
+      cur.phase === 'aborted'
+    ) {
       onlineStore.set({ room })
       return
     }

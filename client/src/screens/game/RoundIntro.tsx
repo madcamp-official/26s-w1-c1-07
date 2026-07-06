@@ -34,10 +34,10 @@ type AsymCopy = { name: string; asym: true; P1: RoleCopy; P2: RoleCopy };
 /** 새 gameId 매핑 기준 (1 숫자 · 2 펜싱 · 3 펌프 · 4 로켓 · 5 라이트사이클 · 6 공룡 · 7 마그마 · 8 포격 · 9 오목 · 10 줄다리기) */
 const COPY: Record<number, SymCopy | AsymCopy> = {
   1: { name: '숫자 맞추기', asym: false, line: '게이지를 올려 내 숫자를 <em>타겟</em>에 맞추고 — 멈춰서 버텨라!', k1: { icon: '▼', label: '내리기' }, k2: { icon: '▲', label: '올리기' } },
-  2: { name: '펜싱', asym: false, line: '찌르고 막아 상대를 <em>링 밖</em>으로 밀어내라!', k1: { icon: '⚔', label: '공격' }, k2: { icon: '⛨', label: '회피' } },
+  2: { name: '타이드 펜싱', asym: false, line: '찌르고 막아 상대를 <em>링 밖</em>으로 밀어내라!', k1: { icon: '⚔', label: '공격' }, k2: { icon: '⛨', label: '회피' } },
   3: { name: '펌프', asym: false, line: '뜨는 <em>화살표</em>와 같은 키를 정확히 눌러 점수를 쌓아라!', k1: { icon: '◀', label: '왼쪽' }, k2: { icon: '▶', label: '오른쪽' } },
   4: {
-    name: '로켓 피하기', asym: true,
+    name: '미사일 매치', asym: true,
     P1: { tag: '공격수', line: '로켓을 쏴 상대를 3번 맞혀라!', k1: { icon: '⇋', label: '방향전환' }, k2: { icon: '✦', label: '발사' } },
     P2: { tag: '러너', line: '좌우로 피해 10초 버텨라!', k1: { icon: '◀', label: '왼쪽' }, k2: { icon: '▶', label: '오른쪽' } },
   },
@@ -47,8 +47,8 @@ const COPY: Record<number, SymCopy | AsymCopy> = {
     P1: { tag: '공룡', line: '점프·숙이기로 피해 10초 살아남아라!', k1: { icon: '▲', label: '점프' }, k2: { icon: '▼', label: '숙이기' } },
     P2: { tag: '스포너', line: '선인장·새를 던져 공룡을 부딪혀라!', k1: { icon: '※', label: '선인장' }, k2: { icon: '^', label: '새' } },
   },
-  7: { name: '마그마 총격 듀얼', asym: false, line: '점프로 떠서 가시·마그마를 피하며 상대를 <em>먼저 쏴라</em>!', k1: { icon: '▲', label: '점프' }, k2: { icon: '✦', label: '발사' } },
-  8: { name: '몬스터 포격전', asym: false, line: '대포를 돌려 몬스터를 격추 — 내 대포를 <em>지켜라</em>!', k1: { icon: '⟳', label: '방향전환' }, k2: { icon: '✦', label: '발사' } },
+  7: { name: '이카루스 매치', asym: false, line: '점프로 떠서 가시·마그마를 피하며 상대를 <em>먼저 쏴라</em>!', k1: { icon: '▲', label: '점프' }, k2: { icon: '✦', label: '발사' } },
+  8: { name: '뿌슝뿌슝', asym: false, line: '대포를 돌려 몬스터를 격추 — 내 대포를 <em>지켜라</em>!', k1: { icon: '⟳', label: '방향전환' }, k2: { icon: '✦', label: '발사' } },
   9: { name: '스피드 오목', asym: false, line: '커서가 원하는 칸에 올 때 놓아 먼저 <em>3목</em>을 만들어라!', k1: { icon: '●', label: '놓기' }, k2: { icon: '✳', label: '방해' } },
   10: { name: '줄다리기', asym: false, line: '두 키를 <em>번갈아</em> 연타해 밧줄을 당겨라!', k1: { icon: '⇄', label: '교대①' }, k2: { icon: '⇄', label: '교대②' } },
 };

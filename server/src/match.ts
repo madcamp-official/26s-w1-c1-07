@@ -89,7 +89,7 @@ export class MatchRunner implements MatchRuntime {
     this.a = a
     this.b = b
     this.matchId = `m_${randomInt(0x100000, 0xffffff).toString(16)}`
-    // 역할(공격/수비 등 게임기능)은 매치당 랜덤 배정 — 이 매치의 모든 라운드에서 A/B가 같은 역할 유지.
+    // 역할(공격/수비 등 게임기능)은 라운드마다 랜덤 재배정된다(beginRound). 여기선 초기값만.
     this.roleOfA = randomInt(0, 2) === 0 ? 'P1' : 'P2'
     // 색은 '플레이어'에 종속(역할과 독립). 어느 슬롯이 파랑일지 매치당 랜덤 → roleOfA와 무관하게
     // 공격자가 파랑일 때도 빨강일 때도 생긴다(색≠역할).
@@ -155,7 +155,9 @@ export class MatchRunner implements MatchRuntime {
   private beginRound(): void {
     if (this.stopped) return
     this.gameId = this.slotGames[this.currentRound % 3]
-    // roleOfA(색)는 매치 시작 때 고정됨 — 라운드마다 재배정하지 않는다.
+    // 역할(공격/수비)은 라운드마다 랜덤 재배정 — 비대칭 게임(로켓·공룡 등)에서 매 라운드
+    // 공격/수비가 바뀐다. 색(플레이어 종속)과는 독립이라 색으로 역할을 알 수 없다.
+    this.roleOfA = randomInt(0, 2) === 0 ? 'P1' : 'P2'
     const roleOfB: Role = this.roleOfA === 'P1' ? 'P2' : 'P1'
     const round = this.currentRound + 1
 
