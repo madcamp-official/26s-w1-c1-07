@@ -48,12 +48,19 @@ export interface OpponentView {
   imageUrl: string | null
 }
 
+/** 플레이어 색 — 역할(P1/P2)이 아니라 '플레이어'에 종속(매치당 고정). 렌더러는 이 색으로 칠한다. */
+export type PlayerColor = 'blue' | 'red'
+
 /** match:start — 각 플레이어에게 개별(자기 슬롯 포함) */
 export interface MatchStartMsg {
   matchId: string
   you: 'A' | 'B' // 매치 고정 슬롯(승패 판정용). 라운드별 역할(P1/P2)은 round:start
   totalRounds: number
   opponent: OpponentView
+  /** 내 색(매치 고정). 역할과 무관 — 공격/수비 역할은 매치마다 랜덤이라 색이 곧 역할이 아니다. */
+  yourColor: PlayerColor
+  /** 상대 색(매치 고정) */
+  oppColor: PlayerColor
 }
 
 /** round:start — 이 라운드의 게임 종류 통보 (역할은 매 라운드 랜덤이라 여기 실림) */

@@ -10,6 +10,7 @@ import {
   type GameResult,
   type MeInfo,
   type OpponentView,
+  type PlayerColor,
   type Role,
   type RoomSnapshot,
   type SlotResult,
@@ -40,6 +41,10 @@ export interface OnlineState {
   gameId: GameId | null
   role: Role | null
   opponent: OpponentView | null
+  /** 내 색(매치 고정, 플레이어 종속 — 역할과 독립). 렌더러가 이 색으로 칠한다. */
+  myColor: PlayerColor | null
+  /** 상대 색(매치 고정) */
+  oppColor: PlayerColor | null
   /** 서버 game:state 최신 투영 상태 (게임 화면이 렌더) */
   serverState: unknown | null
   serverSeq: number
@@ -66,6 +71,8 @@ const INITIAL: OnlineState = {
   gameId: null,
   role: null,
   opponent: null,
+  myColor: null,
+  oppColor: null,
   serverState: null,
   serverSeq: -1,
   countdownUntil: 0,
@@ -80,6 +87,20 @@ const INITIAL: OnlineState = {
 export const onlineStore = createStore<OnlineState>({ ...INITIAL })
 export const useOnline = () => useStore(onlineStore)
 export const getOnline = () => onlineStore.get()
+
+/**
+ * 이 라운드 P1/P2 '기능 엔티티'의 플레이어 색 (색≠역할 — 렌더러는 이 색으로 칠한다).
+ * 색은 플레이어 종속(매치 고정), 역할은 매치마다 랜덤이라 P1(공격)이 파랑일 때도 빨강일 때도 있다.
+ * 오프라인/색 정보 없으면 기본(P1=blue, P2=red)이라 기존 동작과 동일.
+ */
+export function functionColors(): { p1: PlayerColor; p2: PlayerColor } {
+  const o = onlineStore.get()
+  if (!o.myColor || !o.oppColor || !o.role) return { p1: 'blue', p2: 'red' }
+  // role = 내 역할(이 매치 고정). 내가 P1이면 P1엔티티=내 색, 아니면 상대 색.
+  return o.role === 'P1'
+    ? { p1: o.myColor, p2: o.oppColor }
+    : { p1: o.oppColor, p2: o.myColor }
+}
 
 let socket: Socket | null = null
 // 호스트가 room:state 마다 roomStart를 중복 emit해 매치가 2번 시작되는 것 방지(방 코드당 1회).
@@ -142,15 +163,26 @@ function wire(s: Socket) {
   s.on(EV.queueMatched, (m: { roomCode: string; role: Role; opponent: OpponentView }) =>
     onlineStore.set({ role: m.role, opponent: m.opponent }),
   )
-  s.on(EV.matchStart, (m: { matchId: string; you: 'A' | 'B'; totalRounds: number; opponent: OpponentView }) =>
-    onlineStore.set({
-      matchId: m.matchId,
-      mySlot: m.you,
-      totalRounds: m.totalRounds,
-      opponent: m.opponent,
-      matchResult: null,
-      recordedMatchId: null,
-    }),
+  s.on(
+    EV.matchStart,
+    (m: {
+      matchId: string
+      you: 'A' | 'B'
+      totalRounds: number
+      opponent: OpponentView
+      yourColor: PlayerColor
+      oppColor: PlayerColor
+    }) =>
+      onlineStore.set({
+        matchId: m.matchId,
+        mySlot: m.you,
+        totalRounds: m.totalRounds,
+        opponent: m.opponent,
+        myColor: m.yourColor,
+        oppColor: m.oppColor,
+        matchResult: null,
+        recordedMatchId: null,
+      }),
   )
   s.on(EV.roundStart, (m: { matchId: string; round: number; gameId: GameId; role: Role; countdownMs: number }) =>
     onlineStore.set({

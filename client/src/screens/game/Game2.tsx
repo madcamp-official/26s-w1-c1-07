@@ -18,7 +18,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { game2, G2, GAME_DURATION } from '@madpump/shared';
-import type { Game2State, GameInputEvent, Role } from '@madpump/shared';
+import type { Game2State, GameInputEvent, PlayerColor, Role } from '@madpump/shared';
 import type { MatchResult } from '@/shell';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
@@ -32,7 +32,7 @@ import {
   useFlow,
 } from '../../state/flow';
 import { setDebugGame, useDebugScreen } from '../../debug';
-import { onlineStore, sendInput as onlineSendInput } from '../../net/online';
+import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';
 import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
 import './game2.css';
@@ -45,7 +45,7 @@ import './game2.css';
 const CW = 960;
 const CH = 540;
 
-const COL = {
+const COL0 = {
   field: '#1a0b2e', // --bg-raised
   deep: '#160a33', // --surface-deep
   p1: '#05d9e8',
@@ -180,6 +180,13 @@ function drawScene(
   now: number,
   p1IsYou: boolean,
 ): void {
+  // 색은 플레이어 종속(역할 아님) — P1/P2 기능 엔티티의 실제 플레이어 색으로 칠한다.
+  //  P1엔티티 색이 파랑이면 COL0 그대로, 빨강이면 p1/p2 색 스왑. 로컬 COL을 shadow → 아래 COL.p1/p2 자동 반영.
+  const fc = functionColors();
+  const COL =
+    fc.p1 === 'red'
+      ? { ...COL0, p1: COL0.p2, p1dim: COL0.p2dim, p2: COL0.p1, p2dim: COL0.p1dim }
+      : COL0;
   const X = (u: number) => (u / G2.W) * CW;
   const Y = (u: number) => (u / G2.H) * CH;
   const railP1 = Y(G2.LAUNCHER_Y);
@@ -561,11 +568,14 @@ export default function Game2() {
       o.gameId === 2 &&
       o.role != null &&
       (o.phase === 'countdown' || o.phase === 'playing' || o.phase === 'round-result');
-    return active ? `1:${o.role}` : '0';
+    return active ? `1:${o.role}:${o.myColor ?? 'blue'}` : '0';
   };
   const onlineSig = useSyncExternalStore(onlineStore.subscribe, readOnlineSig, readOnlineSig);
   const isOnline = onlineSig !== '0';
-  const myRole: Role | null = isOnline ? (onlineSig.slice(2) as Role) : null;
+  const sigParts = onlineSig.split(':'); // ['1', role, color] | ['0']
+  const myRole: Role | null = isOnline ? (sigParts[1] as Role) : null;
+  // 색은 플레이어 종속(역할과 독립). 키캡/표시는 이 색으로.
+  const myColor: PlayerColor = isOnline ? (sigParts[2] as PlayerColor) : 'blue';
   // 키보드 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref.
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
@@ -829,7 +839,7 @@ export default function Game2() {
             {
               kind: 'caption',
               text: `HP ${s.hp}`,
-              color: COL.p2,
+              color: COL0.p2,
               x: s.p2X,
               y: G2.P2_Y - 10,
               t: now,
@@ -857,7 +867,7 @@ export default function Game2() {
             fxRef.current.push({
               kind: 'caption',
               text: 'CLOSE!',
-              color: COL.p1,
+              color: COL0.p1,
               x: nearX,
               y: G2.P2_Y - 8,
               t: now,
@@ -876,7 +886,7 @@ export default function Game2() {
               {
                 kind: 'caption',
                 text: 'HIT!',
-                color: COL.p2,
+                color: COL0.p2,
                 x: s.p2X,
                 y: G2.P2_Y - 10,
                 t: now,
@@ -890,7 +900,7 @@ export default function Game2() {
               {
                 kind: 'caption',
                 text: 'SURVIVED!',
-                color: COL.p2,
+                color: COL0.p2,
                 x: G2.W / 2,
                 y: G2.P2_Y - 12,
                 t: now,
@@ -983,18 +993,18 @@ export default function Game2() {
         // 온라인: U/I 두 키만 사용. 내 역할의 동작을 내 색으로만 표시(비대칭 게임 — 역할 조건부).
         <div className="g2-keys g2-keys--online">
           <div className="g2-keys__group">
-            <span className={`g2-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {myRole === 'P1' ? '파랑 · ATTACK' : '빨강 · DODGE'}
+            <span className={`g2-keys__tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}>
+              YOU · {myColor === 'blue' ? '파랑' : '빨강'} · {myRole === 'P1' ? 'ATTACK' : 'DODGE'}
             </span>
             <KeyCap
-              role={myRole ?? 'P2'}
+              role={myColor === 'blue' ? 'P1' : 'P2'}
               keyChar="U"
               icon={myRole === 'P1' ? '⇄' : '◀'}
               lit={uLit}
               label={myRole === 'P1' ? '방향전환' : '왼쪽'}
             />
             <KeyCap
-              role={myRole ?? 'P2'}
+              role={myColor === 'blue' ? 'P1' : 'P2'}
               keyChar="I"
               icon={myRole === 'P1' ? '◉' : '▶'}
               lit={iLit}

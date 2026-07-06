@@ -14,6 +14,7 @@ import {
   type GameId,
   type GameInputEvent,
   type GameResult,
+  type PlayerColor,
   type Role,
   type SlotResult,
 } from '@madpump/shared'
@@ -58,6 +59,9 @@ export class MatchRunner implements MatchRuntime {
   private usedGames: GameId[] = []
   private totalRounds = TOTAL_ROUNDS // 방 설정(rounds)에서 구성자에 결정
   private games: GameId[] = ALL_GAME_IDS // 방 설정 체크박스(games)에서 구성자에 결정
+  // 색(플레이어 종속, 매치당 고정) — 역할(roleOfA)과 독립. 렌더는 이 색으로 칠한다.
+  private colorOfA: PlayerColor = 'blue'
+  private colorOfB: PlayerColor = 'red'
   // 현재 라운드 런타임
   private gameId: GameId = 1
   private roleOfA: Role = 'P1'
@@ -75,8 +79,17 @@ export class MatchRunner implements MatchRuntime {
     this.a = a
     this.b = b
     this.matchId = `m_${randomInt(0x100000, 0xffffff).toString(16)}`
-    // 색상(역할)은 매치 시작 때 한 번만 정한다 — 이 매치의 모든 라운드에서 A/B가 같은 역할(색) 유지.
+    // 역할(공격/수비 등 게임기능)은 매치당 랜덤 배정 — 이 매치의 모든 라운드에서 A/B가 같은 역할 유지.
     this.roleOfA = randomInt(0, 2) === 0 ? 'P1' : 'P2'
+    // 색은 '플레이어'에 종속(역할과 독립). 어느 슬롯이 파랑일지 매치당 랜덤 → roleOfA와 무관하게
+    // 공격자가 파랑일 때도 빨강일 때도 생긴다(색≠역할).
+    if (randomInt(0, 2) === 0) {
+      this.colorOfA = 'blue'
+      this.colorOfB = 'red'
+    } else {
+      this.colorOfA = 'red'
+      this.colorOfB = 'blue'
+    }
     // 라운드 수 / 플레이 가능 게임은 방 설정에서 결정(없거나 이상하면 기본값으로).
     this.totalRounds = Math.min(9, Math.max(1, Math.round(room.rounds) || TOTAL_ROUNDS))
     const picked = (room.games ?? []).filter((g) => ALL_GAME_IDS.includes(g))
@@ -90,12 +103,16 @@ export class MatchRunner implements MatchRuntime {
       you: 'A',
       totalRounds: this.totalRounds,
       opponent: { nickname: this.b.nickname, imageUrl: this.b.imageUrl },
+      yourColor: this.colorOfA,
+      oppColor: this.colorOfB,
     })
     this.io.to(this.b.socketId).emit(EV.matchStart, {
       matchId: this.matchId,
       you: 'B',
       totalRounds: this.totalRounds,
       opponent: { nickname: this.a.nickname, imageUrl: this.a.imageUrl },
+      yourColor: this.colorOfB,
+      oppColor: this.colorOfA,
     })
     this.beginRound()
   }

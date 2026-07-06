@@ -23,16 +23,17 @@ export default function OnlineController() {
     }
   }, [o.gameId, o.phase, loc.pathname, navigate])
 
-  // 라운드 카운트다운: 이 라운드에 서버가 배정한 내 색(역할)을 크게 알린다.
-  // 역할이 매 라운드 랜덤이라, 플레이 시작 전에 "내가 파랑인지 빨강인지" 확실히 보여준다.
+  // 라운드 카운트다운: 내 '색'(플레이어 종속, 매치 고정)을 크게 알린다.
+  // 색은 역할과 무관 — 공격/수비 역할은 매치마다 랜덤이라 색으로 역할을 알 수 없다(그게 의도).
   if (o.phase === 'countdown' && o.role) {
-    const iAmP1 = o.role === 'P1'
+    // 색 정보 없으면(구버전 등) 역할 색으로 폴백.
+    const iAmBlue = o.myColor ? o.myColor === 'blue' : o.role === 'P1'
     return (
       <div className="onl-youbanner" data-testid="online-you-banner" aria-live="polite">
-        <div className={`onl-youbanner__card ${iAmP1 ? 'is-p1' : 'is-p2'}`}>
+        <div className={`onl-youbanner__card ${iAmBlue ? 'is-p1' : 'is-p2'}`}>
           <span className="onl-youbanner__label font-arcade">YOU ARE</span>
           <span className="onl-youbanner__color font-arcade glow-text">
-            {iAmP1 ? '파랑 · P1' : '빨강 · P2'}
+            {iAmBlue ? '파랑' : '빨강'}
           </span>
           <span className="onl-youbanner__hint font-display">U · I 로 조종</span>
         </div>
