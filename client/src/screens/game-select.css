@@ -226,6 +226,33 @@
   }
 }
 
+/* ── 게임4~10 네온 픽셀아트 픽토그램 (SVG 씬) ── */
+.gpic svg {
+  width: 88%;
+  height: 88%;
+  overflow: visible; /* 글로우가 씬 경계에서 잘리지 않도록 (스크린이 최종 클립) */
+}
+
+/* 색 계열 — currentColor 로 fill/stroke/글로우 통일 */
+.gp-cyan { color: var(--p1); }
+.gp-pink { color: var(--p2); }
+.gp-yellow { color: var(--accent); }
+.gp-mag { color: var(--accent2); }
+.gp-green { color: var(--win); }
+.gp-dim { color: var(--text-muted); }
+
+.gp-fill { fill: currentColor; stroke: none; }
+.gp-stroke { fill: none; stroke: currentColor; }
+
+/* 네온 글로우 (§1.1 공식의 SVG 판) */
+.gp-glow {
+  filter: drop-shadow(0 0 1.5px currentColor) drop-shadow(0 0 5px currentColor);
+}
+/* 발광 없는 보조선/원근 노트 — 눌러서 네온이 주인공 되게 (네온 절제 §1.1) */
+.gp-dim2 { opacity: 0.4; }
+.gp-grid { opacity: 0.28; }
+.gp-magma { opacity: 0.22; } /* 마그마 바탕 채움은 dim, 상단 윤곽만 발광 */
+
 /* ── 10게임 대응: 캐비닛 줄바꿈 스크롤 + 게임4~10 번호 픽토그램 ── */
 .s8-floor {
   overflow-y: auto;
