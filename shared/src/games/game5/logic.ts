@@ -33,6 +33,13 @@ export const G5 = {
   // ── 총알 ──
   BULLET_SPEED: 660,
   BULLET_R: 5,
+  /**
+   * 총알↔몬스터 피격 판정에만 더하는 여유 반경(관대한 피격).
+   * 빠른 총알(BULLET_SPEED)이 작은 히트박스를 프레임 사이에 통과(tunneling)해
+   * 스치듯 지나가는 문제를 완화한다. 시각 스프라이트 크기(MONSTER_R)와
+   * 몬스터→대포 패배 판정(touchR)에는 영향을 주지 않는다.
+   */
+  HIT_PAD: 6,
   // ── 몬스터 (직선 이동, 기존 대비 20% 감속) ──
   MONSTER_R: 13,
   MONSTER_SPEED_MIN: 44.8,
@@ -241,7 +248,8 @@ export function step(state: Game5State, events: GameInputEvent[], dt: number): G
   state.shots = liveShots
 
   // 6) 총알 ↔ 몬스터 충돌 — 맞으면 몬스터 소멸 + 쏜 사람 +1, 총알도 소멸
-  const hitR = G5.MONSTER_R + G5.BULLET_R
+  //    HIT_PAD 만큼 관대하게: 시각 스프라이트/패배 판정은 그대로, 피격만 잘 되게.
+  const hitR = G5.MONSTER_R + G5.BULLET_R + G5.HIT_PAD
   const deadMonster = new Set<number>()
   const usedShot = new Set<number>()
   for (let si = 0; si < state.shots.length; si++) {
