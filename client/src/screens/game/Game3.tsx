@@ -1,30 +1,31 @@
 /**
- * 게임6 · 펌프 (scr-game3) — NEON COIN-OP 아케이드 화면 (신규 제작).
- * 컨테이너 testid: scr-game3 / 부품: game-stage(CRT 베젤), hud-*(HudFrame 내장), btn-exit
+ * Game 6 · Pump (scr-game3) — NEON COIN-OP arcade screen (newly built).
+ * Container testid: scr-game3 / parts: game-stage(CRT bezel), hud-*(HudFrame built-in), btn-exit
  *
- * ── 게임(코어 game3) ────────────────────────────────────────────
- *  · P1에게는 Q/W, P2에게는 U/I로 이루어진 100칸 연타 스트링(제한 10초 × 10).
- *  · "지금 눌러야 할 키"를 맞히면 +1 & 다음 칸으로. 틀리면 −1(제자리).
- *  · 종료 시 점수 높은 쪽 승(동점 무승부).
- *  키 인코딩: 0 = 첫 키(Q/U), 1 = 둘째 키(W/I).
+ * ── Game (core game3) ────────────────────────────────────────────
+ *  · A 100-cell rapid-tap string of Q/W for P1 and U/I for P2 (limit 10s × 10).
+ *  · Hit "the key you must press now" for +1 & advance to the next cell. Miss = −1 (stay put).
+ *  · At the end, the higher score wins (a tie is a Draw).
+ *  Key encoding: 0 = first key (Q/U), 1 = second key (W/I).
  *
- * ── 화면(처음부터 새로 그린 neon-coinop 비주얼) ─────────────────
- *  "두 개의 연타 레인, 하나의 스코어 잭팟" — DDR식 노트 하이웨이 대전.
- *   · 좌 P1(시안)/우 P2(핑크) 미러 레인. 각 레인에 히트라인(NOW)으로 내려오는
- *     키 타일이 원근으로 수렴(멀수록 작고 흐림). 현재 칸 타일이 히트라인에서 발광.
- *   · 정답 = 타일 팝 + "+1" 상승 + 히트 링 / 오답 = 붉은 플래시 + 레인 셰이크 + "-1".
- *   · 점수 = 아케이드 잭팟 카운터(하드 스텝 + 변경 순간 글로우 버스트).
- *   · 외곽 PUMP 게이지(진행도 idx/100) — 누가 더 펌핑했나 레이스.
- *   · 승패 순간에만 크로마틱 글리치 1프레임. 임박 5초 = 옐로 스캔 스윕(유일 accent).
- *   · CRT 베젤/스캔라인은 theme.css·App 전역 — 여기서 중복 렌더 금지.
+ * ── Screen (neon-coinop visuals drawn fresh from scratch) ─────────────────
+ *  "Two rapid-tap lanes, one score jackpot" — DDR-style note-highway duel.
+ *   · Left P1 (cyan) / right P2 (pink) mirrored lanes. In each lane the key tiles descend
+ *     toward the hit line (NOW), converging in perspective (smaller and fainter with distance).
+ *     The current-cell tile glows at the hit line.
+ *   · Correct = tile pop + "+1" rising + hit ring / wrong = red flash + lane shake + "-1".
+ *   · Score = arcade jackpot counter (hard step + glow burst at the moment of change).
+ *   · Outer PUMP gauge (progress idx/100) — a race for who pumped more.
+ *   · A 1-frame chromatic glitch only at the win/loss moment. Final 5s = yellow scan sweep (the only accent).
+ *   · CRT bezel/scanlines are global in theme.css · App — do not re-render them here.
  *
- * ── 배선(게임1·2 화면과 동일 패턴) ─────────────────────────────
- *   mount → idle이거나 다른 게임이면 startOfflineGame(3) (direct-URL 복구)
- *   라운드마다 game3.create(Math.random)
- *   rAF 루프 → game3.step(state, events, dtSec) → setDebugGame(state) 매 틱
- *   입력 attachLocalKeyboard(GameInputEvent 큐) → step에 그대로 전달(코어가 down만 판정)
- *   result 확정 → (RESULT_FX_MS 글리치 후) reportRoundEnd(매핑) 1회 → <ResultOverlay />
- *   online 모드 → P2는 봇(정답 키를 인간 페이스로 연타, 소량 미스). 사람은 P1(q/w).
+ * ── Wiring (same pattern as the Game 1 · 2 screens) ─────────────────────────────
+ *   mount → if idle or a different game, startOfflineGame(3) (direct-URL recovery)
+ *   each round game3.create(Math.random)
+ *   rAF loop → game3.step(state, events, dtSec) → setDebugGame(state) every tick
+ *   input attachLocalKeyboard(GameInputEvent queue) → passed straight to step (core judges down only)
+ *   result confirmed → (after RESULT_FX_MS glitch) reportRoundEnd(mapping) once → <ResultOverlay />
+ *   online mode → P2 is a bot (taps the correct key at a human pace, small miss rate). The human is P1 (q/w).
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -53,7 +54,7 @@ import { sfx } from '@/audio';
 import './game3.css';
 
 // ---------------------------------------------------------------------------
-// 캔버스 상수 (논리 800×450 — CSS로 반응형 스케일, 16:9)
+// Canvas constants (logical 800×450 — responsive scaling via CSS, 16:9)
 // ---------------------------------------------------------------------------
 const CW = 800;
 const CH = 450;
@@ -74,11 +75,11 @@ const COL0 = {
 } as const;
 
 /**
- * 색을 '역할'이 아니라 '플레이어'에 종속시키는 로컬 팔레트.
- * P1 기능 엔티티 색이 파랑이면 COL0 그대로(P1=시안/P2=핑크), 빨강이면 p1/p2(및 dim) 쌍을 스왑.
- * 오프라인/색 정보 없음 = functionColors 기본 {p1:'blue',p2:'red'} → COL0 반환(기존 동작 보존).
+ * Local palette that binds color to the 'player', not the 'role'.
+ * If the P1 function-entity color is blue, keep COL0 as-is (P1=cyan/P2=pink); if red, swap the p1/p2 (and dim) pairs.
+ * Offline / no color info = functionColors default {p1:'blue',p2:'red'} → returns COL0 (preserves existing behavior).
  */
-type Pal = Record<keyof typeof COL0, string>; // as const 리터럴 타입 회피(스왑 대입 허용)
+type Pal = Record<keyof typeof COL0, string>; // avoid the as const literal type (allow swap assignment)
 function palette(): Pal {
   const fc = functionColors();
   return fc.p1 === 'red'
@@ -88,34 +89,34 @@ function palette(): Pal {
 
 const ARCADE = '"Press Start 2P", monospace';
 
-// 레인/타일 지오메트리 (논리 좌표)
+// Lane/tile geometry (logical coordinates)
 const HIT_Y = 318;
 const SPACING = 60;
-const TILE = 72; // NOW 타일 한 변
+const TILE = 72; // one side of the NOW tile
 const LANE_HALF = 116;
 const P1_X = 206;
 const P2_X = 594;
 const SCORE_Y = 66;
-const AHEAD = 4.6; // 히트라인 위로 보여줄 최대 오프셋
-const BEHIND = -1.4; // 히트라인 아래(소비된 타일)
+const AHEAD = 4.6; // max offset shown above the hit line
+const BEHIND = -1.4; // below the hit line (consumed tiles)
 const PUMP_TOP = 150;
 const PUMP_BOT = 356;
 
-/** 판정 → 결과 오버레이 전환 사이 인게임 글리치 연출 시간 */
+/** In-game glitch effect duration between the ruling → result-overlay transition */
 const RESULT_FX_MS = 620;
 
-/** 코어 result('P1'|'P2'|'DRAW') → 셸 MatchResult */
+/** core result('P1'|'P2'|'DRAW') → shell MatchResult */
 function toMatchResult(r: 'P1' | 'P2' | 'DRAW'): MatchResult {
   return r === 'P1' ? 'P1_WIN' : r === 'P2' ? 'P2_WIN' : 'DRAW';
 }
 
-/** 키 값(0/1) → 방향 아이콘(좌/우 펌프 패드) */
+/** key value(0/1) → direction icon (left/right pump pad) */
 function arrowFor(v: number): string {
   return v === 0 ? '◀' : '▶'; // ◀ / ▶
 }
 
 // ---------------------------------------------------------------------------
-// 렌더 전용 이펙트 (로직 비침범)
+// Render-only effects (does not touch logic)
 // ---------------------------------------------------------------------------
 type Fx =
   | { kind: 'float'; side: PlayerRole; x: number; y: number; t: number; text: string; color: string }
@@ -132,22 +133,22 @@ interface RenderBundle {
   reduceMotion: boolean;
   p1IsYou: boolean;
   p2IsYou: boolean;
-  /** 플레이어 종속 색 팔레트(역할 아님) — drawScene/drawLane이 이 색으로 P1/P2 엔티티를 칠한다. */
+  /** player-bound color palette (not role) — drawScene/drawLane paint the P1/P2 entities with these colors. */
   col: Pal;
 }
 
 // ---------------------------------------------------------------------------
-// 캔버스 렌더러 (순수 그리기 — state는 읽기만)
+// Canvas renderer (pure drawing — state is read-only)
 // ---------------------------------------------------------------------------
 function drawScene(ctx: CanvasRenderingContext2D, s: Game3State, r: RenderBundle): void {
   const { now, urgent, reduceMotion, col: COL } = r;
 
-  // --- 필드 ---
+  // --- field ---
   ctx.clearRect(0, 0, CW, CH);
   ctx.fillStyle = COL.field;
   ctx.fillRect(0, 0, CW, CH);
 
-  // 옅은 세로 그리드 (퍼플) — 임박 시 핑크 톤
+  // faint vertical grid (purple) — pink tone when time is running out
   ctx.save();
   ctx.strokeStyle = urgent ? 'rgba(255,42,109,0.10)' : 'rgba(211,0,197,0.07)';
   ctx.lineWidth = 1;
@@ -159,7 +160,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game3State, r: RenderBundle
   }
   ctx.restore();
 
-  // --- 중앙 디바이더 (퍼플 네온) ---
+  // --- center divider (purple neon) ---
   ctx.save();
   ctx.strokeStyle = COL.accent2;
   ctx.shadowColor = COL.accent2;
@@ -170,7 +171,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game3State, r: RenderBundle
   ctx.moveTo(CW / 2, 92);
   ctx.lineTo(CW / 2, 408);
   ctx.stroke();
-  // 상단 VS 눈금
+  // top VS tick
   ctx.globalAlpha = 0.9;
   ctx.shadowBlur = 6;
   ctx.fillStyle = COL.muted;
@@ -179,7 +180,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game3State, r: RenderBundle
   ctx.fillText('VS', CW / 2, 88);
   ctx.restore();
 
-  // --- 임박 스캔 스윕 (유일 accent 사용) ---
+  // --- final-seconds scan sweep (uses the only accent) ---
   if (urgent && !reduceMotion) {
     ctx.save();
     ctx.strokeStyle = 'rgba(253,245,0,0.12)';
@@ -197,7 +198,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game3State, r: RenderBundle
   drawLane(ctx, 'P1', s, r);
   drawLane(ctx, 'P2', s, r);
 
-  // --- 부유 이펙트 (+1 / -1) ---
+  // --- floating effects (+1 / -1) ---
   for (const f of r.fx) {
     if (f.kind !== 'float') continue;
     const age = now - f.t;
@@ -214,7 +215,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game3State, r: RenderBundle
     ctx.restore();
   }
 
-  // --- 승패 순간 크로마틱 글리치 1프레임 (reduce-motion 존중) ---
+  // --- 1-frame chromatic glitch at the win/loss moment (respects reduce-motion) ---
   if (!reduceMotion) {
     const chroma = r.fx.find((f) => f.kind === 'chroma');
     if (chroma && now - chroma.t < 90) {
@@ -229,10 +230,10 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game3State, r: RenderBundle
   }
 }
 
-/** 한 레인(플레이어) 그리기 */
+/** Draw one lane (player) */
 function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game3State, r: RenderBundle): void {
   const isP1 = side === 'P1';
-  const { now, reduceMotion, col: COL } = r; // 로컬 COL(플레이어 색 스왑본) — 사용 전에 선언
+  const { now, reduceMotion, col: COL } = r; // local COL (player color-swapped version) — declared before use
   const laneX = isP1 ? P1_X : P2_X;
   const color = isP1 ? COL.p1 : COL.p2;
   const dim = isP1 ? COL.p1dim : COL.p2dim;
@@ -245,11 +246,11 @@ function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game3State
   const scoreFxT = r.scoreFx[side];
   const isYou = isP1 ? r.p1IsYou : r.p2IsYou;
 
-  // 오답 셰이크 (레인 타일 그룹에만)
+  // wrong-answer shake (on the lane tile group only)
   const shakeX =
     wrong > 0 && !reduceMotion ? (Math.random() * 2 - 1) * 4 * (wrong / G3.FLASH) : 0;
 
-  // --- 레인 배경 패널 (dim 바탕 + 퍼플 헤어라인) ---
+  // --- lane background panel (dim base + purple hairline) ---
   ctx.save();
   ctx.fillStyle = COL.deep;
   ctx.globalAlpha = 0.55;
@@ -260,7 +261,7 @@ function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game3State
   ctx.strokeRect(laneX - LANE_HALF, 100, LANE_HALF * 2, 300);
   ctx.restore();
 
-  // --- PUMP 진행 게이지 (외곽) ---
+  // --- PUMP progress gauge (outer) ---
   const pumpX = isP1 ? 44 : CW - 44 - 12;
   const ratio = Math.max(0, Math.min(1, idx / SEQ_LEN));
   ctx.save();
@@ -279,10 +280,10 @@ function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game3State
   }
   ctx.restore();
 
-  // --- 노트 하이웨이 (타일) ---
+  // --- note highway (tiles) ---
   const lo = Math.floor(scroll) - 2;
   const hi = Math.floor(scroll) + 6;
-  // 먼 타일(큰 offset) 먼저, 가까운/소비 타일 나중에 그려 위로 겹치게
+  // draw far tiles (large offset) first, near/consumed tiles later so they layer on top
   for (let j = hi; j >= lo; j--) {
     if (j < 0 || j >= SEQ_LEN) continue;
     const offset = j - scroll;
@@ -296,13 +297,13 @@ function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game3State
       scale = Math.max(0.44, 1 - offset * 0.12);
       alpha = Math.max(0.14, 1 - offset * 0.17);
     } else {
-      const tt = -offset; // 소비된 타일이 시청자 쪽으로 커지며 소멸
+      const tt = -offset; // consumed tile grows toward the viewer and fades out
       scale = 1 + tt * 0.18;
       alpha = Math.max(0, 1 - tt * 1.5);
     }
     if (alpha <= 0.02) continue;
 
-    // 정답 팝: 현재(NOW) 타일이 히트 순간 살짝 커짐
+    // correct pop: the current (NOW) tile grows slightly at the hit moment
     const pop = isNow && flash > 0 ? 1 + (flash / G3.FLASH) * 0.14 : 1;
     const sz = TILE * scale * pop;
     const cx = laneX + (offset >= -0.2 ? shakeX : 0);
@@ -312,7 +313,7 @@ function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game3State
     ctx.globalAlpha = alpha;
     ctx.translate(cx, y);
 
-    // 타일 몸통
+    // tile body
     ctx.fillStyle = dim;
     ctx.fillRect(-sz / 2, -sz / 2, sz, sz);
     if (isNow) {
@@ -328,7 +329,7 @@ function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game3State
     }
     ctx.strokeRect(-sz / 2, -sz / 2, sz, sz);
 
-    // 방향 아이콘 — Q/W/U/I 글자 대신 ◀/▶(왼쪽/오른쪽)를 크게 표시
+    // direction icon — show a large ◀/▶ (left/right) instead of the Q/W/U/I letters
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.globalAlpha = alpha;
@@ -340,7 +341,7 @@ function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game3State
     ctx.restore();
   }
 
-  // --- 히트라인 (NOW 프레임) ---
+  // --- hit line (NOW frame) ---
   ctx.save();
   ctx.strokeStyle = flash > 0 ? COL.text : color;
   ctx.shadowColor = color;
@@ -351,7 +352,7 @@ function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game3State
   ctx.moveTo(laneX - LANE_HALF + 6, HIT_Y + TILE / 2 + 6);
   ctx.lineTo(laneX + LANE_HALF - 6, HIT_Y + TILE / 2 + 6);
   ctx.stroke();
-  // 좌우 브래킷 틱
+  // left/right bracket ticks
   const bx = laneX - TILE / 2 - 8;
   const bx2 = laneX + TILE / 2 + 8;
   const by = HIT_Y + TILE / 2 + 6;
@@ -361,7 +362,7 @@ function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game3State
   ctx.moveTo(bx2, by);
   ctx.lineTo(bx2, by - 12);
   ctx.stroke();
-  // NOW 태그
+  // NOW tag
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 0.9;
   ctx.fillStyle = color;
@@ -371,7 +372,7 @@ function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game3State
   ctx.fillText('NOW', isP1 ? laneX - LANE_HALF + 4 : laneX + LANE_HALF - 4, HIT_Y + TILE / 2 + 26);
   ctx.restore();
 
-  // 스트링 소진(비상): NOW 없음 → MAX 표기
+  // string exhausted (emergency): no NOW → show MAX
   if (idx >= SEQ_LEN) {
     ctx.save();
     ctx.fillStyle = color;
@@ -384,7 +385,7 @@ function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game3State
     ctx.restore();
   }
 
-  // --- 히트 링 이펙트 ---
+  // --- hit ring effect ---
   for (const f of r.fx) {
     if (f.kind !== 'ring' || f.side !== side) continue;
     const age = now - f.t;
@@ -401,23 +402,23 @@ function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game3State
     ctx.restore();
   }
 
-  // --- 점수 잭팟 카운터 (하드 스텝 + 변경 순간 글로우 버스트) ---
+  // --- score jackpot counter (hard step + glow burst at the moment of change) ---
   const burst = scoreFxT > 0 && now - scoreFxT < 100;
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
-  // 캡션
+  // caption
   ctx.fillStyle = COL.muted;
   ctx.font = `10px ${ARCADE}`;
   ctx.fillText('SCORE', laneX, SCORE_Y - 30);
-  // 숫자
+  // number
   ctx.fillStyle = color;
   ctx.shadowColor = color;
   ctx.shadowBlur = burst ? 22 : 12;
   const fs = burst ? 44 : 40;
   ctx.font = `${fs}px ${ARCADE}`;
   ctx.fillText(String(score), laneX, SCORE_Y + 8);
-  // 내 쪽 YOU
+  // YOU on my side
   if (isYou && Math.floor(now / 500) % 2 === 0) {
     ctx.fillStyle = COL.accent;
     ctx.shadowColor = COL.accent;
@@ -429,28 +430,29 @@ function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game3State
 }
 
 // ---------------------------------------------------------------------------
-// 컴포넌트
+// Component
 // ---------------------------------------------------------------------------
 export default function Game3() {
   useDebugScreen('scr-game3');
   const flow = useFlow();
   const navigate = useNavigate();
 
-  // 온라인 렌더 훅(성능 표준) — 활성/역할만 '선택 구독'해서 라운드 경계에서만 리렌더하고,
-  // 서버 스냅샷은 stateRef에 직접 미러(리렌더 유발 안 함). per-snapshot HUD/디버그 반영은
-  // onSnapshot으로 위임 → 60Hz 스냅샷이 60Hz 리렌더로 번지던 churn 제거.
-  // isOnline이면 로컬 시뮬/봇/판정을 끄고 서버 권위 상태만 렌더 + 내 입력만 서버로 전송한다.
+  // Online render hook (performance standard) — 'select-subscribe' to active/role only so it re-renders
+  // only at round boundaries, and mirror the server snapshot directly into stateRef (no re-render).
+  // Per-snapshot HUD/debug updates are delegated to onSnapshot → removes the churn where a 60Hz snapshot
+  // bled into 60Hz re-renders.
+  // When isOnline, turn off local sim/bot/ruling and render only the server-authoritative state + send only my input to the server.
   const { isOnline, myRole, stateRef } = useOnlineRender<Game3State>(3, (s) => {
-    setDebugGame(s); // 디버그 브리지 — 스냅샷마다 갱신
-    // HUD 남은 시간(서버 elapsed 기반, 초 단위 양자화 — 값 동일 스냅샷은 리렌더 없음)
+    setDebugGame(s); // debug bridge — updated every snapshot
+    // HUD time remaining (based on server elapsed, quantized to seconds — no re-render for same-value snapshots)
     setHudMs(Math.ceil(Math.max(0, (GAME_DURATION - s.elapsed) * 1000) / 1000) * 1000);
   });
-  // 키보드 핸들러(마운트 시 1회 등록)가 최신 '온라인 활성 여부'를 보게 하는 ref — stale closure 방지.
+  // ref that lets the keyboard handler (registered once on mount) see the latest 'is online active' — prevents a stale closure.
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
 
-  // 색은 플레이어 종속(역할과 독립) — 키캡/YOU 표시는 내 색으로. 선택 구독이라 색 바뀔 때만
-  // 리렌더(60Hz 스냅샷 churn 없음). 오프라인/색 정보 없으면 기본 'blue'.
+  // Color is player-bound (independent of role) — keycap/YOU display uses my color. Select-subscribe so it
+  // re-renders only when the color changes (no 60Hz snapshot churn). Offline / no color info defaults to 'blue'.
   const myColor = useSyncExternalStore(
     onlineStore.subscribe,
     () => onlineStore.get().myColor ?? 'blue',
@@ -470,7 +472,7 @@ export default function Game3() {
   const botNextRef = useRef(0);
   const reduceMotionRef = useRef(false);
 
-  /** HUD 표시용 남은 시간 (초 단위 양자화 — 리렌더 절약) */
+  /** time remaining for HUD display (quantized to seconds — saves re-renders) */
   const [hudMs, setHudMs] = useState(GAME_DURATION * 1000);
 
   const [qLit, flashQ] = useKeyLamp();
@@ -480,13 +482,13 @@ export default function Game3() {
   const lampRef = useRef({ flashQ, flashW, flashU, flashI });
   lampRef.current = { flashQ, flashW, flashU, flashI };
 
-  // direct-URL 복구
+  // direct-URL recovery
   useEffect(() => {
     const f = getFlow();
     if (f.phase === 'idle' || f.gameId !== 3) startOfflineGame(3);
   }, []);
 
-  // reduced-motion 스냅샷
+  // reduced-motion snapshot
   useEffect(() => {
     reduceMotionRef.current =
       typeof window !== 'undefined' && window.matchMedia
@@ -494,7 +496,7 @@ export default function Game3() {
         : false;
   }, []);
 
-  // 캔버스 해상도 (dpr 스케일)
+  // canvas resolution (dpr scale)
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
@@ -504,15 +506,15 @@ export default function Game3() {
     c.getContext('2d')?.scale(dpr, dpr);
   }, []);
 
-  // (서버 상태 → stateRef/디버그/HUD 미러링은 useOnlineRender + 위 onSnapshot 콜백이 담당.
-  //  리렌더 없이 stateRef.current를 갱신하므로 별도 미러 effect가 필요없다.)
+  // (Mirroring server state → stateRef/debug/HUD is handled by useOnlineRender + the onSnapshot callback above.
+  //  It updates stateRef.current without a re-render, so no separate mirror effect is needed.)
 
-  // 키보드 — GameInputEvent 큐 수집 + 램프 점등. 온라인 P2(u/i)는 봇이 대행.
+  // Keyboard — collect the GameInputEvent queue + light lamps. Online P2 (u/i) is handled by the bot.
   useEffect(() => {
     const detach = attachLocalKeyboard(
       () => performance.now() / 1000,
       (e) => {
-        // ── 서버 온라인: U/I 두 키만(요구사항). U=주키(slotA), I=보조키(slotB). Q/W는 무시 ──
+        // ── Server online: U/I keys only (requirement). U=main key (slotA), I=secondary key (slotB). Q/W ignored ──
         if (isOnlineRef.current) {
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           if (e.type === 'down') {
@@ -523,11 +525,11 @@ export default function Game3() {
           onlineSendInput(slot, e.type, e.t);
           return;
         }
-        // ── 오프라인(기존 그대로) — mock-online이면 P2(u/i)는 봇이 대행 ──
+        // ── Offline (unchanged) — if mock-online, P2 (u/i) is handled by the bot ──
         const f = getFlow();
         const mockOnline = f.mode === 'online';
         const isP2 = e.code === 'KeyU' || e.code === 'KeyI';
-        if (mockOnline && isP2) return; // 온라인(mock) P2 = 봇
+        if (mockOnline && isP2) return; // online (mock) P2 = bot
         if (e.type === 'down') {
           if (e.code === 'KeyQ') lampRef.current.flashQ();
           else if (e.code === 'KeyW') lampRef.current.flashW();
@@ -543,11 +545,11 @@ export default function Game3() {
     };
   }, []);
 
-  // 라운드 수명주기: state 생성 → rAF 루프(step + draw) → 결과 보고
+  // Round lifecycle: create state → rAF loop (step + draw) → report result
   useEffect(() => {
-    // ── 서버 온라인: step·봇·결과보고 없이 서버 상태만 그리는 draw-only 루프 ──
+    // ── Server online: draw-only loop that renders only the server state, without step/bot/result-reporting ──
     if (isOnline) {
-      // 첫 스냅샷 전이면 중립 초기 상태를 placeholder로 그린다(스냅샷 오면 onSnapshot이 덮어씀).
+      // Before the first snapshot, draw a neutral initial state as a placeholder (onSnapshot overwrites it once a snapshot arrives).
       if (!stateRef.current) {
         const init = game3.create(Math.random);
         stateRef.current = init;
@@ -563,12 +565,12 @@ export default function Game3() {
         const dt = Math.min(0.5, (now - last) / 1000);
         last = now;
 
-        // 스크롤 이징(순수 렌더) — 서버 idx로 수렴
+        // scroll easing (pure render) — converge to server idx
         const ease = Math.min(1, dt * 18);
         p1ScrollRef.current += (s.p1Idx - p1ScrollRef.current) * ease;
         p2ScrollRef.current += (s.p2Idx - p2ScrollRef.current) * ease;
 
-        // (HUD 남은 시간은 onSnapshot에서 스냅샷마다 갱신 — 렌더 루프에서 setState 하지 않는다.)
+        // (HUD time remaining is updated per snapshot in onSnapshot — do not setState in the render loop.)
         fxRef.current = fxRef.current.filter((f) => now - f.t < 900);
         const displays = getPlayerDisplays(getFlow());
         drawScene(ctx, s, {
@@ -616,14 +618,14 @@ export default function Game3() {
       last = now;
       let s = stateRef.current;
       if (!s) return;
-      // 색은 플레이어 종속(역할 아님) — 이 프레임의 P1/P2 엔티티 색 팔레트. 오프라인이면 COL0(기존 동작).
+      // Color is player-bound (not role) — the P1/P2 entity color palette for this frame. Offline = COL0 (existing behavior).
       const COL = palette();
 
       if (s.result === null) {
         const events = eventsRef.current;
         eventsRef.current = [];
 
-        // 온라인 봇(P2): 정답 키를 인간 페이스로 연타, 소량 미스로 승부 여지
+        // Online bot (P2): taps the correct key at a human pace, with a small miss rate to leave room for a contest
         if (getFlow().mode === 'online' && s.p2Idx < SEQ_LEN && now >= botNextRef.current) {
           const correctV = s.p2Seq[s.p2Idx];
           const miss = Math.random() < 0.09;
@@ -642,34 +644,34 @@ export default function Game3() {
         const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
         setHudMs(Math.ceil(remainingMs / 1000) * 1000);
 
-        // ---- 렌더 전용 이펙트 파생 (로직 비침범) ----
-        // 정답(idx 증가) → 히트 링 + "+1"
+        // ---- Derive render-only effects (does not touch logic) ----
+        // correct (idx increases) → hit ring + "+1"
         if (s.p1Idx > prev.p1Idx) {
-          sfx('g3-hit-correct'); // 점수 +1(정타) 순간
-          if (s.p1Idx >= SEQ_LEN && prev.p1Idx < SEQ_LEN) sfx('g3-sequence-clear'); // 스트링 완주(중간)
+          sfx('g3-hit-correct'); // moment of score +1 (correct hit)
+          if (s.p1Idx >= SEQ_LEN && prev.p1Idx < SEQ_LEN) sfx('g3-sequence-clear'); // string completed (mid-game)
           fxRef.current.push(
             { kind: 'ring', side: 'P1', x: P1_X, y: HIT_Y, t: now },
             { kind: 'float', side: 'P1', x: P1_X, y: HIT_Y - 44, t: now, text: '+1', color: COL.p1 },
           );
         }
         if (s.p2Idx > prev.p2Idx) {
-          sfx('g3-hit-correct'); // 점수 +1(정타) 순간
-          if (s.p2Idx >= SEQ_LEN && prev.p2Idx < SEQ_LEN) sfx('g3-sequence-clear'); // 스트링 완주(중간)
+          sfx('g3-hit-correct'); // moment of score +1 (correct hit)
+          if (s.p2Idx >= SEQ_LEN && prev.p2Idx < SEQ_LEN) sfx('g3-sequence-clear'); // string completed (mid-game)
           fxRef.current.push(
             { kind: 'ring', side: 'P2', x: P2_X, y: HIT_Y, t: now },
             { kind: 'float', side: 'P2', x: P2_X, y: HIT_Y - 44, t: now, text: '+1', color: COL.p2 },
           );
         }
-        // 오답(점수 감소, idx 유지) → "-1"
+        // wrong (score drops, idx held) → "-1"
         if (s.p1Score < prev.p1Score && s.p1Idx === prev.p1Idx) {
-          sfx('g3-hit-wrong'); // 점수 -1(오타) 순간
+          sfx('g3-hit-wrong'); // moment of score -1 (wrong hit)
           fxRef.current.push({ kind: 'float', side: 'P1', x: P1_X, y: HIT_Y - 44, t: now, text: '-1', color: COL.error });
         }
         if (s.p2Score < prev.p2Score && s.p2Idx === prev.p2Idx) {
-          sfx('g3-hit-wrong'); // 점수 -1(오타) 순간
+          sfx('g3-hit-wrong'); // moment of score -1 (wrong hit)
           fxRef.current.push({ kind: 'float', side: 'P2', x: P2_X, y: HIT_Y - 44, t: now, text: '-1', color: COL.error });
         }
-        // 점수 변경 순간 글로우 버스트 타임스탬프
+        // glow-burst timestamp at the moment the score changes
         if (s.p1Score !== prev.p1Score) scoreFxRef.current.P1 = now;
         if (s.p2Score !== prev.p2Score) scoreFxRef.current.P2 = now;
 
@@ -680,18 +682,18 @@ export default function Game3() {
           p2Idx: s.p2Idx,
         };
 
-        // 판정 순간 글리치 1회
+        // one glitch at the ruling moment
         if (s.result !== null && resultAtRef.current === 0) {
           resultAtRef.current = now;
           fxRef.current.push({ kind: 'chroma', t: now });
         }
       } else if (!reportedRef.current && now - resultAtRef.current >= RESULT_FX_MS) {
-        if (isOnline) return; // 온라인은 서버가 round:end 구동 — 화면은 결과 보고 안 함
+        if (isOnline) return; // online: the server drives round:end — the screen does not report the result
         reportedRef.current = true;
         if (s.result) reportRoundEnd(toMatchResult(s.result));
       }
 
-      // 스크롤 이징(타일 슬라이드) — idx로 수렴
+      // scroll easing (tile slide) — converge to idx
       const ease = Math.min(1, dt * 18);
       p1ScrollRef.current += (s.p1Idx - p1ScrollRef.current) * ease;
       p2ScrollRef.current += (s.p2Idx - p2ScrollRef.current) * ease;
@@ -738,9 +740,9 @@ export default function Game3() {
             navigate('/');
           }}
         >
-          ◀ 나가기
+          ◀ Exit
         </Button>
-        <span className="g3-title font-arcade c-muted">게임3 · 펌프</span>
+        <span className="g3-title font-arcade c-muted">Game 3 · Pump</span>
       </div>
 
       <div className="g3-hudwrap">
@@ -755,35 +757,35 @@ export default function Game3() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g3-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g3-canvas" aria-label="게임3 스테이지 — 펌프" />
+        <canvas ref={canvasRef} className="g3-canvas" aria-label="Game 3 stage — Pump" />
 
       </div>
 
-      {/* 온스크린 키캡 — 실제 배정 키 표기 (SPEC Q2), 입력 순간 램프 점등 */}
+      {/* On-screen keycaps — show the actual assigned keys (SPEC Q2), lamps light on input */}
       {isOnline ? (
-        // 온라인: 로컬 플레이어(U/I)만, 내 색으로. U=왼쪽 패드, I=오른쪽 패드.
+        // Online: local player (U/I) only, in my color. U=left pad, I=right pad.
         <div className="g3-keys g3-keys--online">
           <div className="g3-keys__group">
             <span className={`g3-keys__tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {myColor === 'blue' ? '파랑' : '빨강'} · PUMP
+              YOU · {myColor === 'blue' ? 'BLUE' : 'RED'} · PUMP
             </span>
-            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="◀" lit={uLit} label="왼쪽" />
-            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="▶" lit={iLit} label="오른쪽" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="◀" lit={uLit} label="Left" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="▶" lit={iLit} label="Right" />
           </div>
           <span className="g3-keys__hint font-arcade c-muted">HIT THE GLOWING PAD</span>
         </div>
       ) : (
         <div className="g3-keys">
           <div className="g3-keys__group">
-            <KeyCap role="P1" keyChar="Q" icon="◀" lit={qLit} label="왼쪽" />
-            <KeyCap role="P1" keyChar="W" icon="▶" lit={wLit} label="오른쪽" />
+            <KeyCap role="P1" keyChar="Q" icon="◀" lit={qLit} label="Left" />
+            <KeyCap role="P1" keyChar="W" icon="▶" lit={wLit} label="Right" />
             <span className="g3-keys__tag font-arcade c-p1">P1 · PUMP</span>
           </div>
           <span className="g3-keys__hint font-arcade c-muted">HIT THE GLOWING PAD</span>
           <div className="g3-keys__group">
             <span className="g3-keys__tag font-arcade c-p2">P2 · PUMP</span>
-            <KeyCap role="P2" keyChar="U" icon="◀" lit={uLit} label="왼쪽" />
-            <KeyCap role="P2" keyChar="I" icon="▶" lit={iLit} label="오른쪽" />
+            <KeyCap role="P2" keyChar="U" icon="◀" lit={uLit} label="Left" />
+            <KeyCap role="P2" keyChar="I" icon="▶" lit={iLit} label="Right" />
           </div>
         </div>
       )}

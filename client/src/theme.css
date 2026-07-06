@@ -1,19 +1,20 @@
 /**
- * NEON COIN-OP — 신스웨이브 아케이드 디자인 시스템 (PLAN.md §1 정본)
- * (아키텍트 소유 — 구현 에이전트 수정 금지. 화면 전용 스타일은 각 화면 파일 옆 css로.)
+ * NEON COIN-OP — synthwave arcade design system (PLAN.md §1 source of truth)
+ * (Owned by the architect — implementation agents must not modify. Screen-specific styles go in each screen's sibling css.)
  *
- * 제공 유틸 클래스 카탈로그:
- *  폰트      .font-arcade(Press Start 2P) / .font-display(Gugi)  — 본문은 기본 산세리프
- *  글로우    .glow-text .glow-box  (currentColor / --glow-color 기반, §1.1 공식)
- *  색 헬퍼   .c-accent .c-accent2 .c-p1 .c-p2 .c-error .c-win .c-muted
- *  모션      .anim-sign-on(점등 플리커) .anim-blink(steps 점멸) .anim-shake(에러 셰이크)
- *  프레임    .corner-brackets(모서리 L브래킷, --bracket-color) .crt-bezel(인게임 스테이지)
- *  배경      .crt-overlay(전역 스캔라인 — App이 1장 렌더) .vanish-grid(소실점 그리드)
- *  부품      .marquee-strip(카드/모달 상단 간판) .lamp / .lamp.lit(라운드 램프)
- *           .neon-input(터미널 입력 래퍼) .unit-chip(단위 pill)
+ * Provided utility class catalog:
+ *  Fonts     .font-arcade(Press Start 2P) / .font-display(Gugi)  — body uses the default sans-serif
+ *  Glow      .glow-text .glow-box  (currentColor / --glow-color based, §1.1 formula)
+ *  Color     .c-accent .c-accent2 .c-p1 .c-p2 .c-error .c-win .c-muted
+ *  helpers
+ *  Motion    .anim-sign-on(power-on flicker) .anim-blink(steps blink) .anim-shake(error shake)
+ *  Frame     .corner-brackets(corner L-brackets, --bracket-color) .crt-bezel(in-game stage)
+ *  Backgrnd  .crt-overlay(global scanlines — App renders one) .vanish-grid(vanishing-point grid)
+ *  Parts     .marquee-strip(card/modal top signboard) .lamp / .lamp.lit(round lamp)
+ *           .neon-input(terminal input wrapper) .unit-chip(unit pill)
  */
 
-/* ---------------------------------------------------------------- 토큰 §1.1 */
+/* ---------------------------------------------------------------- tokens §1.1 */
 :root {
   --bg: #0d0221;
   --bg-raised: #1a0b2e;
@@ -30,13 +31,13 @@
   --error: #ff3864;
   --win: #39ff88;
 
-  --hairline: rgba(211, 0, 197, 0.35); /* 퍼플 헤어라인 */
+  --hairline: rgba(211, 0, 197, 0.35); /* purple hairline */
   --font-arcade: 'Press Start 2P', monospace;
   --font-display: 'Gugi', sans-serif;
   --font-body: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
 }
 
-/* ---------------------------------------------------------------- 전역 */
+/* ---------------------------------------------------------------- global */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -84,10 +85,10 @@ input {
   color: var(--text);
 }
 
-/* ---------------------------------------------------------------- 폰트 */
+/* ---------------------------------------------------------------- fonts */
 .font-arcade {
   font-family: var(--font-arcade);
-  /* Press Start 2P — 10px 미만 금지 (§1.2) */
+  /* Press Start 2P — never below 10px (§1.2) */
   font-size: max(10px, 1em);
   line-height: 1.4;
   letter-spacing: 0.04em;
@@ -98,7 +99,7 @@ input {
   font-weight: 400;
 }
 
-/* ---------------------------------------------------------------- 색 헬퍼 */
+/* ---------------------------------------------------------------- color helpers */
 .c-accent { color: var(--accent); }
 .c-accent2 { color: var(--accent2); }
 .c-p1 { color: var(--p1); }
@@ -107,13 +108,13 @@ input {
 .c-win { color: var(--win); }
 .c-muted { color: var(--text-muted); }
 
-/* ---------------------------------------------------------------- 글로우 §1.1 */
+/* ---------------------------------------------------------------- glow §1.1 */
 .glow-text {
   text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
 }
 
-/* 박스 글로우 — --glow-color(rgb triplet 아님, 색상값)와 --glow-color-a(투명 배합용) 지정.
-   예) style={{ '--glow-color': 'var(--p1)' }} + className="glow-box" */
+/* Box glow — specify --glow-color (a color value, not an rgb triplet) and --glow-color-a (for transparent blending).
+   e.g.) style={{ '--glow-color': 'var(--p1)' }} + className="glow-box" */
 .glow-box {
   --glow-color: var(--accent2);
   box-shadow:
@@ -122,8 +123,8 @@ input {
     inset 0 0 8px color-mix(in srgb, var(--glow-color) 25%, transparent);
 }
 
-/* ---------------------------------------------------------------- 모션 §1.4 */
-/* 네온 점등: off → 2회 플리커 → on (400ms, steps) */
+/* ---------------------------------------------------------------- motion §1.4 */
+/* Neon power-on: off → 2 flickers → on (400ms, steps) */
 @keyframes sign-on {
   0% { opacity: 0; }
   29% { opacity: 0; }
@@ -143,7 +144,7 @@ input {
   animation: sign-on 400ms steps(1, end) both;
 }
 
-/* "INSERT COIN" 점멸: 1s 주기 steps(1), 50% duty — 부드러운 pulse 금지 */
+/* "INSERT COIN" blink: 1s period steps(1), 50% duty — no smooth pulse */
 @keyframes hard-blink {
   0%, 49% { opacity: 1; }
   50%, 100% { opacity: 0; }
@@ -153,7 +154,7 @@ input {
   animation: hard-blink 1s steps(1, end) infinite;
 }
 
-/* 에러 수평 셰이크 1회 */
+/* single horizontal error shake */
 @keyframes h-shake {
   0%, 100% { transform: translateX(0); }
   20% { transform: translateX(-6px); }
@@ -166,7 +167,7 @@ input {
   animation: h-shake 260ms linear both;
 }
 
-/* 타이머 임박(≤5초) — 옐로↔핑크 교차 점멸 */
+/* timer imminent (≤5s) — alternating yellow↔pink blink */
 @keyframes urgent-flash {
   0%, 49% { color: var(--accent); }
   50%, 100% { color: var(--p2); }
@@ -185,7 +186,7 @@ input {
   }
 }
 
-/* ---------------------------------------------------------------- CRT 오버레이 (App이 1장 렌더) */
+/* ---------------------------------------------------------------- CRT overlay (App renders one) */
 .crt-overlay {
   position: fixed;
   inset: 0;
@@ -198,7 +199,7 @@ input {
   );
 }
 
-/* 가장자리 비네팅 */
+/* edge vignetting */
 .crt-overlay::after {
   content: '';
   position: absolute;
@@ -206,10 +207,10 @@ input {
   background: radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, 0.45) 100%);
 }
 
-/* ---------------------------------------------------------------- 소실점 그리드 §1.3 */
-/* 메인 계열 화면(S1·S2·S5·S8) 하단 1/3에 절대 배치할 것.
-   사용: <div className="vanish-grid" aria-hidden /> (부모 position:relative)
-   인게임 배경엔 .vanish-grid.dim(20%)을 사용 */
+/* ---------------------------------------------------------------- vanishing-point grid §1.3 */
+/* Absolutely position it in the bottom 1/3 of main-series screens (S1·S2·S5·S8).
+   Usage: <div className="vanish-grid" aria-hidden /> (parent position:relative)
+   For in-game backgrounds use .vanish-grid.dim(20%) */
 .vanish-grid {
   position: absolute;
   left: 0;
@@ -218,11 +219,11 @@ input {
   height: 34%;
   pointer-events: none;
   overflow: hidden;
-  /* 바닥이 소실점으로 천천히 물러나는 무한 스크롤 파라미터 (§1.3 확장) */
-  --vg-gap: 3.06vh;  /* 가로줄 1주기 간격 = 스크롤 1회 이동량 (원본 9% × 높이 34% ≈ 3.06vh) */
-  --vg-speed: 4.5s;  /* 1주기 소요 시간 — 느린 드리프트(기존 9s의 2배 속도) */
-  --vg-shimmer: 3.5s; /* 수평선 헤이즈가 밝아졌다 뿌옇게 흐려지는 주기 */
-  /* 수평선(멀어지는 가로줄) — 아래로 갈수록 간격 확대 */
+  /* Infinite-scroll parameters for the floor slowly receding toward the vanishing point (§1.3 extension) */
+  --vg-gap: 3.06vh;  /* one horizontal-line period = distance moved per scroll cycle (original 9% × height 34% ≈ 3.06vh) */
+  --vg-speed: 4.5s;  /* time per cycle — slow drift (2× the speed of the previous 9s) */
+  --vg-shimmer: 3.5s; /* period over which the horizon haze brightens then hazes back out */
+  /* Horizon lines (receding horizontal lines) — spacing widens toward the bottom */
   background:
     linear-gradient(
       to bottom,
@@ -230,12 +231,12 @@ input {
       transparent 2px
     )
     top / 100% 100% no-repeat;
-  /* 수평선 헤이즈: 위쪽(지평선) 안쪽 글로우가 천천히 밝아졌다 뿌옇게 흐려짐 */
+  /* Horizon haze: the inner glow at the top (horizon) slowly brightens then hazes back out */
   animation: horizon-shimmer var(--vg-shimmer) ease-in-out infinite;
 }
 
 .vanish-grid::before {
-  /* 세로줄: 지평선 소실점으로 수렴하는 부챗살 */
+  /* Vertical lines: fan spokes converging toward the horizon vanishing point */
   content: '';
   position: absolute;
   inset: -100% -50% 0;
@@ -247,7 +248,7 @@ input {
 }
 
 .vanish-grid::after {
-  /* 가로줄(원근 간격) + 지평선 글로우 밴드 */
+  /* Horizontal lines (perspective spacing) + horizon glow band */
   content: '';
   position: absolute;
   inset: 0;
@@ -262,7 +263,7 @@ input {
       color-mix(in srgb, var(--accent2) 50%, transparent) 0 1px,
       transparent 1px var(--vg-gap)
     );
-  /* 글로우(1층)는 지평선에 고정, 가로줄(2층)만 위로 스크롤 → 바닥이 뒤로 물러나는 착시 */
+  /* The glow (layer 1) stays fixed at the horizon, only the horizontal lines (layer 2) scroll up → illusion of the floor receding */
   background-position: 0 0, 0 0;
   mask-image: linear-gradient(to bottom, black, black 85%, transparent);
   animation: vanish-recede var(--vg-speed) linear infinite;
@@ -270,33 +271,33 @@ input {
 
 .vanish-grid.dim {
   opacity: 0.2;
-  animation: none; /* 인게임: 수평선 헤이즈도 정지(가로줄은 .dim::after에서 정지) */
+  animation: none; /* in-game: the horizon haze also stops (horizontal lines stop in .dim::after) */
 }
 
-/* 지평선 헤이즈: 위쪽 안쪽 글로우(--p2 핑크)가 은은하게 밝아졌다 뿌옇게 흐려짐(살짝 반짝) */
+/* Horizon haze: the inner glow at the top (--p2 pink) subtly brightens then hazes back out (slight sparkle) */
 @keyframes horizon-shimmer {
   0%, 100% { box-shadow: inset 0 7px 20px -8px color-mix(in srgb, var(--p2) 24%, transparent); }
   50%      { box-shadow: inset 0 11px 34px -8px color-mix(in srgb, var(--p2) 55%, transparent); }
 }
 
-/* 가로줄(2층)만 소실점(위)으로 정확히 1주기 이동 → 무한 반복 시 이음매 없는 스크롤.
-   음수 background-position-y = 위로 이동 = 바닥이 관측자에게서 멀어짐(뒤로 물러남). */
+/* Only the horizontal lines (layer 2) move exactly one period toward the vanishing point (up) → seamless scroll on infinite loop.
+   Negative background-position-y = moving up = the floor receding away from the observer. */
 @keyframes vanish-recede {
   from { background-position: 0 0, 0 0; }
   to   { background-position: 0 0, 0 calc(var(--vg-gap) * -1); }
 }
 
-/* 인게임 배경(dim)은 정지 — 플레이 시야 방해 방지 (요청 범위: 메인 계열 화면) */
+/* The in-game background (dim) is stopped — avoids obstructing the player's view (requested scope: main-series screens) */
 .vanish-grid.dim::after {
   animation: none;
 }
 
-/* NOTE: 이 스크롤은 사용자가 명시 요청한 핵심 연출이라 prefers-reduced-motion에서도
-   기본 재생한다(아주 느린 데코 드리프트). 접근성 우선이면 아래 gate 주석 해제:
+/* NOTE: this scroll is a core effect the user explicitly requested, so it plays by
+   default even under prefers-reduced-motion (a very slow decorative drift). If accessibility comes first, uncomment the gate below:
    @media (prefers-reduced-motion: reduce) { .vanish-grid::after { animation: none; } } */
 
-/* ---------------------------------------------------------------- 코너 브래킷 §1.3 */
-/* 히어로 패널 네 모서리의 12px L자 브래킷. --bracket-color로 색 지정 */
+/* ---------------------------------------------------------------- corner brackets §1.3 */
+/* 12px L-shaped brackets on the four corners of the hero panel. Set color with --bracket-color */
 .corner-brackets {
   position: relative;
   --bracket-color: var(--accent2);
@@ -325,7 +326,7 @@ input {
   border-right: 2px solid var(--bracket-color);
 }
 
-/* 나머지 두 모서리는 내부 helper 요소로 (컴포넌트가 <i className="cb2" /> 렌더) */
+/* The remaining two corners use an internal helper element (the component renders <i className="cb2" />) */
 .corner-brackets > .cb2 {
   position: absolute;
   inset: -2px;
@@ -354,17 +355,17 @@ input {
   border-left: 2px solid var(--bracket-color);
 }
 
-/* ---------------------------------------------------------------- CRT 베젤 §1.3 (인게임 game-stage) */
+/* ---------------------------------------------------------------- CRT bezel §1.3 (in-game game-stage) */
 .crt-bezel {
   position: relative;
   background: var(--bg-raised);
   border: 14px solid #000;
-  border-radius: 12px; /* 베젤 모서리만 라운딩 — 브라운관 실루엣 */
+  border-radius: 12px; /* only the bezel corners are rounded — CRT silhouette */
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p1) 55%, transparent);
   overflow: hidden;
 }
 
-/* 타이머 임박 시 베젤 헤어라인 명멸 — 스테이지에 .urgent 추가 */
+/* When the timer is imminent the bezel hairline flashes — add .urgent to the stage */
 @keyframes bezel-pulse {
   0%, 49% { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p2) 80%, transparent), inset 0 0 24px color-mix(in srgb, var(--p2) 25%, transparent); }
   50%, 100% { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p1) 55%, transparent); }
@@ -381,7 +382,7 @@ input {
   }
 }
 
-/* ---------------------------------------------------------------- 마퀴 스트립 §1.5 (카드/모달 상단 간판) */
+/* ---------------------------------------------------------------- marquee strip §1.5 (card/modal top signboard) */
 .marquee-strip {
   display: flex;
   align-items: center;
@@ -400,8 +401,8 @@ input {
   letter-spacing: 0.08em;
 }
 
-/* ---------------------------------------------------------------- 램프 §1.3 */
-/* 아케이드 캐비닛 원형 램프. 점등: .lit + --lamp-color 지정 */
+/* ---------------------------------------------------------------- lamp §1.3 */
+/* Arcade cabinet round lamp. Lit: set .lit + --lamp-color */
 .lamp {
   width: 10px;
   height: 10px;
@@ -418,7 +419,7 @@ input {
   box-shadow: 0 0 6px var(--lamp-color), 0 0 14px color-mix(in srgb, var(--lamp-color) 45%, transparent);
 }
 
-/* ---------------------------------------------------------------- 단위 칩 (S4 "round"/"초") */
+/* ---------------------------------------------------------------- unit chip (S4 "round"/"sec") */
 .unit-chip {
   display: inline-block;
   padding: 2px 10px;
@@ -428,9 +429,9 @@ input {
   font-size: 12px;
 }
 
-/* ---------------------------------------------------------------- 터미널 입력 §1.5 */
-/* 사용: <label className="neon-input"><span className="prompt">&gt;</span><input …/></label>
-   에러: .neon-input.error */
+/* ---------------------------------------------------------------- terminal input §1.5 */
+/* Usage: <label className="neon-input"><span className="prompt">&gt;</span><input …/></label>
+   Error: .neon-input.error */
 .neon-input {
   display: flex;
   align-items: center;

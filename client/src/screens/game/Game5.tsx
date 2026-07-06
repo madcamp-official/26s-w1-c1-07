@@ -1,25 +1,25 @@
 /**
- * 게임10 · 라이트 사이클 (Light Cycle / Tron) — NEON COIN-OP 신규 화면.
- * 컨테이너 testid: scr-game5 / 부품: game-stage(CRT 베젤), hud-*(HudFrame 내장), btn-exit
+ * Game 10 · Light Cycle (Light Cycle / Tron) — NEON COIN-OP new screen.
+ * Container testid: scr-game5 / parts: game-stage(CRT bezel), hud-*(HudFrame embedded), btn-exit
  *
- * ── 원칙 ────────────────────────────────────────────────────────────
- *  · 게임 로직/판정/상수는 100% @madpump/shared game5 코어(create/step) + G5 상수만 사용.
- *  · 화면·렌더링은 이 파일에서 처음부터 새로 작성(캔버스 직접 그리기). game-lab 렌더러 미참조.
- *  · design-lab import 0줄. 색/폰트는 theme.css 토큰(hex)만 복사해 씀.
+ * ── Principles ────────────────────────────────────────────────────────────
+ *  · Game logic/judgement/constants use 100% @madpump/shared game5 core(create/step) + G5 constants only.
+ *  · Screen/rendering is written from scratch in this file (direct canvas drawing). No reference to the game-lab renderer.
+ *  · 0 lines of design-lab import. Colors/fonts only copy theme.css tokens(hex).
  *
- * 게임(코어 상태 필드에서 파생):
- *  · 격자 GX×GY(64×36)에서 두 바이크가 STEP(0.05s)마다 한 칸 전진, 지나온 칸에 궤적(벽) occ[].
- *  · P1 Q=좌회전 / W=우회전, P2 U=좌회전 / I=우회전 (코어가 pend→turn 판정).
- *  · 벽/궤적 충돌 시 사망, 마지막 생존자 승. 정면충돌·동시사망·10초 생존은 DRAW.
- *  · gx/gy=머리칸, dir=방향(0우1하2좌3상), frac=다음칸 진행률(0~1, 보간용), occ=벽 맵.
+ * Game (derived from core state fields):
+ *  · On a GX×GY(64×36) grid, two bikes advance one cell every STEP(0.05s), leaving a trail(wall) occ[] on cells passed.
+ *  · P1 Q=turn left / W=turn right, P2 U=turn left / I=turn right (core does pend→turn judgement).
+ *  · Death on wall/trail collision, last survivor wins. Head-on collision / simultaneous death / surviving 10s is a DRAW.
+ *  · gx/gy=head cell, dir=direction(0 right 1 down 2 left 3 up), frac=progress to next cell(0~1, for interpolation), occ=wall map.
  *
- * 배선(게임1·2 패턴):
- *  · game5.create(Math.random) / game5.step(state, events, dtSec) — state는 in-place mutate + 동일 참조.
- *  · attachLocalKeyboard(now, push): KeyQ/KeyW=P1, KeyU/KeyI=P2 (down/up 큐잉, 램프 점등).
- *  · rAF 루프 + 워치독(interval)으로 백그라운드 탭에서도 결과까지 진행(QA 대응).
- *  · result 확정 → 짧은 크래시 연출(RESULT_FX_MS) 후 reportRoundEnd 1회 → <ResultOverlay />.
- *  · online 모드면 P2는 봇(라이트 사이클 생존 AI가 좌/우 회전키를 합성).
- *  · 매 틱 setDebugGame(state), 언마운트 setDebugGame(null).
+ * Wiring (Game 1·2 pattern):
+ *  · game5.create(Math.random) / game5.step(state, events, dtSec) — state is mutated in-place + same reference.
+ *  · attachLocalKeyboard(now, push): KeyQ/KeyW=P1, KeyU/KeyI=P2 (down/up queuing, lamp lighting).
+ *  · rAF loop + watchdog(interval) so it progresses to the result even in a background tab(QA handling).
+ *  · result confirmed → short crash effect(RESULT_FX_MS) then reportRoundEnd once → <ResultOverlay />.
+ *  · In online mode P2 is a bot(the Light Cycle survival AI synthesizes left/right turn keys).
+ *  · Every tick setDebugGame(state), on unmount setDebugGame(null).
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -48,7 +48,7 @@ import { sfx } from '@/audio';
 import './game5.css';
 
 // ---------------------------------------------------------------------------
-// 캔버스: 코어 필드(800×450) = 격자 64×36 → 셀 12.5px. DPR 스케일로 반응형.
+// Canvas: core field(800×450) = grid 64×36 → cell 12.5px. Responsive via DPR scaling.
 // ---------------------------------------------------------------------------
 const CW = G5.W; // 800
 const CH = G5.H; // 450
@@ -57,7 +57,7 @@ const GY = G5.GY; // 36
 const CELL_W = CW / GX; // 12.5
 const CELL_H = CH / GY; // 12.5
 
-// 방향 벡터(렌더/AI 전용 — 판정은 코어가 함). 0=우 1=하 2=좌 3=상
+// Direction vectors(render/AI only — judgement is done by the core). 0=right 1=down 2=left 3=up
 const DX = [1, 0, -1, 0];
 const DY = [0, 1, 0, -1];
 
@@ -66,7 +66,7 @@ const COL0 = {
   bgBottom: '#0d0221', // --bg
   grid: 'rgba(211,0,197,0.07)', // --accent2 dim
   gridMajor: 'rgba(211,0,197,0.15)',
-  gridU: 'rgba(255,42,109,0.10)', // 임박(핑크)
+  gridU: 'rgba(255,42,109,0.10)', // imminent(pink)
   gridUMajor: 'rgba(255,42,109,0.20)',
   border: '#d300c5', // --accent2
   p1: '#05d9e8',
@@ -79,10 +79,10 @@ const COL0 = {
 } as const;
 
 /**
- * 색=플레이어 종속(역할 아님): 모듈 기본 COL0은 P1엔티티=시안('blue')·P2엔티티=핑크('red').
- * 이 라운드 실제 플레이어 색(functionColors)이 P1=빨강이면 p1/p2(그리고 body)를 스왑한 로컬 COL을 준다.
- * → 아래 COL.p1/p2/p1body/p2body 사용부가 자동으로 '플레이어 색'을 따른다(온라인/오프라인 draw 공통).
- * 오프라인/색 정보 없음이면 functionColors가 기본을 줘서 기존과 동일(시안 P1 / 핑크 P2).
+ * Color = player-bound (not role): the module default COL0 is P1 entity=cyan('blue') · P2 entity=pink('red').
+ * If this round's actual player color(functionColors) has P1=red, give a local COL that swaps p1/p2(and body).
+ * → The COL.p1/p2/p1body/p2body usages below automatically follow the 'player color'(common to online/offline draw).
+ * If offline / no color info, functionColors gives the default so it stays the same as before(cyan P1 / pink P2).
  */
 function playerCol() {
   const fc = functionColors();
@@ -93,13 +93,13 @@ function playerCol() {
 
 const ARCADE_FONT = '"Press Start 2P", monospace';
 
-/** 궤적 hot-glow로 표시할 최근 칸 수(머리 부근 발광 그라데이션) */
+/** Number of recent cells to show as trail hot-glow(glow gradient near the head) */
 const HOT_MAX = 44;
-/** 판정 → 결과 오버레이 전환 사이 인게임 크래시 연출 시간 */
+/** In-game crash effect duration between judgement → result overlay transition */
 const RESULT_FX_MS = 750;
 
 // ---------------------------------------------------------------------------
-// 렌더 전용 이펙트/구조
+// Render-only effects/structures
 // ---------------------------------------------------------------------------
 type Fx =
   | { kind: 'shards'; x: number; y: number; color: string; t: number }
@@ -112,20 +112,20 @@ interface Cell {
   y: number;
 }
 
-/** 코어 result → 셸 MatchResult 매핑 */
+/** core result → shell MatchResult mapping */
 function toMatchResult(r: 'P1' | 'P2' | 'DRAW'): MatchResult {
   return r === 'P1' ? 'P1_WIN' : r === 'P2' ? 'P2_WIN' : 'DRAW';
 }
 
 // ---------------------------------------------------------------------------
-// 온라인 mock 봇 — P2(라이트 사이클) 생존 AI. 판정은 여전히 코어.
-// occ를 읽어 전방/좌/우 여유 칸을 재고 좌/우 회전을 반환('L'|'R'|null).
+// Online mock bot — P2(Light Cycle) survival AI. Judgement is still the core.
+// Reads occ to measure the free cells ahead/left/right and returns a left/right turn('L'|'R'|null).
 // ---------------------------------------------------------------------------
 function free(occ: readonly number[], x: number, y: number): boolean {
   return x >= 0 && x < GX && y >= 0 && y < GY && occ[y * GX + x] === 0;
 }
 
-/** dir 방향으로 막힐 때까지 연속 빈 칸 수(cap) */
+/** Number of consecutive empty cells in the dir direction until blocked(cap) */
 function rayFree(occ: readonly number[], x: number, y: number, dir: number, cap = 18): number {
   let n = 0;
   let cx = x;
@@ -147,16 +147,16 @@ function chooseBotTurn(s: Game5State): 'L' | 'R' | null {
   const left = rayFree(occ, x, y, leftDir);
   const right = rayFree(occ, x, y, rightDir);
 
-  // 임박: 바로 앞칸이 막힘 → 이번 스텝에 반드시 꺾는다
+  // Imminent: the cell right ahead is blocked → must turn this step
   if (straight === 0) {
-    if (left === 0 && right === 0) return null; // 궁지 — 직진(사망)
+    if (left === 0 && right === 0) return null; // cornered — go straight(death)
     return left >= right ? 'L' : 'R';
   }
-  // 선제 회피: 전방 여유가 짧고 옆이 훨씬 넓으면 미리 꺾는다
+  // Preemptive avoidance: if room ahead is short and a side is much wider, turn early
   if (straight <= 3 && (left > straight + 2 || right > straight + 2)) {
     return left >= right ? 'L' : 'R';
   }
-  // 완만한 방황(자기 궤적에 갇히지 않도록) — 확률적으로 넓은 쪽으로
+  // Gentle wandering(so as not to get trapped in own trail) — probabilistically toward the wider side
   if (straight <= 7 && Math.abs(left - right) > 3 && Math.random() < 0.14) {
     return left > right ? 'L' : 'R';
   }
@@ -164,7 +164,7 @@ function chooseBotTurn(s: Game5State): 'L' | 'R' | null {
 }
 
 // ---------------------------------------------------------------------------
-// 캔버스 렌더러 (순수 그리기 — state는 읽기만)
+// Canvas renderer (pure drawing — state is read-only)
 // ---------------------------------------------------------------------------
 function drawScene(
   ctx: CanvasRenderingContext2D,
@@ -177,13 +177,13 @@ function drawScene(
   p1IsYou: boolean,
   p2IsYou: boolean,
 ): void {
-  // 색=플레이어 종속: 모듈 COL을 이 라운드 실제 플레이어 색으로 스왑한 로컬 COL로 그림자화.
-  // 아래 COL.p1/p2/p1body/p2body(궤적·hot·바이크)가 자동으로 P1/P2 기능 엔티티의 플레이어 색을 따른다.
+  // Color = player-bound: shadow the module COL with a local COL swapped to this round's actual player color.
+  // The COL.p1/p2/p1body/p2body below(trail·hot·bike) automatically follow the P1/P2 functional entity's player color.
   const COL = playerCol();
   const remMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
   const urgent = remMs <= 5000 && s.result === null;
 
-  // --- 배경(딥퍼플 그라디언트) ---
+  // --- Background(deep purple gradient) ---
   ctx.clearRect(0, 0, CW, CH);
   const bg = ctx.createLinearGradient(0, 0, 0, CH);
   bg.addColorStop(0, COL.bgTop);
@@ -191,7 +191,7 @@ function drawScene(
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, CW, CH);
 
-  // --- 아케이드 그리드(임박 시 핑크 틴트) ---
+  // --- Arcade grid(pink tint when imminent) ---
   ctx.save();
   ctx.lineWidth = 1;
   const minor = urgent ? COL.gridU : COL.grid;
@@ -214,7 +214,7 @@ function drawScene(
   }
   ctx.restore();
 
-  // --- 아레나 경계(퍼플 네온 프레임) ---
+  // --- Arena border(purple neon frame) ---
   ctx.save();
   ctx.strokeStyle = COL.border;
   ctx.globalAlpha = 0.55;
@@ -224,7 +224,7 @@ function drawScene(
   ctx.strokeRect(1, 1, CW - 2, CH - 2);
   ctx.restore();
 
-  // --- 궤적 몸통(occ 정본 — 연속 벽, 반투명 색·글로우 없음) ---
+  // --- Trail body(occ source of truth — continuous wall, semi-transparent color, no glow) ---
   const occ = s.occ;
   for (let j = 0; j < GY; j += 1) {
     for (let i = 0; i < GX; i += 1) {
@@ -235,16 +235,16 @@ function drawScene(
     }
   }
 
-  // --- 궤적 hot-glow(최근 칸일수록 밝게 — 바이크의 광벽 발광) ---
+  // --- Trail hot-glow(more recent cells brighter — the bike's light-wall glow) ---
   drawHot(ctx, hot1, COL.p1, now);
   drawHot(ctx, hot2, COL.p2, now);
 
-  // --- 바이크 머리 + 방향 노즈(발광 초점) ---
+  // --- Bike head + direction nose(glow focus) ---
   const youBlink = Math.floor(now / 450) % 2 === 0;
   drawBike(ctx, s.gx1, s.gy1, s.dir1, s.frac, COL.p1, 'P1', p1IsYou && youBlink, dead.p1);
   drawBike(ctx, s.gx2, s.gy2, s.dir2, s.frac, COL.p2, 'P2', p2IsYou && youBlink, dead.p2);
 
-  // --- 이펙트: 파편 / 캡션 / 플래시 ---
+  // --- Effects: shards / caption / flash ---
   for (const f of fx) {
     const age = now - f.t;
     if (f.kind === 'shards' && age < 700) {
@@ -260,7 +260,7 @@ function drawScene(
       }
       ctx.restore();
     } else if (f.kind === 'caption' && age < f.life) {
-      const blinkOn = Math.floor(age / 110) % 2 === 0 || age > 220; // steps 점멸 후 유지
+      const blinkOn = Math.floor(age / 110) % 2 === 0 || age > 220; // blinks then stays lit
       if (blinkOn) {
         ctx.save();
         ctx.font = `14px ${ARCADE_FONT}`;
@@ -284,7 +284,7 @@ function drawScene(
     }
   }
 
-  // --- 크래시 순간 크로마틱 어버레이션(승패 순간에만 1회, ~90ms) ---
+  // --- Chromatic aberration at crash moment(once only at the win/loss moment, ~90ms) ---
   const chroma = fx.find((f) => f.kind === 'chroma');
   if (chroma && now - chroma.t < 90) {
     ctx.save();
@@ -306,7 +306,7 @@ function drawHot(ctx: CanvasRenderingContext2D, hot: readonly Cell[], color: str
   ctx.shadowBlur = 8;
   const denom = n - 1 || 1;
   for (let k = 0; k < n; k += 1) {
-    const rec = k / denom; // 0 오래됨 .. 1 최신
+    const rec = k / denom; // 0 oldest .. 1 newest
     ctx.globalAlpha = 0.12 + 0.5 * rec;
     const c = hot[k];
     ctx.fillRect(c.x * CELL_W + 2, c.y * CELL_H + 2, CELL_W - 4, CELL_H - 4);
@@ -325,11 +325,11 @@ function drawBike(
   showYou: boolean,
   dead: boolean,
 ): void {
-  if (dead) return; // 사망 바이크는 파편(shards)으로 대체
+  if (dead) return; // dead bike is replaced by shards
   const cx = gx * CELL_W + CELL_W / 2;
   const cy = gy * CELL_H + CELL_H / 2;
 
-  // 방향 노즈(진행 방향으로 frac만큼 늘어나는 발광 선 → 속도감)
+  // Direction nose(glow line that extends by frac in the travel direction → sense of speed)
   const lead = 0.5 + 0.7 * frac;
   const nx = cx + DX[dir] * lead * CELL_W;
   const ny = cy + DY[dir] * lead * CELL_H;
@@ -343,7 +343,7 @@ function drawBike(
   ctx.moveTo(cx, cy);
   ctx.lineTo(nx, ny);
   ctx.stroke();
-  // 머리 사각(밝은 코어)
+  // Head square(bright core)
   ctx.fillStyle = color;
   ctx.fillRect(cx - CELL_W / 2 + 1.5, cy - CELL_H / 2 + 1.5, CELL_W - 3, CELL_H - 3);
   ctx.shadowBlur = 0;
@@ -351,7 +351,7 @@ function drawBike(
   ctx.fillRect(cx - 2, cy - 2, 4, 4);
   ctx.restore();
 
-  // 머리 위 P1/P2 태그(+ 내 바이크면 YOU 점멸)
+  // P1/P2 tag above the head(+ YOU blinking if it's my bike)
   ctx.save();
   ctx.font = `10px ${ARCADE_FONT}`;
   ctx.textAlign = 'center';
@@ -370,7 +370,7 @@ function drawBike(
 }
 
 // ---------------------------------------------------------------------------
-// 컴포넌트
+// Component
 // ---------------------------------------------------------------------------
 export default function Game5() {
   useDebugScreen('scr-game5');
@@ -388,26 +388,26 @@ export default function Game5() {
   const reportedRef = useRef(false);
   const resultAtRef = useRef(0);
   const botNextAtRef = useRef(0);
-  // 종료 연출: result 전환 추적(기본 플래시 전용 — 폭발 없음)
+  // End effect: track result transition(basic flash only — no explosion)
   const endRef = useRef<EndTracker>(createEndTracker());
 
-  /** HUD 남은 시간(초 단위 양자화 — 리렌더 절약) */
+  /** HUD remaining time(quantized to seconds — saves re-renders) */
   const [hudMs, setHudMs] = useState(GAME_DURATION * 1000);
 
-  // 서버 온라인(권위) 렌더 훅 — 활성/역할만 선택 구독(값 바뀌는 라운드 경계에서만 리렌더).
-  //  · 스냅샷 → stateRef/snapAtRef 미러링은 훅이 리렌더 없이 처리.
-  //  · per-snapshot HUD/디버그 반영만 onSnapshot으로 위임 → 값이 실제 바뀔 때만 리렌더(초 양자화).
+  // Server-online(authoritative) render hook — selectively subscribes only to active/role(re-render only at round boundaries where the value changes).
+  //  · Snapshot → stateRef/snapAtRef mirroring is handled by the hook without re-render.
+  //  · Only per-snapshot HUD/debug reflection is delegated to onSnapshot → re-render only when the value actually changes(second quantization).
   const { isOnline, myRole, stateRef, snapAtRef } = useOnlineRender<Game5State>(5, (s) => {
     setDebugGame(s);
     const remMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
     setHudMs(Math.ceil(remMs / 1000) * 1000);
   });
-  // 입력 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref(stale-closure 방지)
+  // ref that lets the input handler(stable closure) see the latest 'whether online is active'(prevents stale-closure)
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
 
-  // 내 색(플레이어 종속, 역할과 독립) — 원시값만 선택 구독 → 색 배정(매치 시작)에서만 리렌더.
-  // 키캡/HUD 표식 색을 역할이 아니라 이 색으로 준다.
+  // My color(player-bound, independent of role) — selectively subscribe only to the primitive value → re-render only on color assignment(match start).
+  // Give keycap/HUD marker colors from this color, not from the role.
   const myColor = useSyncExternalStore(
     onlineStore.subscribe,
     () => onlineStore.get().myColor ?? 'blue',
@@ -419,8 +419,8 @@ export default function Game5() {
   const [uLit, flashU] = useKeyLamp();
   const [iLit, flashI] = useKeyLamp();
 
-  // direct-URL 복구 + 이탈 시 디버그 브리지 정리
-  // (온라인 매치가 활성이면 flow는 OnlineController가 세팅하므로 오프라인 복구를 걸지 않는다)
+  // direct-URL recovery + clean up the debug bridge on leaving
+  // (if an online match is active, flow is set by OnlineController, so don't trigger offline recovery)
   useEffect(() => {
     const f = getFlow();
     if (!isOnline && (f.phase === 'idle' || f.gameId !== 5)) startOfflineGame(5);
@@ -428,9 +428,9 @@ export default function Game5() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // (서버 스냅샷 → stateRef/snapAtRef 미러링 + per-snapshot HUD/디버그 반영은 useOnlineRender가 처리)
+  // (server snapshot → stateRef/snapAtRef mirroring + per-snapshot HUD/debug reflection are handled by useOnlineRender)
 
-  // 캔버스 해상도 초기화(dpr 스케일)
+  // Initialize canvas resolution(dpr scale)
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
@@ -440,17 +440,17 @@ export default function Game5() {
     c.getContext('2d')?.scale(dpr, dpr);
   }, []);
 
-  // 키보드 — 로컬 어댑터. GameInputEvent 큐잉 + 램프 점등.
-  // P1 Q/W, P2 U/I. 온라인이면 P2 키는 봇이 대행하므로 흡수하지 않는다.
+  // Keyboard — local adapter. GameInputEvent queuing + lamp lighting.
+  // P1 Q/W, P2 U/I. In online, the P2 keys are handled by the bot, so don't absorb them.
   useEffect(() => {
     const detach = attachLocalKeyboard(
       () => performance.now() / 1000,
       (e) => {
-        // 서버 온라인 활성: 로컬 큐/봇 대신 서버로만 전송.
-        // 슬롯 A=좌회전(Q·U) / B=우회전(W·I) — 내 역할은 서버가 role로 재기입하므로
-        // 4키 아무거나 눌러도 내 슬롯으로 간다. 램프 점등은 눌린 물리 키 기준으로 유지.
+        // Server-online active: send only to the server instead of the local queue/bot.
+        // Slot A=turn left(Q·U) / B=turn right(W·I) — since the server rewrites my role,
+        // pressing any of the 4 keys goes to my slot. Lamp lighting stays based on the physical key pressed.
         if (isOnlineRef.current) {
-          // 온라인은 U/I 두 키만(요구사항). U=주키(slotA), I=보조키(slotB). Q/W는 무시.
+          // Online uses only the two keys U/I(requirement). U=main key(slotA), I=secondary key(slotB). Q/W are ignored.
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
           onlineSendInput(slot, e.type, e.t ?? performance.now() / 1000);
@@ -475,7 +475,7 @@ export default function Game5() {
             flashW();
           }
         } else if (e.code === 'KeyU') {
-          if (online) return; // 온라인 mock: P2 = 봇
+          if (online) return; // online mock: P2 = bot
           if (e.type === 'down') {
             sfx('g5-turn');
             flashU();
@@ -493,11 +493,11 @@ export default function Game5() {
     return detach;
   }, [flashQ, flashW, flashU, flashI]);
 
-  // 라운드 수명주기: state 생성 → rAF 루프(step + draw) → 결과 보고.
-  // 백그라운드/오클루전 탭에서 rAF가 멈춰도 워치독 interval이 대신 스텝을 밟는다(QA 자동화 대응).
+  // Round lifecycle: create state → rAF loop(step + draw) → report result.
+  // Even if rAF stalls in a background/occluded tab, the watchdog interval steps in its place(QA automation handling).
   useEffect(() => {
-    // ── 온라인(서버 권위): step·봇·판정·결과보고 없이 서버 state만 그린다 ──
-    // 기존 오프라인 루프가 매 프레임 호출하던 drawScene()을 그대로 재사용한다.
+    // ── Online(server-authoritative): draw only the server state, with no step·bot·judgement·result-report ──
+    // Reuse the drawScene() that the existing offline loop called every frame, as-is.
     if (isOnline) {
       let raf = 0;
       const recordHot = (arr: Cell[], lastRef: { current: Cell }, x: number, y: number) => {
@@ -517,9 +517,9 @@ export default function Game5() {
           recordHot(hot2Ref.current, lastHead2Ref, s.gx2, s.gy2);
           fxRef.current = fxRef.current.filter((f) => now - f.t < 1400);
           const disp = getPlayerDisplays(getFlow());
-          // 스냅샷 사이 외삽: 머리칸(gx/gy)·궤적(occ)은 충돌 정본이라 절대 전진시키지 않고,
-          // 렌더 보간용 frac(다음칸 진행률, 노즈 길이)만 자기 속도(1칸/STEP)로 채운다.
-          // 코어가 매 프레임 frac를 갱신하던 오프라인 노즈 램프를 온라인에서도 재현(0~1 캡).
+          // Extrapolation between snapshots: never advance the head cell(gx/gy)·trail(occ) since they are the collision source of truth,
+          // only fill the render-interpolation frac(progress to next cell, nose length) at its own speed(1 cell/STEP).
+          // Reproduces online too the offline nose ramp where the core updated frac every frame(capped 0~1).
           const extraDt = Math.min(G5.STEP, Math.max(0, (now - snapAtRef.current) / 1000));
           const view =
             extraDt > 0 && s.result === null
@@ -536,7 +536,7 @@ export default function Game5() {
             disp.P1.isYou,
             disp.P2.isYou,
           );
-          endRef.current.update(s.result, now); // 기본 종료 플래시
+          endRef.current.update(s.result, now); // basic end flash
           drawEndFlash(ctx, CW, CH, endRef.current.age(now));
         }
         raf = requestAnimationFrame(loop);
@@ -575,9 +575,9 @@ export default function Game5() {
       }
     };
 
-    // 판정 순간 크래시 연출 산출(승패 순간에만 글리치)
+    // Produce the crash effect at the judgement moment(glitch only at the win/loss moment)
     const onResult = (s: Game5State, now: number) => {
-      // 크래시 파편/플래시/캡션 색도 플레이어 종속(바이크와 동일 색): 로컬 COL 그림자화.
+      // The crash shards/flash/caption colors are also player-bound(same color as the bike): shadow the local COL.
       const COL = playerCol();
       const timeout = s.elapsed >= GAME_DURATION - 1e-6;
       let dead1 = false;
@@ -589,7 +589,7 @@ export default function Game5() {
         dead2 = true;
       }
       deadRef.current = { p1: dead1, p2: dead2 };
-      // 크래시(죽는 소리) 임팩트 — 실제 사망이 있을 때만 1회(타임아웃 무승부 제외).
+      // Crash(death sound) impact — once only when there's an actual death(excluding timeout draw).
       if (dead1 || dead2) sfx('g5-crash');
 
       const cellPx = (gx: number, gy: number, dir: number) => {
@@ -639,14 +639,14 @@ export default function Game5() {
 
     const frame = (now: number) => {
       if (stopped) return;
-      // 라운드 인트로 중엔 시뮬 정지(코어 step 스킵) + last 갱신으로 재개 시 dt 점프 방지.
-      // frame이 자기-스케줄 rAF 콜백이므로 다음 프레임은 계속 요청(체인 유지, Game1 loop 구조와 동일).
+      // During the round intro, pause the sim(skip core step) + update last to avoid a dt jump on resume.
+      // Since frame is a self-scheduling rAF callback, keep requesting the next frame(maintains the chain, same as the Game1 loop structure).
       if (isRoundIntroActive()) {
         last = now;
         raf = requestAnimationFrame(frame);
         return;
       }
-      const dt = Math.min(0.1, (now - last) / 1000); // 초 단위, 100ms 클램프(격자 순간이동 방지)
+      const dt = Math.min(0.1, (now - last) / 1000); // in seconds, 100ms clamp(prevents grid teleport)
       last = now;
       let s = stateRef.current;
       if (!s) return;
@@ -655,7 +655,7 @@ export default function Game5() {
         const events = eventsRef.current;
         eventsRef.current = [];
 
-        // 온라인 봇(P2): 생존 AI가 좌/우 회전키를 합성(스로틀 40ms)
+        // Online bot(P2): the survival AI synthesizes left/right turn keys(throttle 40ms)
         if (getFlow().mode === 'online' && now >= botNextAtRef.current) {
           const t = chooseBotTurn(s);
           if (t) {
@@ -667,7 +667,7 @@ export default function Game5() {
 
         s = game5.step(s, events, dt);
         stateRef.current = s;
-        setDebugGame(s); // 디버그 브리지 — 매 틱
+        setDebugGame(s); // debug bridge — every tick
         const remMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
         setHudMs(Math.ceil(remMs / 1000) * 1000);
 
@@ -679,10 +679,10 @@ export default function Game5() {
           onResult(s, now);
         }
       } else if (!reportedRef.current && now - resultAtRef.current >= RESULT_FX_MS) {
-        // 크래시 연출을 짧게 보여준 뒤 라운드 종료 1회 보고 → ResultOverlay
+        // After briefly showing the crash effect, report round end once → ResultOverlay
         reportedRef.current = true;
         stopped = true;
-        if (isOnline) return; // 온라인은 서버가 round:end 구동 — 화면은 보고하지 않음
+        if (isOnline) return; // online: the server drives round:end — the screen does not report
         if (s.result) reportRoundEnd(toMatchResult(s.result));
       }
 
@@ -701,7 +701,7 @@ export default function Game5() {
           disp.P1.isYou,
           disp.P2.isYou,
         );
-        endRef.current.update(s.result, now); // 기본 종료 플래시
+        endRef.current.update(s.result, now); // basic end flash
         drawEndFlash(ctx, CW, CH, endRef.current.age(now));
       }
 
@@ -711,7 +711,7 @@ export default function Game5() {
     raf = requestAnimationFrame(frame);
     const watchdog = setInterval(() => {
       const now = performance.now();
-      if (!stopped && now - last > 280) frame(now); // rAF가 살아있으면 개입하지 않음
+      if (!stopped && now - last > 280) frame(now); // don't intervene if rAF is alive
     }, 250);
 
     return () => {
@@ -724,7 +724,7 @@ export default function Game5() {
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
   const urgent = flow.phase === 'playing' && hudMs <= 5000;
-  // 라이더 표식 색=플레이어 종속: P1 기능 엔티티가 빨강이면 칩 색을 스왑(캔버스 바이크 색과 일치).
+  // Rider marker color = player-bound: if the P1 functional entity is red, swap the chip color(matches the canvas bike color).
   const colorSwap = functionColors().p1 === 'red';
 
   return (
@@ -740,9 +740,9 @@ export default function Game5() {
             navigate('/');
           }}
         >
-          ◀ 나가기
+          ◀ Exit
         </Button>
-        <span className="g5-title font-display c-muted">게임5 · 라이트 사이클</span>
+        <span className="g5-title font-display c-muted">Game 5 · Light Cycle</span>
       </div>
 
       <div className="g5-hudwrap">
@@ -757,9 +757,9 @@ export default function Game5() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g5-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g5-canvas anim-sign-on" aria-label="게임5 스테이지 — 라이트 사이클" />
+        <canvas ref={canvasRef} className="g5-canvas anim-sign-on" aria-label="Game 5 stage — Light Cycle" />
 
-        {/* 좌상단 라이더 표식 — 색=플레이어 종속(P1/P2 기능 엔티티의 실제 플레이어 색) */}
+        {/* Top-left rider markers — color = player-bound(the P1/P2 functional entity's actual player color) */}
         <div className="g5-riders" aria-hidden>
           <span className={`g5-rider ${colorSwap ? 'g5-rider--p2' : 'g5-rider--p1'} font-arcade`}>
             P1 CYCLE
@@ -770,30 +770,30 @@ export default function Game5() {
         </div>
       </div>
 
-      {/* 온스크린 키캡 — 실제 배정 키(SPEC Q2) + 입력 순간 램프 점등 */}
+      {/* On-screen keycaps — the actual assigned keys(SPEC Q2) + lamp lights at input moment */}
       {isOnline ? (
         <div className="g5-keys g5-keys--online">
           <div className="g5-keys__group">
             <span className={`g5-keys__tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {myColor === 'blue' ? '파랑' : '빨강'} · CYCLE
+              YOU · {myColor === 'blue' ? 'BLUE' : 'RED'} · CYCLE
             </span>
-            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="↺" lit={uLit} label="좌회전" />
-            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="↻" lit={iLit} label="우회전" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="↺" lit={uLit} label="Turn left" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="↻" lit={iLit} label="Turn right" />
           </div>
-          <span className="g5-keys__hint font-arcade">U 좌회전 · I 우회전 — TURN TO SURVIVE</span>
+          <span className="g5-keys__hint font-arcade">U turn left · I turn right — TURN TO SURVIVE</span>
         </div>
       ) : (
         <div className="g5-keys">
           <div className="g5-keys__group">
-            <KeyCap role="P1" keyChar="Q" icon="↺" lit={qLit} label="좌회전" />
-            <KeyCap role="P1" keyChar="W" icon="↻" lit={wLit} label="우회전" />
+            <KeyCap role="P1" keyChar="Q" icon="↺" lit={qLit} label="Turn left" />
+            <KeyCap role="P1" keyChar="W" icon="↻" lit={wLit} label="Turn right" />
             <span className="g5-keys__tag font-arcade c-p1">P1 · CYCLE</span>
           </div>
           <span className="g5-keys__hint font-arcade">TURN TO SURVIVE</span>
           <div className="g5-keys__group">
             <span className="g5-keys__tag font-arcade c-p2">P2 · CYCLE</span>
-            <KeyCap role="P2" keyChar="U" icon="↺" lit={uLit} label="좌회전" />
-            <KeyCap role="P2" keyChar="I" icon="↻" lit={iLit} label="우회전" />
+            <KeyCap role="P2" keyChar="U" icon="↺" lit={uLit} label="Turn left" />
+            <KeyCap role="P2" keyChar="I" icon="↻" lit={iLit} label="Turn right" />
           </div>
         </div>
       )}

@@ -1,13 +1,13 @@
 /**
- * SFX 레지스트리 — 큐 id → 합성 스펙(sfxr 프리셋 또는 멀티노트 징글) + BGM 트랙.
- * 담당: audio 에이전트. id는 게임 SFX 정본(docs/AUDIO_PLAN.md)과 일치.
+ * SFX registry — cue id → synthesis spec (sfxr preset or multi-note jingle) + BGM tracks.
+ * Owner: audio agent. ids match the game SFX source of truth (docs/AUDIO_PLAN.md).
  */
 import type { SfxParams, SeqNote, VampTrack, Wave } from './synth';
 
 type Rng = () => number;
 type PresetFn = (r: Rng) => SfxParams;
 
-/** sfxr식 프리셋 (r = 시드된 난수 → 큐마다 미세 변주) */
+/** sfxr-style presets (r = seeded random → subtle variation per cue) */
 export const PRESETS: Record<string, PresetFn> = {
   hover: (r) => ({ wave: 'sine', freq: 1000 + r() * 260, attack: 0.002, sustain: 0.008, decay: 0.04, gain: 0.13 }),
   click: (r) => ({ wave: 'square', duty: 0.5, freq: 560 + r() * 140, slide: -2, attack: 0.001, sustain: 0.008, decay: 0.05, punch: 0.3, gain: 0.24 }),
@@ -60,7 +60,7 @@ export const SEQS: Record<string, SeqNote[]> = {
   ],
 };
 
-/** 큐 id → 스펙: preset(프리셋명) 또는 seq(징글명). docs/AUDIO_PLAN.md 70큐 대응. */
+/** cue id → spec: preset (preset name) or seq (jingle name). Matches the 70 cues in docs/AUDIO_PLAN.md. */
 export interface SfxSpec {
   preset?: string;
   seq?: string;
@@ -146,7 +146,7 @@ export const SPEC: Record<string, SfxSpec> = {
 
 export type SfxId = keyof typeof SPEC;
 
-/** 칩튠 루프 BGM 트랙 (renderVamp용 코드 뱀프) */
+/** Chiptune loop BGM tracks (chord vamp for renderVamp) */
 export const BGM: Record<string, VampTrack> = {
   lobby: { id: 'lobby', bpm: 150, leadWave: 'square', leadOct: 0, density: 16, bars: [[60, 64, 67], [55, 59, 62], [57, 60, 64], [53, 57, 60]] },
   battle: { id: 'battle', bpm: 165, leadWave: 'square', leadOct: 1, density: 16, bars: [[62, 66, 69], [57, 61, 64], [59, 62, 66], [55, 59, 62]] },

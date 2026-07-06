@@ -2,52 +2,52 @@ import type { GameInputEvent, GameResult } from '../types'
 import { GAME_DURATION } from '../types'
 
 /**
- * 게임5 = 몬스터 포격전 (대칭 대결).
- *  · 두 플레이어는 화면 중앙에 약간의 간격을 두고 대포 형태로 자리한다.
- *      P1 왼쪽 대포 (CX-GAP, CY) / P2 오른쪽 대포 (CX+GAP, CY).
- *  · 몬스터는 화면 가장자리 랜덤 지점에서 생성돼 목표 대포로 직선 이동한다.
- *      생성 시 목표 대포(P1/P2)를 번갈아 배정 → 두 대포가 받는 위협이 균등.
- *  · 조작 — 대포는 기본적으로 계속 회전(기본값 반시계)한다.
- *      P1: Q 회전 방향 전환 · W 발사(쿨 FIRE_COOLDOWN)
- *      P2: U 회전 방향 전환 · I 발사
- *  · 총알이 몬스터에 맞으면 몬스터 소멸 + 쏜 플레이어 +1점. (아무 몬스터나 맞힐 수 있다)
- *  · 몬스터가 어느 대포에든 닿으면 그 대포의 주인이 즉시 패배 → 상대 승리.
- *  · 제한시간(10s) 생존 시: 둘 다 살아남았으면 점수 높은 쪽 승, 동점이면 DRAW.
+ * Game 5 = Monster Barrage (symmetric duel).
+ *  · The two players sit as cannons near the center of the screen with a small gap between them.
+ *      P1 left cannon (CX-GAP, CY) / P2 right cannon (CX+GAP, CY).
+ *  · Monsters spawn at random points along the screen edges and move in a straight line toward their target cannon.
+ *      On spawn the target cannon (P1/P2) is assigned alternately → both cannons face an even threat.
+ *  · Controls — the cannon rotates continuously by default (default counter-clockwise).
+ *      P1: Q toggle rotation direction · W fire (cooldown FIRE_COOLDOWN)
+ *      P2: U toggle rotation direction · I fire
+ *  · When a bullet hits a monster the monster is destroyed + the shooter gets +1 point. (any monster can be hit)
+ *  · If a monster touches either cannon, that cannon's owner loses instantly → the opponent wins.
+ *  · Surviving the time limit (10s): if both survive, the higher score wins; a tie is a DRAW.
  *
- * 각도 규약: 총구 방향 = (cos a, sin a) (캔버스 좌표, y 아래로 증가).
- *   화면에서 "반시계 방향"으로 돌리려면 a 를 감소시킨다 → 회전 방향 dir=-1 이 반시계(기본값).
+ * Angle convention: muzzle direction = (cos a, sin a) (canvas coordinates, y increases downward).
+ *   To rotate "counter-clockwise" on screen, decrease a → rotation direction dir=-1 is counter-clockwise (the default).
  */
 export const G8 = {
   W: 800,
   H: 450,
   CX: 400,
   CY: 225,
-  /** 두 대포의 중심에서 좌우로 벌린 간격 */
+  /** Gap spread left/right from the center of the two cannons */
   GAP: 74,
   CANNON_R: 16,
-  /** 포신 길이(렌더 + 총알 생성 위치) */
+  /** Barrel length (render + bullet spawn position) */
   BARREL_LEN: 26,
-  // ── 대포 조작 ──
-  ROT_SPEED: 5.4, // rad/s (항상 회전, Q/U로 방향 전환)
+  // ── Cannon controls ──
+  ROT_SPEED: 5.4, // rad/s (always rotating, Q/U toggles direction)
   FIRE_COOLDOWN: 0.32,
-  // ── 총알 ──
+  // ── Bullets ──
   BULLET_SPEED: 660,
   BULLET_R: 5,
   /**
-   * 총알↔몬스터 피격 판정에만 더하는 여유 반경(관대한 피격).
-   * 빠른 총알(BULLET_SPEED)이 작은 히트박스를 프레임 사이에 통과(tunneling)해
-   * 스치듯 지나가는 문제를 완화한다. 시각 스프라이트 크기(MONSTER_R)와
-   * 몬스터→대포 패배 판정(touchR)에는 영향을 주지 않는다.
+   * Extra radius added only to the bullet↔monster hit test (forgiving hits).
+   * Mitigates the problem where a fast bullet (BULLET_SPEED) tunnels through a
+   * small hitbox between frames and grazes past. Does not affect the visual
+   * sprite size (MONSTER_R) or the monster→cannon loss test (touchR).
    */
   HIT_PAD: 6,
-  // ── 몬스터 (직선 이동, 기존 대비 20% 감속) ──
+  // ── Monsters (straight-line movement, 20% slower than before) ──
   MONSTER_R: 13,
   MONSTER_SPEED_MIN: 44.8,
   MONSTER_SPEED_MAX: 76.8,
-  // ── 스폰: 시간이 갈수록 간격이 짧아진다 ──
+  // ── Spawn: the interval shortens over time ──
   SPAWN_INTERVAL_START: 0.9,
   SPAWN_INTERVAL_MIN: 0.42,
-  /** 가장자리에서 살짝 안쪽으로 스폰 */
+  /** Spawn slightly inside the edge */
   SPAWN_MARGIN: 24,
 } as const
 
@@ -62,27 +62,27 @@ export interface Shot {
 export interface Monster {
   x: number
   y: number
-  /** 이 몬스터가 노리는 대포 */
+  /** The cannon this monster is targeting */
   target: 1 | 2
-  /** 생성 시 목표를 향해 고정된 직선 속도 */
+  /** Straight-line velocity fixed toward the target at spawn */
   vx: number
   vy: number
-  /** 렌더용 애니메이션 위상 */
+  /** Animation phase for rendering */
   anim: number
 }
 
 export interface Game8State {
   elapsed: number
   result: GameResult
-  // ── P1 대포 ──
+  // ── P1 cannon ──
   p1Angle: number
-  /** 회전 방향(-1=반시계 기본, 1=시계). Q로 토글 */
+  /** Rotation direction (-1=counter-clockwise default, 1=clockwise). Toggled with Q */
   p1Dir: 1 | -1
   p1Cooldown: number
   p1Score: number
-  // ── P2 대포 ──
+  // ── P2 cannon ──
   p2Angle: number
-  /** 회전 방향(-1=반시계 기본, 1=시계). U로 토글 */
+  /** Rotation direction (-1=counter-clockwise default, 1=clockwise). Toggled with U */
   p2Dir: 1 | -1
   p2Cooldown: number
   p2Score: number
@@ -90,7 +90,7 @@ export interface Game8State {
   shots: Shot[]
   monsters: Monster[]
   spawnTimer: number
-  /** 다음 몬스터가 노릴 대포(번갈아 배정) */
+  /** The cannon the next monster will target (assigned alternately) */
   nextTarget: 1 | 2
   seed: number
 }
@@ -106,7 +106,7 @@ function nextRand(seed: number): { u: number; seed: number } {
 const p1Pos = () => ({ x: G8.CX - G8.GAP, y: G8.CY })
 const p2Pos = () => ({ x: G8.CX + G8.GAP, y: G8.CY })
 
-/** 현재 경과 시간 기준 스폰 간격 (선형 가속) */
+/** Spawn interval based on current elapsed time (linear acceleration) */
 function spawnInterval(elapsed: number): number {
   const t = clamp(elapsed / GAME_DURATION, 0, 1)
   return lerp(G8.SPAWN_INTERVAL_START, G8.SPAWN_INTERVAL_MIN, t)
@@ -116,28 +116,28 @@ export function create(rand: () => number): Game8State {
   return {
     elapsed: 0,
     result: null,
-    p1Angle: -Math.PI / 2, // 위쪽을 향한 채 시작
-    p1Dir: -1, // 기본 반시계
+    p1Angle: -Math.PI / 2, // start pointing upward
+    p1Dir: -1, // default counter-clockwise
     p1Cooldown: 0,
     p1Score: 0,
     p2Angle: -Math.PI / 2,
-    p2Dir: -1, // 기본 반시계
+    p2Dir: -1, // default counter-clockwise
     p2Cooldown: 0,
     p2Score: 0,
     shots: [],
     monsters: [],
-    spawnTimer: 0.4, // 첫 몬스터까지 살짝 여유
+    spawnTimer: 0.4, // small delay before the first monster
     nextTarget: rand() < 0.5 ? 1 : 2,
     seed: Math.floor(rand() * 4294967296) >>> 0,
   }
 }
 
-/** 가장자리 랜덤 지점에서 target 대포를 노리는 몬스터를 만든다 */
+/** Create a monster at a random edge point that targets the given cannon */
 function spawnMonster(state: Game8State, target: 1 | 2): void {
   const m = G8.SPAWN_MARGIN
   let r = nextRand(state.seed)
   state.seed = r.seed
-  const edge = Math.floor(r.u * 4) % 4 // 0 상 1 하 2 좌 3 우
+  const edge = Math.floor(r.u * 4) % 4 // 0 top 1 bottom 2 left 3 right
 
   r = nextRand(state.seed)
   state.seed = r.seed
@@ -163,7 +163,7 @@ function spawnMonster(state: Game8State, target: 1 | 2): void {
   state.seed = r.seed
   const speed = lerp(G8.MONSTER_SPEED_MIN, G8.MONSTER_SPEED_MAX, r.u)
 
-  // 목표 대포를 향한 고정 직선 속도 (대포는 정지 → 경로가 직선)
+  // Fixed straight-line velocity toward the target cannon (the cannon is stationary → the path is straight)
   const tp = target === 1 ? p1Pos() : p2Pos()
   const dist = Math.hypot(tp.x - x, tp.y - y) || 1
   const vx = ((tp.x - x) / dist) * speed
@@ -178,17 +178,17 @@ export function step(state: Game8State, events: GameInputEvent[], dt: number): G
   state.p1Cooldown = Math.max(0, state.p1Cooldown - dt)
   state.p2Cooldown = Math.max(0, state.p2Cooldown - dt)
 
-  // 1) 입력
+  // 1) Input
   for (const e of events) {
     const down = e.type === 'down'
     switch (e.code) {
-      case 'KeyQ': // P1 회전 방향 전환
+      case 'KeyQ': // P1 toggle rotation direction
         if (down) state.p1Dir = state.p1Dir === -1 ? 1 : -1
         break
-      case 'KeyU': // P2 회전 방향 전환
+      case 'KeyU': // P2 toggle rotation direction
         if (down) state.p2Dir = state.p2Dir === -1 ? 1 : -1
         break
-      case 'KeyW': // P1 발사
+      case 'KeyW': // P1 fire
         if (down && state.p1Cooldown === 0) {
           const p = p1Pos()
           state.shots.push({
@@ -201,7 +201,7 @@ export function step(state: Game8State, events: GameInputEvent[], dt: number): G
           state.p1Cooldown = G8.FIRE_COOLDOWN
         }
         break
-      case 'KeyI': // P2 발사
+      case 'KeyI': // P2 fire
         if (down && state.p2Cooldown === 0) {
           const p = p2Pos()
           state.shots.push({
@@ -217,11 +217,11 @@ export function step(state: Game8State, events: GameInputEvent[], dt: number): G
     }
   }
 
-  // 2) 대포 회전 — 항상 회전(dir=-1 반시계 기본), Q/U로 방향만 토글
+  // 2) Cannon rotation — always rotating (dir=-1 counter-clockwise default), Q/U only toggle direction
   state.p1Angle += G8.ROT_SPEED * state.p1Dir * dt
   state.p2Angle += G8.ROT_SPEED * state.p2Dir * dt
 
-  // 3) 몬스터 스폰(번갈아 목표 배정)
+  // 3) Monster spawn (alternating target assignment)
   state.spawnTimer -= dt
   if (state.spawnTimer <= 0) {
     spawnMonster(state, state.nextTarget)
@@ -229,14 +229,14 @@ export function step(state: Game8State, events: GameInputEvent[], dt: number): G
     state.spawnTimer += spawnInterval(state.elapsed)
   }
 
-  // 4) 몬스터 이동 — 생성 시 정해진 목표를 향해 직선 이동
+  // 4) Monster movement — straight-line toward the target fixed at spawn
   for (const mo of state.monsters) {
     mo.x += mo.vx * dt
     mo.y += mo.vy * dt
     mo.anim += dt
   }
 
-  // 5) 총알 이동 + 화면 밖 제거
+  // 5) Bullet movement + remove off-screen
   const liveShots: Shot[] = []
   for (const sh of state.shots) {
     sh.x += sh.vx * dt
@@ -247,8 +247,8 @@ export function step(state: Game8State, events: GameInputEvent[], dt: number): G
   }
   state.shots = liveShots
 
-  // 6) 총알 ↔ 몬스터 충돌 — 맞으면 몬스터 소멸 + 쏜 사람 +1, 총알도 소멸
-  //    HIT_PAD 만큼 관대하게: 시각 스프라이트/패배 판정은 그대로, 피격만 잘 되게.
+  // 6) Bullet ↔ monster collision — on hit the monster is destroyed + the shooter gets +1, and the bullet is destroyed too
+  //    Forgiving by HIT_PAD: the visual sprite / loss test stay the same, only the hit detection is made more reliable.
   const hitR = G8.MONSTER_R + G8.BULLET_R + G8.HIT_PAD
   const deadMonster = new Set<number>()
   const usedShot = new Set<number>()
@@ -271,7 +271,7 @@ export function step(state: Game8State, events: GameInputEvent[], dt: number): G
     state.shots = state.shots.filter((_, i) => !usedShot.has(i))
   }
 
-  // 7) 몬스터 ↔ 대포 충돌 — 닿은 대포의 주인이 즉시 패배
+  // 7) Monster ↔ cannon collision — the owner of the touched cannon loses instantly
   const touchR = G8.MONSTER_R + G8.CANNON_R
   const p1 = p1Pos()
   const p2 = p2Pos()
@@ -286,7 +286,7 @@ export function step(state: Game8State, events: GameInputEvent[], dt: number): G
     }
   }
 
-  // 8) 제한시간 종료 — 둘 다 생존, 점수로 판정
+  // 8) Time limit ends — both survived, decided by score
   if (state.elapsed >= GAME_DURATION) {
     if (state.p1Score > state.p2Score) state.result = 'P1'
     else if (state.p2Score > state.p1Score) state.result = 'P2'

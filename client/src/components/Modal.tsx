@@ -1,20 +1,20 @@
 /**
- * Modal — 오버레이 + 네온 패널 (PLAN §1.5).
- * (아키텍트 소유 — 구현 에이전트 수정 금지)
+ * Modal — overlay + neon panel (PLAN §1.5).
+ * (Owned by the architect — implementation agents must not modify)
  *
- * - 오버레이 rgba(13,2,33,.82) (스캔라인은 전역 .crt-overlay가 이미 덮음)
- * - 본체: --surface + 2px 포인트색 보더 + 코너 브래킷 + 상단 마퀴 스트립 제목
- * - 등장 sign-on 플리커 (§1.4)
- * - 배경 클릭/ESC → onClose (SPEC 관례). 닫기 불가 모달은 onClose 생략.
+ * - Overlay rgba(13,2,33,.82) (scanlines are already covered by the global .crt-overlay)
+ * - Root: --surface + 2px accent-color border + corner brackets + top marquee strip title
+ * - sign-on flicker on entry (§1.4)
+ * - Background click/ESC → onClose (SPEC convention). Non-closable modals omit onClose.
  *
- * 사용법:
+ * Usage:
  *   <Modal open={flow.modal === 'settings'} onClose={closeModal}
- *          marquee="설정 — OPERATOR MENU" accentColor="var(--accent)"
+ *          marquee="Settings — OPERATOR MENU" accentColor="var(--accent)"
  *          testId="modal-settings" width={520}>
- *     ...본문...
+ *     ...body...
  *   </Modal>
  *
- * testId는 모달 "본체" 요소에 붙는다 (QA 레지스트리: modal-*).
+ * testId attaches to the modal "root" element (QA registry: modal-*).
  */
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
@@ -22,15 +22,15 @@ import './modal.css';
 
 export interface ModalProps {
   open: boolean;
-  /** 배경 클릭/ESC 시 호출. 생략하면 배경/ESC로 닫히지 않음 */
+  /** Called on background click/ESC. If omitted, does not close via background/ESC */
   onClose?: () => void;
-  /** 상단 마퀴 스트립 제목 */
+  /** Top marquee strip title */
   marquee?: ReactNode;
-  /** 보더·브래킷·마퀴 색 (기본 --accent2) */
+  /** Border/bracket/marquee color (default --accent2) */
   accentColor?: string;
-  /** 본체 data-testid (QA 레지스트리 modal-*) */
+  /** Root data-testid (QA registry modal-*) */
   testId?: string;
-  /** 본체 max-width (px, 기본 480) */
+  /** Root max-width (px, default 480) */
   width?: number;
   children: ReactNode;
 }

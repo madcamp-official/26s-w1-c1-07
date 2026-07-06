@@ -1,98 +1,98 @@
-# MADPUMP 실행 계획서 (v1 풀 온라인 런칭 + 10게임 확장)
+# MADPUMP execution plan (v1 full-online launch + 10-game expansion)
 
-> grilling으로 닫은 결정 전체 + 한 번에 진행할 실행 로드맵. 정본 순위: `TECH_STACK.md` / `ERD.md` 하위의 구현 계획.
+> The full set of decisions closed via grilling + a single execution roadmap. Source-of-truth priority: implementation plans under `TECH_STACK.md` / `ERD.md`.
 
 ---
 
-## 0. 확정 결정 로그 (grilling 결과)
+## 0. Confirmed decision log (grilling results)
 
-| # | 항목 | 결정 |
+| # | Item | Decision |
 |---|---|---|
-| D1 | 런칭 스코프 | **C = 풀 온라인** (구글로그인 + 온라인 매칭 + 결과저장 + 리더보드) |
-| D2 | 방/큐 저장 | **서버 메모리** (`Map`), DB 아님. 결과만 DB. |
-| D3 | 매치 구조 | **3라운드, 항상 완주**(조기 클린치 없음). 매치 승자 = 라운드 다승, 동률=DRAW |
-| D4 | 라운드 게임/역할 | **게임 랜덤(라운드마다 서로 다른 것, 균등 분배) + 역할 랜덤** |
-| D5 | 스키마 | `game_match`(playerA/B, result) + **`game_round` 신설**. enum→`A_WIN/B_WIN/DRAW`. 게임역할(P1/P2)은 DB 미저장 |
-| D6 | 리더보드 | 랭킹=**매치 단위**(승3/무1/패0), 게임별 승률=**라운드 단위** |
-| D7 | 넷코드 | **덤 클라이언트**·서버권위·게임2·3 ~30Hz·예측 없음·game3 `t` clamp |
-| D8 | 끊김 처리 | **중단 없음** — 서버가 끝까지 연산, 결과 항상 저장. **라운드 서버 자동 카운트다운 진행**. `match:aborted`=안내 알림만 |
-| D9 | 게임 선택 화면 | **전면 삭제**(온·오프라인 모두 랜덤). **매치 러너**가 3게임 순차 진행 |
-| D10 | 프로필 | 온보딩+설정에서 변경. 저장=**VM 로컬 디스크**(R2 안 씀) |
-| D11 | admin | v1=핵심(로그인·점수수정·결과수정·그룹생성·인원목록). 인원 CRUD=fast-follow |
-| D12 | 게임 수 | 10개 로직+상수 완성(game-test 브랜치). 게임1~3 런칭 + **게임4~10 fast-follow(병렬)** |
-| D13 | 게임4~10 제작 | **완전히 새로 제작**. game-lab 렌더러 재사용/껍데기 금지. 로직·상수만 재사용. 게임별 subagent. 디자인은 PLAN.md/theme.css를 **읽어서 복사**(참조 금지). 자립성 테스트 필수 |
-| D14 | 세션 | 서버 인메모리. 닉네임 1~20자 유니크. 분반 DB 시드 |
+| D1 | Launch scope | **C = full online** (Google login + online matchmaking + result saving + leaderboard) |
+| D2 | Room/queue storage | **server memory** (`Map`), not DB. Only results in DB. |
+| D3 | Match structure | **3 rounds, always run to completion** (no early clinch). Match winner = round majority, tie = DRAW |
+| D4 | Round game/role | **random game (different each round, evenly distributed) + random role** |
+| D5 | Schema | `game_match`(playerA/B, result) + **new `game_round`**. enum→`A_WIN/B_WIN/DRAW`. Game role (P1/P2) not stored in DB |
+| D6 | Leaderboard | Ranking = **per match** (win 3/draw 1/loss 0), per-game win rate = **per round** |
+| D7 | Netcode | **dumb client**·server-authoritative·games 2·3 ~30Hz·no prediction·game3 `t` clamp |
+| D8 | Disconnect handling | **no interruption** — server computes to the end, results always saved. **Rounds auto-count-down on the server**. `match:aborted` = notification alert only |
+| D9 | Game select screen | **fully removed** (random both online and offline). The **match runner** runs 3 games in sequence |
+| D10 | Profile | Changed in onboarding+settings. Storage = **VM local disk** (R2 not used) |
+| D11 | admin | v1 = core (login·score edit·result edit·group creation·member list). Member CRUD = fast-follow |
+| D12 | Game count | 10 games' logic+constants complete (game-test branch). Games 1~3 launch + **games 4~10 fast-follow (parallel)** |
+| D13 | Games 4~10 build | **built entirely from scratch**. No reusing the game-lab renderer / no shells. Reuse logic·constants only. Per-game subagent. Design is **read and copied** from PLAN.md/theme.css (no referencing). Self-containment test required |
+| D14 | Session | Server in-memory. Nickname 1~20 chars, unique. Classes seeded into DB |
 
 ---
 
-## 1. 아키텍처 2계층 (핵심 불변식)
+## 1. Two-layer architecture (core invariant)
 
-- **라이브/프로토콜 계층**: `P1/P2` = 그 라운드의 게임 역할(코어 반환). 매 라운드 랜덤. 소켓 이벤트에서 사용.
-- **DB 계층**: `A/B` = 고정된 두 참가자 신원. "누가 이겼나"만 저장. 서버가 라운드 끝날 때 역할결과→신원승자 번역.
-- **서버 권위**: 모든 판정은 서버 `core.step`. 클라는 입력 전송 + 상태 렌더(덤). 끊겨도 서버가 끝까지 연산.
-- **자립성**: main(client/server/shared)은 design-lab/game-lab을 절대 참조 안 함. `scripts/check-standalone.sh`로 강제.
+- **Live/protocol layer**: `P1/P2` = that round's game role (returned by the core). Random each round. Used in socket events.
+- **DB layer**: `A/B` = the two fixed participant identities. Only "who won" is stored. When a round ends the server translates role-result → identity-winner.
+- **Server authority**: all judgments are the server's `core.step`. The client sends input + renders state (dumb). Even if disconnected, the server computes to the end.
+- **Self-containment**: main (client/server/shared) never references design-lab/game-lab. Enforced by `scripts/check-standalone.sh`.
 
 ---
 
-## 2. 스키마 변경 (ERD.md 먼저 → schema.prisma → 마이그레이션)
+## 2. Schema changes (ERD.md first → schema.prisma → migration)
 
 ```
-enum MatchResult { A_WIN, B_WIN, DRAW }          // P1_WIN/P2_WIN → A_WIN/B_WIN 개명
+enum MatchResult { A_WIN, B_WIN, DRAW }          // P1_WIN/P2_WIN → A_WIN/B_WIN rename
 
 game_match
   id BIGINT PK · playerA_id FK · playerB_id FK
   result MatchResult · played_at DATETIME · deleted_at DATETIME?
 
-game_round  (신설)
+game_round  (new)
   id BIGINT PK · match_id FK→game_match · round_index INT
   game_type TINYINT FK→game · result MatchResult
   UNIQUE(match_id, round_index)
 
-game  (시드 3행 → 10행으로 확장)
-score_config  (승3/무1/패0, admin 수정)
-match_edit_history  (result enum도 A/B로)
+game  (seed 3 rows → expand to 10 rows)
+score_config  (win 3/draw 1/loss 0, admin-editable)
+match_edit_history  (result enum also A/B)
 ```
 
 ---
 
-## 3. 실행 로드맵 (2트랙 병렬)
+## 3. Execution roadmap (2 tracks in parallel)
 
-### 트랙 A — 백엔드/온라인 (순차, 내가 주도)
-| P | 작업 | 검증 |
+### Track A — backend/online (sequential, led by me)
+| P | Task | Verify |
 |---|---|---|
-| A0 | ERD.md 갱신 + schema.prisma(game_round·enum개명·game 10행) + 로컬 docker MySQL migrate/seed | 마이그레이션 성공, seed 10게임 |
-| A1 | 서버 뼈대: Fastify+Socket.IO, `shared/src/net/events.ts` 통합봉투, **개발용 로그인 스텁**, 핸드셰이크+`lobby:hello` | 두 탭 소켓 연결 |
-| A2 | 로비: 코드방(room:*)+빠른시작(글로벌 FIFO queue) + room:state 브로드캐스트 | 두 탭 매칭 성사 |
-| A3 | **매치 러너 + 게임1 온라인 수직 슬라이스**: 서버 권위 step 루프, 3라운드 랜덤·역할랜덤·자동 카운트다운, game:input/state, 끊김=끝까지연산, match:end→game_match+game_round INSERT | 로그인→매칭→온라인 플레이→결과 DB저장→리더보드 반영 |
-| A4 | 게임2·3 온라인화(같은 봉투 재사용) + ~30Hz | 3게임 온라인 |
-| A5 | 진짜 구글 OAuth + 세션쿠키 + 온보딩(닉네임·분반) → 스텁 교체 | 실제 로그인 |
-| A6 | 프로필(온보딩+설정, VM 로컬디스크) + admin 핵심(점수·결과수정·그룹생성·인원목록) | 프로필 변경·admin 동작 |
-| A7 | VM 배포: KAIST VM 서버+DB, 원격 2인 테스트 | 실기기 원격 플레이 |
+| A0 | Update ERD.md + schema.prisma (game_round·enum rename·game 10 rows) + local docker MySQL migrate/seed | migration succeeds, seed 10 games |
+| A1 | Server skeleton: Fastify+Socket.IO, `shared/src/net/events.ts` unified envelope, **dev login stub**, handshake + `lobby:hello` | two tabs socket-connected |
+| A2 | Lobby: code room (room:*) + quick start (global FIFO queue) + room:state broadcast | two tabs matchmade |
+| A3 | **Match runner + game 1 online vertical slice**: server-authoritative step loop, 3 rounds random·random-role·auto countdown, game:input/state, disconnect = compute-to-end, match:end → game_match+game_round INSERT | login → matchmaking → online play → result saved to DB → reflected in leaderboard |
+| A4 | Bring games 2·3 online (reusing the same envelope) + ~30Hz | 3 games online |
+| A5 | Real Google OAuth + session cookie + onboarding (nickname·class) → replace the stub | actual login |
+| A6 | Profile (onboarding+settings, VM local disk) + admin core (score·result edit·group creation·member list) | profile change·admin works |
+| A7 | VM deploy: KAIST VM server+DB, remote 2-player test | real-device remote play |
 
-### 트랙 B — 콘텐츠 (병렬, subagent 팀)
-| P | 작업 | 검증 |
+### Track B — content (parallel, subagent team)
+| P | Task | Verify |
 |---|---|---|
-| B0 | 게임4~10 로직+상수 main `shared/`로 vendor-in, GameId 1~10 확장 | typecheck |
-| B1 | **게임4~10 화면 7개 완전 신규 제작**(게임별 subagent, 네온 신규 UI, 로직·상수만 재사용, design-lab 참조 0) | 빌드+브라우저+자립성 테스트 |
-| B2 | 매치 러너에 편입(게임 풀 = is_active 전체) | 랜덤 매치에 새 게임 등장 |
+| B0 | Vendor games 4~10 logic+constants into main `shared/`, expand GameId 1~10 | typecheck |
+| B1 | **Build 7 fully new screens for games 4~10** (per-game subagent, new neon UI, reuse logic·constants only, 0 design-lab references) | build + browser + self-containment test |
+| B2 | Fold into the match runner (game pool = all is_active) | new games appear in random matches |
 
-**런칭(토요일) = A0~A5 + 게임1~3.** 게임4~10(B1)·admin 확장·프로필 고도화는 직후 fast-follow.
+**Launch (Saturday) = A0~A5 + games 1~3.** Games 4~10 (B1)·admin expansion·profile enhancement are fast-follow right after.
 
 ---
 
-## 4. 게임4~10 제작 규칙 (D13 상세)
+## 4. Games 4~10 build rules (D13 detail)
 
-각 게임 = 전용 subagent + 개별 지시문. 규칙:
-1. `@madpump/shared`의 `gameN.create/step` + `GN` 상수 **그대로 사용**(로직 재구현 금지).
-2. game-lab 렌더러 **재사용/복붙/껍데기 금지** — 화면·렌더링 **완전 신규 제작**.
-3. 디자인 = `design-lab/ideas/02-neon-coinop/PLAN.md`(정본)·`theme.css`(토큰)를 **읽어서 값만 main으로 복사**. **design-lab 경로 import 절대 금지.**
-4. 네온 시스템(HudFrame·KeyCap·Button·CRT베젤·theme 토큰, 이미 main에 복사됨) 재사용.
-5. 게임1~3 화면을 배선 패턴 참고로 읽되 코드 복사 아님.
-6. **자립성 검증**: `check-standalone.sh` + 탯줄절단(design-lab 치우고 빌드).
+Each game = a dedicated subagent + individual instructions. Rules:
+1. **Use as-is** `@madpump/shared`'s `gameN.create/step` + `GN` constants (no reimplementing logic).
+2. **No reusing/copy-pasting/shelling** the game-lab renderer — build the screen·rendering **fully new**.
+3. Design = **read** `design-lab/ideas/02-neon-coinop/PLAN.md` (source of truth)·`theme.css` (tokens) **and copy only the values into main**. **Never import from design-lab paths.**
+4. Reuse the neon system (HudFrame·KeyCap·Button·CRT bezel·theme tokens, already copied into main).
+5. Read the games 1~3 screens as a wiring-pattern reference but do not copy the code.
+6. **Self-containment verification**: `check-standalone.sh` + umbilical cut (move design-lab aside and build).
 
 ---
 
-## 5. 검증 게이트 (모든 단계 공통)
-- 각 단계는 **관측 가능하게 동작**한 뒤 다음으로.
-- `npm run check:standalone` 상시 통과(design-lab/game-lab 참조 0).
-- 온라인 판정은 "동일 입력열 재생 시 서버 결과 == 로컬 시뮬"으로 결정성 확인.
+## 5. Verification gates (common to every step)
+- Each step is done only after it **works observably**, then move on.
+- `npm run check:standalone` passes at all times (0 design-lab/game-lab references).
+- Online judgment is confirmed deterministic by "replaying the same input sequence, server result == local sim".

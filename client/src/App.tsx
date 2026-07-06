@@ -1,15 +1,15 @@
 /**
- * App — 라우팅 + 모달 호스트 + 전역 CRT 오버레이 (아키텍트 소유 — 구현 에이전트 수정 금지).
+ * App — routing + modal host + global CRT overlay (owned by the architect — implementation agents must not modify).
  *
- * 라우트:
- *   /            → 세션 게이트: loggedIn ? S2(MainLoggedIn) : S1(MainLoggedOut)
- *   /select      → S8 게임 선택 (로그인 불필요)
+ * Routes:
+ *   /            → session gate: loggedIn ? S2(MainLoggedIn) : S1(MainLoggedOut)
+ *   /select      → S8 Game Select (login not required)
  *   /game/1|2|3  → S9 / S10·S11 / S12
- * (온보딩(S5)은 로스터 로그인 전환으로 폐기 — 닉네임/분반이 명단에 고정, docs/AUTH.md)
+ * (Onboarding (S5) was dropped with the switch to roster login — nickname/class are fixed in the roster, docs/AUTH.md)
  *
- * 모달 5종은 전역 호스트로 항상 마운트 — 각 모달이 flow.modal을 보고 스스로 열림/닫힘.
- * (모달 컴포넌트 안에서 useNavigate 사용 가능하도록 BrowserRouter 안에 위치)
- * 스캔라인+비네팅(.crt-overlay)은 여기서 1장만 렌더 — 화면들이 중복 렌더하지 말 것.
+ * The 5 modals are always mounted as a global host — each modal opens/closes itself by watching flow.modal.
+ * (Placed inside BrowserRouter so modal components can use useNavigate)
+ * Scanlines + vignette (.crt-overlay) are rendered only once here — screens must not render duplicates.
  */
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { useSession } from './state/session';
@@ -59,11 +59,11 @@ export default function App() {
         <Route path="/game/8" element={<Game8 />} />
         <Route path="/game/9" element={<Game9 />} />
         <Route path="/game/10" element={<Game10 />} />
-        {/* 온라인 매치 전용 URL(오프라인 /game/N 과 구분) — 라이브 컨텍스트 없으면 메인으로 */}
+        {/* Online-match-only URL (distinct from offline /game/N) — no live context → back to main */}
         <Route path="/online/game/:gameId" element={<OnlineGame />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      {/* 전역 모달 호스트 */}
+      {/* Global modal host */}
       <LoginRequiredModal />
       <LoginModal />
       <SettingsModal />
@@ -71,9 +71,9 @@ export default function App() {
       <RankingModal />
       <OnlineModal />
       <MatchingModal />
-      {/* 온라인 매치 네비게이션 + 종료 오버레이 (실서버) */}
+      {/* Online match navigation + end overlay (live server) */}
       <OnlineController />
-      {/* 전역 스캔라인 + 비네팅 (PLAN §1.3) — 항상 최상단, 클릭 통과 */}
+      {/* Global scanlines + vignette (PLAN §1.3) — always on top, click-through */}
       <div className="crt-overlay" aria-hidden />
     </BrowserRouter>
   );

@@ -1,18 +1,19 @@
 /**
- * S8 게임 선택 (lobby 에이전트 소유).
- * 컨테이너 testid: scr-game-select / 카드: card-game{내부id} (예: card-game1, card-game5)
+ * S8 Game Select (owned by the lobby agent).
+ * Container testid: scr-game-select / cards: card-game{internal id} (e.g. card-game1, card-game5)
  *
- * 표시 순서·넘버링 (shared/coins.ts GAME_ORDER = [1,3,6,2,10,4,8,5,7,9]):
- *   캐비닛은 GAME_ORDER 순으로 늘어서고, 마퀴 라벨 "GAME 1..10" 은 게임 내부 id 가 아니라
- *   이 배열의 위치(1-기반)를 따른다. 라우팅·픽토그램·테스트 id 는 내부 id 를 그대로 쓴다.
+ * Display order / numbering (shared/coins.ts GAME_ORDER = [1,3,6,2,10,4,8,5,7,9]):
+ *   Cabinets are laid out in GAME_ORDER, and the marquee label "GAME 1..10" follows the
+ *   position in this array (1-based), not the game's internal id. Routing, pictograms, and
+ *   test ids use the internal id as-is.
  *
- * 해금 (shared/coins.ts):
- *   표시 순서의 마지막 두 게임(LOCKABLE_GAME_IDS)만 잠겨 있고 나머지는 처음부터 오픈.
- *   잠긴 두 게임은 순서와 무관하게 각각 독립적으로 해금 가능(로그인 필요).
- *   잠긴 카드 클릭 → 하단 확인 바 → POST /api/unlock({gameId}). 비로그인은 해금 불가.
+ * Unlocking (shared/coins.ts):
+ *   Only the last two games in display order (LOCKABLE_GAME_IDS) are locked; the rest are open from the start.
+ *   The two locked games can each be unlocked independently, regardless of order (login required).
+ *   Click a locked card → bottom confirm bar → POST /api/unlock({gameId}). Logged-out users cannot unlock.
  *
- * SPEC QA-S8-01~04: 카드 클릭 → startOfflineGame(id); navigate(`/game/${id}`) — 매칭 없이 즉시.
- *   로그인 불필요(라우트 가드 없음). 메인 복귀 수단 = [◀ 메인으로].
+ * SPEC QA-S8-01~04: click card → startOfflineGame(id); navigate(`/game/${id}`) — immediate, no matchmaking.
+ *   No login required (no route guard). Way back to main = [◀ Back to main].
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -29,7 +30,7 @@ import '../global-interaction.css';
 
 interface CabinetSpec {
   id: GameId;
-  /** 표시 순서 위치(1-기반) — 마퀴 "GAME N" 라벨 */
+  /** display order position (1-based) — marquee "GAME N" label */
   displayNo: number;
   title: string;
   name: string;
@@ -37,7 +38,7 @@ interface CabinetSpec {
 }
 
 const CAB_COLORS = ['var(--accent)', 'var(--p1)', 'var(--p2)', 'var(--accent2)', 'var(--win)'];
-/** GAME_ORDER 순으로 캐비닛 구성 — 라벨/색은 위치, 정체성(id·이름·픽토)은 내부 id */
+/** Build cabinets in GAME_ORDER — label/color by position, identity (id, name, pictogram) by internal id */
 const CABINETS: CabinetSpec[] = (GAME_ORDER as readonly GameId[]).map((id, i) => ({
   id,
   displayNo: i + 1,
@@ -51,28 +52,28 @@ export default function GameSelect() {
   const navigate = useNavigate();
   const session = useSession();
 
-  /** 해금 확인 바 대상 (잠긴 카드 클릭 시) */
+  /** unlock confirm bar target (when a locked card is clicked) */
   const [armed, setArmed] = useState<GameId | null>(null);
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
 
-  // 매치/해금으로 코인이 변했을 수 있으니 진입 시 지갑 새로고침
+  // Coins may have changed from a match/unlock, so refresh the wallet on entry
   useEffect(() => {
     if (session.loggedIn) void restoreSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // unlocked_count 는 비트마스크 — 비로그인은 0(기본 오픈만)
+  // unlocked_count is a bitmask — logged-out is 0 (default-open only)
   const unlocked = unlockedGameIds(session.loggedIn ? session.unlockedCount : 0);
   const armedCab = armed !== null ? CABINETS.find((c) => c.id === armed) ?? null : null;
 
   const pick = (id: GameId) => {
     if (unlocked.has(id)) {
-      startOfflineGame(id); // 매칭 단계 없이 즉시 인게임 (주석 16:1665)
+      startOfflineGame(id); // straight into the game, no matchmaking step (comment 16:1665)
       navigate(`/game/${id}`);
       return;
     }
-    // 잠긴 게임: 로그인 상태에서만 해금 확인 바 (순서 무관 자유 해금)
+    // Locked game: show the unlock confirm bar only when logged in (free unlock, order-independent)
     setUnlockError(null);
     if (session.loggedIn && isLockable(id)) setArmed(id);
   };
@@ -86,7 +87,7 @@ export default function GameSelect() {
       setUnlockError(r.error);
       return;
     }
-    setArmed(null); // 성공 — 세션 store가 갱신돼 카드가 열린다
+    setArmed(null); // success — the session store updates and the card opens
   };
 
   return (
@@ -95,7 +96,7 @@ export default function GameSelect() {
 
       <header className="s8-header">
         <Button variant="tertiary" onClick={() => navigate('/')}>
-          ◀ 메인으로
+          ◀ Back to main
         </Button>
         <p className="s8-wordmark font-arcade" aria-label="MADPUMP">
           <span className="c-p2 glow-text">MAD</span>
@@ -115,7 +116,7 @@ export default function GameSelect() {
       <div className="s8-floor">
         {CABINETS.map((cab) => {
           const isLocked = !unlocked.has(cab.id);
-          const canUnlock = isLocked && session.loggedIn; // 로그인 시 어느 잠금 게임이든 해금 가능
+          const canUnlock = isLocked && session.loggedIn; // when logged in, any locked game can be unlocked
           return (
             <button
               key={cab.id}
@@ -156,26 +157,26 @@ export default function GameSelect() {
         })}
       </div>
 
-      {/* 해금 확인 바 — 잠긴 카드를 눌렀을 때 (순서 무관) */}
+      {/* Unlock confirm bar — when a locked card is clicked (order-independent) */}
       {armedCab && (
         <div className="s8-unlock-bar" data-testid="unlock-bar" role="dialog" aria-live="polite">
           <span className="font-display">
-            GAME {armedCab.displayNo} ({armedCab.name}) 를{' '}
-            <strong className="c-accent">{unlockCost(armedCab.id)}코인</strong>으로 해금할까요?
+            Unlock GAME {armedCab.displayNo} ({armedCab.name}) for{' '}
+            <strong className="c-accent">{unlockCost(armedCab.id)} Coins</strong>?
           </span>
           {unlockError && <span className="s8-unlock-err c-error font-display">{unlockError}</span>}
           <div className="s8-unlock-actions">
             <Button variant="primary" data-testid="btn-unlock" onClick={onUnlock} disabled={unlocking}>
-              {unlocking ? '해금 중…' : '해금하기'}
+              {unlocking ? 'Unlocking…' : 'Unlock'}
             </Button>
             <Button variant="tertiary" onClick={() => setArmed(null)} disabled={unlocking}>
-              취소
+              Cancel
             </Button>
           </div>
         </div>
       )}
 
-      {/* COIN FARM — 솔로 펌프 미션으로 코인 벌기 (비로그인은 로그인 모달로) */}
+      {/* COIN FARM — earn coins via a solo Pump mission (logged-out goes to the login modal) */}
       <button
         type="button"
         className="s8-grind font-arcade"

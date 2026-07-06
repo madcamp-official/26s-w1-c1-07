@@ -1,13 +1,13 @@
 /**
- * 온라인 매치 네비게이션 컨트롤러 — App에 상시 마운트.
- * 라운드마다 게임이 바뀌면 해당 게임 화면으로 자동 이동(서버 round:start 기반).
- * 매치 시작 시 슬롯머신+VS 인트로(phase 'slot'), 종료 시 결과+리벤지 오버레이.
+ * Online match navigation controller — permanently mounted in App.
+ * When the game changes each round, automatically navigates to that game's screen (based on server round:start).
+ * Slot machine + VS intro at match start (phase 'slot'), result + rematch overlay at the end.
  *
- * 리벤지 UX (docs/ONLINE_MATCH.md):
- *  · 패자: 자격이 있으면 REVENGE 버튼(스테이크·ALL-IN 표시) → 신청 후 응답 대기(취소 가능)
- *  · 승자: 오퍼 다이얼로그 "{이름} 님이 … 수락하시겠습니까?" [수락]/[거절] + 10초 카운트
- *  · 무산(거절/취소/타임아웃/불가): revengeClosed 수신 → 방 나가고 메인으로
- *  · 수락: 서버가 revenge:result → match:start 순으로 보냄 → 슬롯 인트로부터 재시작
+ * Rematch UX (docs/ONLINE_MATCH.md):
+ *  · Loser: if eligible, a REVENGE button (shows stake · ALL-IN) → after requesting, waits for a response (can cancel)
+ *  · Winner: offer dialog "Do you accept {name}'s …?" [Accept]/[Decline] + 10s count
+ *  · Fallthrough (decline/cancel/timeout/ineligible): revengeClosed received → leave the room and go to main
+ *  · Accept: server sends revenge:result → match:start in order → restarts from the slot intro
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -29,16 +29,16 @@ export default function OnlineController() {
   const navigate = useNavigate()
   const loc = useLocation()
 
-  /** 리벤지 카운트다운 표시용(코스메틱 — 실제 타임아웃은 서버 10초). now로 초기화(#7: 첫 250ms 오표시 방지) */
+  /** For displaying the rematch countdown (cosmetic — the actual timeout is the server's 10s). Initialized to now (#7: prevents the first 250ms being shown wrong) */
   const [nowTick, setNowTick] = useState(() => performance.now())
-  /** 패자가 신청을 보낸 시각 (대기 카운트 표시용) */
+  /** The time the loser sent the request (for displaying the wait count) */
   const [waitStartedAt, setWaitStartedAt] = useState(0)
   const [requestError, setRequestError] = useState<string | null>(null)
-  /** REVENGE 신청 in-flight 가드 (#3: 더블클릭 방지) */
+  /** In-flight guard for the REVENGE request (#3: prevents double-clicks) */
   const [requesting, setRequesting] = useState(false)
-  /** 취소 요청 후 서버 확정 대기 중 */
+  /** Waiting for the server to confirm after a cancel request */
   const [cancelling, setCancelling] = useState(false)
-  /** 내가 스스로 메인으로 빠져나가는 중 — 서버 이벤트 에코가 teardown을 재트리거하지 않게 (#1·#6) */
+  /** I'm leaving to main on my own — so a server event echo doesn't re-trigger teardown (#1·#6) */
   const leavingRef = useRef(false)
 
   const goMain = useCallback(() => {
@@ -49,23 +49,23 @@ export default function OnlineController() {
     navigate('/')
   }, [navigate])
 
-  // 매치 시작(슬롯 인트로 포함) 시 모달 정리 + 라운드 게임 화면으로 이동
+  // At match start (including the slot intro), clean up modals + navigate to the round's game screen
   useEffect(() => {
     if (o.phase === 'slot') {
-      leavingRef.current = false // 새 매치 진입 — teardown 가드 해제 (리벤지 수락 재시작 포함)
+      leavingRef.current = false // entering a new match — release the teardown guard (including rematch-accept restart)
       setRequestError(null)
       setRequesting(false)
       setCancelling(false)
-      closeModal() // 인트로 시작 — 온라인/매칭 모달 닫기
+      closeModal() // intro starts — close the online/matchmaking modal
     }
     if ((o.phase === 'countdown' || o.phase === 'playing') && o.gameId) {
       closeModal()
-      const target = `/online/game/${o.gameId}` // 온라인 매치 전용 URL (오프라인 /game/N 과 구분)
+      const target = `/online/game/${o.gameId}` // online-match-only URL (distinct from offline /game/N)
       if (loc.pathname !== target) navigate(target)
     }
   }, [o.gameId, o.phase, loc.pathname, navigate])
 
-  // 새 매치 종료(match-end)마다 이전 매치의 stale 신청상태 초기화 (#2)
+  // On every new match end (match-end), reset the stale request state from the previous match (#2)
   useEffect(() => {
     if (o.phase === 'match-end') {
       setRequestError(null)
@@ -74,19 +74,19 @@ export default function OnlineController() {
     }
   }, [o.matchId, o.phase])
 
-  // 리벤지 무산(거절/취소/타임아웃/신청 불가) → 방 나가고 메인으로 (명세 2c). goMain이 중복 실행 차단(#6)
+  // Rematch fallthrough (decline/cancel/timeout/request ineligible) → leave the room and go to main (spec 2c). goMain blocks duplicate execution (#6)
   useEffect(() => {
     if (o.revengeClosed) goMain()
   }, [o.revengeClosed, goMain])
 
-  // 리벤지 카운트다운 틱 (대기/오퍼 중에만)
+  // Rematch countdown tick (only while waiting/offering)
   useEffect(() => {
     if (o.revengePhase === 'none') return
     const t = window.setInterval(() => setNowTick(performance.now()), 250)
     return () => window.clearInterval(t)
   }, [o.revengePhase])
 
-  // ── 슬롯머신 + VS 인트로 ──
+  // ── Slot machine + VS intro ──
   if (o.phase === 'slot' && o.slotGames && o.opponent) {
     return (
       <MatchIntro
@@ -108,19 +108,19 @@ export default function OnlineController() {
     )
   }
 
-  // 라운드 카운트다운: 내 '색'(플레이어 종속, 매치 고정)을 크게 알린다.
-  // 색은 역할과 무관 — 공격/수비 역할은 매치마다 랜덤이라 색으로 역할을 알 수 없다(그게 의도).
+  // Round countdown: prominently announce my 'color' (player-bound, fixed for the match).
+  // Color is unrelated to role — attack/defense roles are random each match, so color doesn't reveal role (that's intended).
   if (o.phase === 'countdown' && o.role) {
-    // 색 정보 없으면(구버전 등) 역할 색으로 폴백.
+    // If there's no color info (old versions, etc.), fall back to the role color.
     const iAmBlue = o.myColor ? o.myColor === 'blue' : o.role === 'P1'
     return (
       <div className="onl-youbanner" data-testid="online-you-banner" aria-live="polite">
         <div className={`onl-youbanner__card ${iAmBlue ? 'is-p1' : 'is-p2'}`}>
           <span className="onl-youbanner__label font-arcade">YOU ARE</span>
           <span className="onl-youbanner__color font-arcade glow-text">
-            {iAmBlue ? '파랑' : '빨강'}
+            {iAmBlue ? 'BLUE' : 'RED'}
           </span>
-          <span className="onl-youbanner__hint font-display">U · I 로 조종</span>
+          <span className="onl-youbanner__hint font-display">Control with U · I</span>
         </div>
       </div>
     )
@@ -132,14 +132,14 @@ export default function OnlineController() {
     const label = draw ? 'DRAW' : win ? 'YOU WIN!' : 'YOU LOSE'
     const cls = draw ? 'draw' : win ? 'win' : 'lose'
 
-    // 리벤지 오퍼 남은 초 (승자 다이얼로그) — 상한 클램프(#7: 첫 렌더 과대 표시 방지)
+    // Remaining seconds on the rematch offer (winner dialog) — clamped to an upper bound (#7: prevents over-display on first render)
     const offerRemain = o.revengeOffer
       ? Math.min(
           Math.ceil(o.revengeOffer.timeoutMs / 1000),
           Math.max(0, Math.ceil((o.revengeOffer.timeoutMs - (nowTick - o.revengeOffer.receivedAt)) / 1000)),
         )
       : 0
-    // 신청 대기 남은 초 (패자) — 서버 타임아웃 10초 기준 코스메틱, 상한 10s 클램프
+    // Remaining seconds waiting for the request (loser) — cosmetic based on the server's 10s timeout, clamped to 10s upper bound
     const waitRemain = Math.min(10, Math.max(0, Math.ceil((10_000 - (nowTick - waitStartedAt)) / 1000)))
 
     return (
@@ -151,23 +151,23 @@ export default function OnlineController() {
             <span className={o.coinDelta > 0 ? 'win' : o.coinDelta < 0 ? 'lose' : 'draw'}>
               {o.coinDelta > 0 ? `+${o.coinDelta}` : o.coinDelta} COIN
             </span>
-            {o.coinBalance !== null && <span className="onl-coins-balance"> · 보유 {o.coinBalance}</span>}
+            {o.coinBalance !== null && <span className="onl-coins-balance"> · Held {o.coinBalance}</span>}
           </div>
         )}
 
-        {/* ── 승자: 리벤지 오퍼 다이얼로그 ── */}
+        {/* ── Winner: rematch offer dialog ── */}
         {o.revengePhase === 'offered' && o.revengeOffer && (
           <div className="onl-revenge-offer anim-sign-on" data-testid="revenge-offer" role="dialog">
             <p className="font-display onl-revenge-offer__msg">
-              <strong>{o.revengeOffer.fromNickname}</strong> 님이 베팅 코인의 2배를 걸고 리벤지
-              매치를 신청하셨습니다.
+              <strong>{o.revengeOffer.fromNickname}</strong> has requested a rematch, betting double
+              the bet Coins.
               <br />
-              리벤지를 수락하시겠습니까?
+              Do you accept the rematch?
             </p>
             <p className="font-arcade onl-revenge-offer__stake">
-              내 베팅 🪙 {o.revengeOffer.yourStake}
+              My bet 🪙 {o.revengeOffer.yourStake}
               {o.revengeOffer.yourAllIn && <em className="onl-allin font-arcade">ALL-IN</em>}
-              <span className="c-muted"> / 상대 🪙 {o.revengeOffer.oppStake}</span>
+              <span className="c-muted"> / Opponent 🪙 {o.revengeOffer.oppStake}</span>
               {o.revengeOffer.oppAllIn && <em className="onl-allin font-arcade">ALL-IN</em>}
             </p>
             <div className="onl-revenge-offer__actions">
@@ -177,7 +177,7 @@ export default function OnlineController() {
                 data-testid="btn-revenge-accept"
                 onClick={() => respondRevenge(true)}
               >
-                수락 ({offerRemain}s)
+                Accept ({offerRemain}s)
               </button>
               <button
                 type="button"
@@ -185,14 +185,14 @@ export default function OnlineController() {
                 data-testid="btn-revenge-decline"
                 onClick={() => respondRevenge(false)}
               >
-                거절
+                Decline
               </button>
             </div>
           </div>
         )}
 
-        {/* ── 패자: REVENGE 버튼 (자격 있을 때만) / 신청 후 대기 ──
-            revengeClosed 중엔 곧 메인으로 나가므로 버튼을 숨겨 한 프레임 깜빡임 방지 */}
+        {/* ── Loser: REVENGE button (only when eligible) / wait after requesting ──
+            During revengeClosed we're about to leave to main, so hide the button to prevent a one-frame flicker */}
         {!draw && !win && o.revengePhase === 'none' && o.revenge && !o.revengeClosed && (
           <div className="onl-revenge">
             <button
@@ -201,17 +201,17 @@ export default function OnlineController() {
               data-testid="btn-revenge"
               disabled={requesting}
               onClick={async () => {
-                if (requesting) return // #3: 더블클릭 in-flight 가드
+                if (requesting) return // #3: double-click in-flight guard
                 setRequesting(true)
                 setRequestError(null)
                 setWaitStartedAt(performance.now())
-                const r = await requestRevenge() // 성공 시 revengePhase='waiting'로 전환됨
+                const r = await requestRevenge() // on success, transitions to revengePhase='waiting'
                 if (!r.ok) {
-                  // 승자가 이미 떠났거나 매치가 잡힘 — 안내 후 메인으로 (명세 2c)
-                  setRequestError(r.message ?? '리벤지를 신청할 수 없어요')
+                  // The winner already left or a match was found — notify then go to main (spec 2c)
+                  setRequestError(r.message ?? 'Can’t request a rematch')
                   window.setTimeout(goMain, 1200)
                 }
-                // 성공이면 waiting UI로 넘어가므로 requesting은 그대로(버튼 언마운트)
+                // On success we move to the waiting UI, so requesting stays as-is (button unmounts)
               }}
             >
               REVENGE — 🪙 {o.revenge.stake}
@@ -219,7 +219,7 @@ export default function OnlineController() {
             </button>
             {requestError && (
               <p className="font-display c-error onl-revenge__err" role="alert">
-                {requestError} — 메인으로 돌아갑니다
+                {requestError} — returning to main
               </p>
             )}
           </div>
@@ -227,10 +227,10 @@ export default function OnlineController() {
         {o.revengePhase === 'waiting' && (
           <div className="onl-revenge" data-testid="revenge-waiting">
             <p className="font-display onl-revenge__wait">
-              {cancelling ? '취소하는 중…' : `상대의 응답을 기다리는 중… (${waitRemain}s)`}
+              {cancelling ? 'Cancelling…' : `Waiting for the opponent’s response… (${waitRemain}s)`}
             </p>
-            {/* 취소는 서버 확정 기반 — 낙관적 teardown을 하지 않고 revenge:result(CANCELLED)를 기다린다.
-                (#1: 승자 '수락'과의 경합에서 취소가 져도 코인을 잃지 않게 — 수락 시엔 그대로 매치로 진입) */}
+            {/* Cancel is server-confirmation-based — it doesn't do an optimistic teardown, it waits for revenge:result(CANCELLED).
+                (#1: so that even if cancel loses the race against the winner's 'accept', no Coins are lost — on accept we just enter the match) */}
             <button
               type="button"
               className="onl-btn font-display"
@@ -241,15 +241,15 @@ export default function OnlineController() {
                 cancelRevenge()
               }}
             >
-              취소
+              Cancel
             </button>
           </div>
         )}
 
-        {/* 대기 중이 아닐 때만 '메인으로' — waiting 중엔 취소만 노출해 경합 창을 없앤다(#1) */}
+        {/* 'To main' only when not waiting — while waiting, expose only cancel to eliminate the race window (#1) */}
         {o.revengePhase !== 'waiting' && (
           <button type="button" className="onl-btn font-display" onClick={goMain}>
-            메인으로 ▶
+            To main ▶
           </button>
         )}
       </div>
@@ -260,9 +260,9 @@ export default function OnlineController() {
     return (
       <div className="onl-overlay" data-testid="online-aborted">
         <div className="onl-result font-arcade glow-text lose">OPPONENT LEFT</div>
-        <div className="onl-sub font-arcade">상대가 나갔습니다 — 매치는 서버에서 종료됩니다</div>
+        <div className="onl-sub font-arcade">Opponent left — the match is ended by the server</div>
         <button type="button" className="onl-btn font-display" onClick={goMain}>
-          메인으로 ▶
+          To main ▶
         </button>
       </div>
     )

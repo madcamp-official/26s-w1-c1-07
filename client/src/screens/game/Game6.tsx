@@ -1,25 +1,25 @@
 /**
- * S? 게임4 — 공룡 달리기 (NEON COIN-OP). 담당: game6 에이전트.
- * 컨테이너 testid: scr-game6 / 부품: game-stage(CRT 베젤), hud-*(HudFrame 내장), btn-exit
+ * S? Game 6 — Dino Run (NEON COIN-OP). Owner: game6 agent.
+ * Container testid: scr-game6 / parts: game-stage(CRT bezel), hud-*(HudFrame built-in), btn-exit
  *
- * ── 원칙 ────────────────────────────────────────────────────────
- *  · 로직/판정은 @madpump/shared game6 코어(create/step) + G6 상수만 사용 — 재구현 금지.
- *  · 화면은 neon-coinop 컨셉으로 처음부터 새로 구성(canvas 직접 렌더). 실험 폴더 미참조.
+ * ── Principles ────────────────────────────────────────────────────────
+ *  · Logic/decisions use only the @madpump/shared game6 core(create/step) + G6 constants — no reimplementation.
+ *  · The screen is built fresh from scratch on the neon-coinop concept(direct canvas render). No reference to the experimental folder.
  *
- * 게임 규칙(코어 주석 요약):
- *  · P1(공룡, 시안) = Q 점프 / W 숙이기(홀드). 10초를 버티면 P1 승.
- *  · P2(핑크) = U 선인장(지면 장애물, 점프로 회피) / I 새(머리높이, 숙여서 회피).
- *    공용 쿨타임(cooldown/cooldownMax)으로 연속 생성을 제한 — 무한 벽 쌓기 방지.
- *  · 한 번이라도 충돌하면 즉시 P2 승.
+ * Game rules(core-comment summary):
+ *  · P1(dino, cyan) = Q jump / W duck(hold). Survive 10 seconds and P1 wins.
+ *  · P2(pink) = U cactus(ground obstacle, dodge by jumping) / I bird(head height, dodge by ducking).
+ *    A shared cooldown(cooldown/cooldownMax) limits back-to-back spawns — prevents endless wall building.
+ *  · A single collision and P2 wins instantly.
  *
- * 배선(게임1·2와 동일 계약):
- *  · direct-URL 진입: idle이거나 gameId!==6면 startOfflineGame(6)
- *  · 라운드마다 game6.create(Math.random) → rAF 루프 game6.step(state, events, dtSec)
- *  · attachLocalKeyboard: KeyQ/KeyW=P1, KeyU/KeyI=P2. 코어가 down/up(엣지·홀드) 판정.
- *  · step은 원본 mutate 후 동일 참조 반환 → 이전값 비교는 호출 전 스칼라 스냅샷.
- *  · result 확정 → (짧은 인게임 연출 후) reportRoundEnd 1회 → <ResultOverlay />
- *  · 매 틱 setDebugGame(state), 언마운트 setDebugGame(null)
- *  · online 모드: P2(장애물 생성)는 봇 — 쿨타임마다 무작위 장애물 투척(사람은 P1=q/w)
+ * Wiring(same contract as games 1·2):
+ *  · direct-URL entry: if idle or gameId!==6, startOfflineGame(6)
+ *  · each round game6.create(Math.random) → rAF loop game6.step(state, events, dtSec)
+ *  · attachLocalKeyboard: KeyQ/KeyW=P1, KeyU/KeyI=P2. The core decides down/up(edge·hold).
+ *  · step mutates the original then returns the same reference → prev-value comparisons are scalar snapshots taken before the call.
+ *  · result decided → (after a short in-game effect) reportRoundEnd once → <ResultOverlay />
+ *  · every tick setDebugGame(state), on unmount setDebugGame(null)
+ *  · online mode: P2(obstacle spawning) is a bot — throws random obstacles each cooldown(the human is P1=q/w)
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -48,72 +48,72 @@ import { sfx } from '@/audio';
 import './game6.css';
 
 // ---------------------------------------------------------------------------
-// 캔버스 상수 — 논리 필드는 코어 G6.W/H(800×450). 캔버스는 1.2배(960×540)로 16:9 유지.
-// SX=SY=1.2 균일 스케일이라 논리→캔버스 변환은 단순 곱.
+// Canvas constants — the logical field is the core G6.W/H(800×450). The canvas is 1.2× (960×540) keeping 16:9.
+// SX=SY=1.2 uniform scale, so logical→canvas conversion is a simple multiply.
 // ---------------------------------------------------------------------------
 const CW = 960;
 const CH = 540;
 const SC = CW / G6.W; // 1.2 (== CH / G6.H)
 
-// 모듈 기본 팔레트(P1=시안/P2=핑크). 색은 '역할'이 아니라 '플레이어'를 따라야 하므로
-// drawScene 맨 위에서 functionColors()로 로컬 COL을 shadow해 P1/P2 엔티티 색을 스왑한다.
+// Module default palette(P1=cyan/P2=pink). Colors must follow the 'player', not the 'role', so
+// at the top of drawScene functionColors() shadows a local COL to swap the P1/P2 entity colors.
 const COL0 = {
   field: '#1a0b2e', // --bg-raised
   deep: '#160a33', // --surface-deep
-  p1: '#05d9e8', // --p1 (공룡 — 시안)
+  p1: '#05d9e8', // --p1 (dino — cyan)
   p1dim: '#0a3a4a', // --p1-dim
-  p2: '#ff2a6d', // --p2 (장애물 — 핑크)
+  p2: '#ff2a6d', // --p2 (obstacle — pink)
   p2dim: '#4a0a26', // --p2-dim
-  accent: '#fdf500', // 코인 옐로
-  accent2: '#d300c5', // 네온 퍼플(그리드)
+  accent: '#fdf500', // coin yellow
+  accent2: '#d300c5', // neon purple(grid)
   muted: '#9d8fbf',
   win: '#39ff88',
 } as const;
 
-/** 스왑된 로컬 팔레트도 담을 수 있게 값 타입을 넓힌 팔레트(스프라이트 헬퍼 인자용) */
+/** A palette with widened value types so it can also hold the swapped local palette(for sprite-helper args) */
 type ColPalette = { readonly [K in keyof typeof COL0]: string };
 
 const ARCADE_FONT = '"Press Start 2P", monospace';
 
-/** 판정 → 결과 오버레이 전환 사이 인게임 연출 시간(충돌 파편/생존 러쉬) */
+/** In-game effect duration between decision → result-overlay transition(collision shards/survival rush) */
 const RESULT_FX_MS = 700;
 
-/** 코어 result('P1'|'P2'|'DRAW') → 셸 MatchResult 매핑 */
+/** Core result('P1'|'P2'|'DRAW') → shell MatchResult mapping */
 function toMatchResult(r: 'P1' | 'P2' | 'DRAW'): MatchResult {
   return r === 'P1' ? 'P1_WIN' : r === 'P2' ? 'P2_WIN' : 'DRAW';
 }
 
-// 배경 별(패럴랙스) — 결정론적 정적 배치, elapsed로 스크롤
+// Background stars(parallax) — deterministic static placement, scrolled by elapsed
 const STARS: readonly { x: number; y: number; z: number; r: number }[] = Array.from(
   { length: 34 },
   (_, i) => ({
     x: (i * 137.5) % CW,
     y: (i * 71.3) % 300,
-    z: 0.15 + ((i * 53) % 100) / 300, // 패럴랙스 속도 계수
+    z: 0.15 + ((i * 53) % 100) / 300, // parallax speed factor
     r: 0.6 + ((i * 29) % 10) / 8,
   }),
 );
 
 // ---------------------------------------------------------------------------
-// 렌더 전용 이펙트 (로직 비침범)
+// Render-only effects (non-invasive to logic)
 // ---------------------------------------------------------------------------
 type Fx =
-  | { kind: 'dust'; x: number; y: number; t: number } // 착지/점프 먼지
-  | { kind: 'shards'; x: number; y: number; t: number } // 충돌 파편
-  | { kind: 'spawn'; x: number; y: number; t: number } // P2 투척 섬광
+  | { kind: 'dust'; x: number; y: number; t: number } // landing/jump dust
+  | { kind: 'shards'; x: number; y: number; t: number } // collision shards
+  | { kind: 'spawn'; x: number; y: number; t: number } // P2 throw flash
   | { kind: 'caption'; text: string; color: string; x: number; y: number; t: number; life: number }
-  | { kind: 'chroma'; t: number } // 충돌 순간 크로마틱 어버레이션
-  | { kind: 'rush'; t: number }; // 생존 승리 러쉬
+  | { kind: 'chroma'; t: number } // chromatic aberration at the collision moment
+  | { kind: 'rush'; t: number }; // survival-win rush
 
-// 좌표 변환
+// Coordinate conversion
 const X = (u: number) => u * SC;
 const Y = (u: number) => u * SC;
 
 // ---------------------------------------------------------------------------
-// 스프라이트 (네온 아웃라인 — 채움은 dim, 스트로크는 플레이어색 + 글로우)
+// Sprites (neon outline — fill is dim, stroke is player color + glow)
 // ---------------------------------------------------------------------------
 
-/** 공룡(P1, 시안). leftPx=박스 좌측 px, bottomPx=박스 하단 px */
+/** Dino(P1, cyan). leftPx=box left px, bottomPx=box bottom px */
 function drawDino(
   ctx: CanvasRenderingContext2D,
   leftPx: number,
@@ -146,17 +146,17 @@ function drawDino(
   };
 
   if (!ducking) {
-    // 서 있는 티라노(오른쪽을 봄) 실루엣
+    // Standing T-rex(facing right) silhouette
     poly([
       [4, 32], [12, 24], [12, 14], [19, 14], [19, 4], [40, 4],
       [41, 16], [30, 16], [30, 21], [27, 21], [27, 40], [13, 40], [13, 32],
     ]);
-    // 팔
+    // arm
     ctx.beginPath();
     ctx.moveTo(mx(28), my(23));
     ctx.lineTo(mx(33), my(27));
     ctx.stroke();
-    // 다리(달리기 — runPhase로 교대). 공중이면 짧게 접음.
+    // legs(running — alternated by runPhase). Tucked short when airborne.
     const step = Math.floor(runPhase * 14) % 2 === 0;
     const frontH = grounded ? (step ? 10 : 4) : 5;
     const backH = grounded ? (step ? 4 : 10) : 5;
@@ -168,14 +168,14 @@ function drawDino(
     };
     leg(13, backH);
     leg(21, frontH);
-    // 눈
+    // eye
     ctx.shadowBlur = 0;
     ctx.fillStyle = col.p1;
     ctx.beginPath();
     ctx.arc(mx(34), my(9), 1.6 * SC, 0, Math.PI * 2);
     ctx.fill();
   } else {
-    // 숙인 자세 — 낮고 길게(머리 앞으로)
+    // Ducked pose — low and long(head forward)
     poly([
       [0, 12], [10, 6], [22, 3], [44, 3], [44, 11], [33, 13], [14, 15], [8, 20], [2, 20],
     ]);
@@ -199,7 +199,7 @@ function drawDino(
   ctx.restore();
 }
 
-/** 선인장(P2 점프 장애물, 핑크). 지면(ground)에 바닥을 붙임 */
+/** Cactus(P2 jump obstacle, pink). Base anchored to the ground */
 function drawCactus(
   ctx: CanvasRenderingContext2D,
   leftPx: number,
@@ -222,15 +222,15 @@ function drawCactus(
     ctx.fill();
     ctx.stroke();
   };
-  seg(10, 4, 17, 46); // 몸통
-  seg(3, 18, 8, 30); // 왼팔 세로
-  seg(6, 24, 11, 30); // 왼팔 연결
-  seg(19, 12, 24, 26); // 오른팔 세로
-  seg(16, 20, 21, 26); // 오른팔 연결
+  seg(10, 4, 17, 46); // body
+  seg(3, 18, 8, 30); // left arm vertical
+  seg(6, 24, 11, 30); // left arm connector
+  seg(19, 12, 24, 26); // right arm vertical
+  seg(16, 20, 21, 26); // right arm connector
   ctx.restore();
 }
 
-/** 새(P2 숙이기 장애물, 핑크). 머리 높이로 날아옴 + 날갯짓(phase) */
+/** Bird(P2 duck obstacle, pink). Flies in at head height + wing flap(phase) */
 function drawBird(
   ctx: CanvasRenderingContext2D,
   leftPx: number,
@@ -239,7 +239,7 @@ function drawBird(
   col: ColPalette,
 ): void {
   const mx = (x: number) => leftPx + x * SC;
-  const my = (y: number) => topPx + y * SC; // 박스 상단 기준 (0..28)
+  const my = (y: number) => topPx + y * SC; // relative to box top (0..28)
   ctx.save();
   ctx.strokeStyle = col.p2;
   ctx.fillStyle = col.p2dim;
@@ -247,7 +247,7 @@ function drawBird(
   ctx.shadowBlur = 10;
   ctx.lineWidth = 2.2;
   ctx.lineJoin = 'round';
-  // 몸통(부리는 왼쪽 = 진행 방향)
+  // body(beak on the left = travel direction)
   ctx.beginPath();
   const body: readonly [number, number][] = [
     [2, 14], [10, 9], [24, 8], [34, 10], [38, 15], [28, 19], [12, 19], [7, 16],
@@ -256,7 +256,7 @@ function drawBird(
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  // 날개 — 위/아래로 퍼덕
+  // wing — flaps up/down
   const flap = Math.sin(phase * 16);
   ctx.beginPath();
   ctx.moveTo(mx(15), my(12));
@@ -265,7 +265,7 @@ function drawBird(
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  // 눈
+  // eye
   ctx.shadowBlur = 0;
   ctx.fillStyle = col.p2;
   ctx.beginPath();
@@ -275,7 +275,7 @@ function drawBird(
 }
 
 // ---------------------------------------------------------------------------
-// 장면 렌더러 (순수 그리기 — state는 읽기만)
+// Scene renderer (pure drawing — state is read-only)
 // ---------------------------------------------------------------------------
 function drawScene(
   ctx: CanvasRenderingContext2D,
@@ -285,14 +285,14 @@ function drawScene(
   p1IsYou: boolean,
   p2IsYou: boolean,
 ): void {
-  // 색은 플레이어 종속(역할 아님) — P1/P2 기능 엔티티를 실제 플레이어 색으로 칠한다.
-  //  P1엔티티가 파랑이면 COL0 그대로, 빨강이면 p1/p2 색 스왑. 로컬 COL을 shadow → 아래 COL.p1/p2·헬퍼가 자동 반영.
+  // Colors are player-dependent(not role) — paint the P1/P2 function entities in the actual player colors.
+  //  If the P1 entity is blue, keep COL0 as-is; if red, swap p1/p2 colors. Shadowing the local COL → COL.p1/p2 and helpers below reflect it automatically.
   const fc = functionColors();
   const COL: ColPalette =
     fc.p1 === 'red'
       ? { ...COL0, p1: COL0.p2, p1dim: COL0.p2dim, p2: COL0.p1, p2dim: COL0.p1dim }
       : COL0;
-  // 상태 구동 P2 글로우(스폰 섬광·리로드 게이지 외곽)용 rgb — 하드코딩 핑크가 아니라 P2 플레이어 색을 따른다.
+  // rgb for state-driven P2 glow(spawn flash·reload-gauge outline) — follows the P2 player color, not hardcoded pink.
   const p2rgb = fc.p2 === 'red' ? '255,42,109' : '5,217,232';
   const horizon = Y(G6.GROUND_Y);
   const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
@@ -302,12 +302,12 @@ function drawScene(
   const resultAge = resultFx ? now - resultFx.t : Infinity;
   const gridCol = urgent ? 'rgba(255,42,109,0.16)' : 'rgba(211,0,197,0.13)';
 
-  // --- 하늘 필드 ---
+  // --- Sky field ---
   ctx.clearRect(0, 0, CW, CH);
   ctx.fillStyle = COL.field;
   ctx.fillRect(0, 0, CW, CH);
 
-  // --- 별(패럴랙스) ---
+  // --- Stars(parallax) ---
   ctx.save();
   ctx.fillStyle = COL.muted;
   for (const st of STARS) {
@@ -318,10 +318,10 @@ function drawScene(
   }
   ctx.restore();
 
-  // --- 지면 아래 신스웨이브 원근 그리드 ---
+  // --- Synthwave perspective grid below the ground ---
   ctx.save();
   const vpx = CW / 2;
-  // 수렴하는 세로줄
+  // converging vertical lines
   ctx.strokeStyle = gridCol;
   ctx.lineWidth = 1;
   for (let k = -7; k <= 7; k++) {
@@ -330,7 +330,7 @@ function drawScene(
     ctx.lineTo(vpx + k * 96, CH);
     ctx.stroke();
   }
-  // 다가오는 가로줄(아래로 흐름 = 전진감)
+  // approaching horizontal lines(flowing downward = sense of forward motion)
   const gscroll = (s.elapsed * 0.7) % 1;
   const N = 9;
   for (let j = 0; j < N; j++) {
@@ -344,7 +344,7 @@ function drawScene(
   }
   ctx.restore();
 
-  // --- 지면선(시안) + 스피드 대시 스크롤 ---
+  // --- Ground line(cyan) + speed-dash scroll ---
   ctx.save();
   ctx.strokeStyle = COL.p1;
   ctx.shadowColor = COL.p1;
@@ -354,7 +354,7 @@ function drawScene(
   ctx.moveTo(0, horizon);
   ctx.lineTo(CW, horizon);
   ctx.stroke();
-  // 지면 위 짧은 대시(왼쪽으로 흘러 속도감)
+  // short dashes on the ground(flowing left for a sense of speed)
   ctx.shadowBlur = 6;
   ctx.globalAlpha = 0.7;
   const gap = 60;
@@ -368,7 +368,7 @@ function drawScene(
   }
   ctx.restore();
 
-  // 임박 5초: 상승 스캔라인(핑크)
+  // Final 5 seconds: rising scanlines(pink)
   if (urgent) {
     ctx.save();
     ctx.strokeStyle = 'rgba(255,42,109,0.10)';
@@ -383,13 +383,13 @@ function drawScene(
     ctx.restore();
   }
 
-  // --- 장애물(핑크) ---
+  // --- Obstacles(pink) ---
   for (const o of s.obstacles) {
     if (o.type === 'jump') drawCactus(ctx, X(o.x), horizon, COL);
     else drawBird(ctx, X(o.x), Y(G6.BIRD_TOP), o.phase, COL);
   }
 
-  // --- P2 투척 섬광(spawnAnim 파생) — 오른쪽 끝에서 장애물이 튀어나오는 순간 ---
+  // --- P2 throw flash(derived from spawnAnim) — the moment an obstacle pops out from the right edge ---
   if (s.spawnAnim > 0) {
     const a = Math.min(1, s.spawnAnim / G6.SPAWN_ANIM);
     ctx.save();
@@ -402,10 +402,10 @@ function drawScene(
     ctx.restore();
   }
 
-  // --- 공룡(P1, 시안) ---
+  // --- Dino(P1, cyan) ---
   const dinoBottom = horizon - Y(s.y);
   const blink = crashed && resultAge < RESULT_FX_MS && Math.floor(now / 60) % 2 === 0;
-  const showDino = !(crashed && resultAge > RESULT_FX_MS * 0.55); // 충돌 후 파편으로 대체
+  const showDino = !(crashed && resultAge > RESULT_FX_MS * 0.55); // replaced by shards after collision
   if (showDino) {
     drawDino(
       ctx,
@@ -418,7 +418,7 @@ function drawScene(
       COL,
     );
   }
-  // 공룡 그림자(지면 원형)
+  // Dino shadow(ground ellipse)
   if (s.result === null) {
     ctx.save();
     ctx.globalAlpha = s.grounded ? 0.35 : 0.18;
@@ -429,7 +429,7 @@ function drawScene(
     ctx.restore();
   }
 
-  // --- 플레이어 배지 ---
+  // --- Player badge ---
   ctx.save();
   ctx.font = `10px ${ARCADE_FONT}`;
   ctx.textAlign = 'center';
@@ -444,7 +444,7 @@ function drawScene(
   }
   ctx.restore();
 
-  // --- P2 리로드 게이지(우상단) — 코어 cooldown/cooldownMax 노출 ---
+  // --- P2 reload gauge(top-right) — exposes core cooldown/cooldownMax ---
   {
     const ready = s.cooldown <= 0;
     const ratio = ready ? 1 : 1 - s.cooldown / Math.max(0.0001, s.cooldownMax);
@@ -460,13 +460,13 @@ function drawScene(
     ctx.shadowBlur = ready ? 8 : 0;
     ctx.fillText(p2IsYou ? 'P2(YOU) RELOAD' : 'P2 RELOAD', gx + gw, gy - 4);
     ctx.shadowBlur = 0;
-    // 트랙
+    // track
     ctx.strokeStyle = `rgba(${p2rgb},0.4)`;
     ctx.lineWidth = 1;
     ctx.strokeRect(gx, gy, gw, gh);
     ctx.fillStyle = COL.p2dim;
     ctx.fillRect(gx, gy, gw, gh);
-    // 채움
+    // fill
     const blinkReady = ready && Math.floor(now / 200) % 2 === 0;
     ctx.fillStyle = COL.p2;
     ctx.globalAlpha = ready ? (blinkReady ? 1 : 0.75) : 0.9;
@@ -476,7 +476,7 @@ function drawScene(
     ctx.restore();
   }
 
-  // --- 이펙트 ---
+  // --- Effects ---
   for (const f of fx) {
     const age = now - f.t;
     if (f.kind === 'dust' && age < 320) {
@@ -521,7 +521,7 @@ function drawScene(
       ctx.stroke();
       ctx.restore();
     } else if (f.kind === 'caption' && age < f.life) {
-      const on = Math.floor(age / 110) % 2 === 0 || age > 260; // steps 점멸 후 유지
+      const on = Math.floor(age / 110) % 2 === 0 || age > 260; // blinks in steps then holds
       if (on) {
         ctx.save();
         ctx.font = `13px ${ARCADE_FONT}`;
@@ -535,7 +535,7 @@ function drawScene(
     }
   }
 
-  // --- 생존 승리 러쉬(지면선 시안 글로우 러쉬) ---
+  // --- Survival-win rush(ground-line cyan glow rush) ---
   const rush = fx.find((f) => f.kind === 'rush');
   if (rush) {
     const a = Math.min(1, (now - rush.t) / 260);
@@ -548,7 +548,7 @@ function drawScene(
     ctx.restore();
   }
 
-  // --- 충돌 순간 크로마틱 어버레이션(승패 순간에만 1프레임 계열) ---
+  // --- Chromatic aberration at the collision moment(a one-frame series only at the win/loss moment) ---
   const chroma = fx.find((f) => f.kind === 'chroma');
   if (chroma && now - chroma.t < 90) {
     ctx.save();
@@ -562,13 +562,14 @@ function drawScene(
 }
 
 // ---------------------------------------------------------------------------
-// 스냅샷 사이 보간(외삽) — 서버 스냅샷을 dt초만큼 각 오브젝트 '자기 속도'로 전진시킨
-// 표시용 상태를 만든다. 스냅샷에 vy·grounded·obstacles가 이미 있어 ID 매칭이 불필요하고
-// 추가 지연도 0. 착지/방향전환 순간만 미세 오차이며 다음 스냅샷이 즉시 교정한다.
-// 30/60Hz 스냅샷을 60fps 렌더로 부드럽게 잇는 게 목적(장애물 순간이동·점프 계단 제거).
-//  · 장애물: x -= OBST_SPEED·dt (좌진행).
-//  · 공룡: 코어와 동일한 반암시적 오일러로 점프 아크(중력·패스트폴)를 전진.
-//  · elapsed: 지면 대시·별·그리드 스크롤을 장애물과 같은 속도로 유지(백그라운드 저더 방지).
+// Between-snapshot interpolation(extrapolation) — builds a display-only state by advancing the
+// server snapshot dt seconds forward with each object's 'own velocity'. The snapshot already has
+// vy·grounded·obstacles, so no ID matching is needed and added latency is 0. Only the landing/
+// direction-change moments have a tiny error, which the next snapshot corrects immediately.
+// The goal is to smoothly bridge 30/60Hz snapshots into a 60fps render(removing obstacle teleporting·jump stair-stepping).
+//  · obstacles: x -= OBST_SPEED·dt (leftward travel).
+//  · dino: advances the jump arc(gravity·fastfall) with the same semi-implicit Euler as the core.
+//  · elapsed: keeps the ground dashes·stars·grid scrolling at the same speed as obstacles(prevents background judder).
 // ---------------------------------------------------------------------------
 function extrapolate(s: Game6State, dt: number): Game6State {
   let y = s.y;
@@ -596,7 +597,7 @@ function extrapolate(s: Game6State, dt: number): Game6State {
 }
 
 // ---------------------------------------------------------------------------
-// 컴포넌트
+// Component
 // ---------------------------------------------------------------------------
 export default function Game6() {
   useDebugScreen('scr-game6');
@@ -606,7 +607,7 @@ export default function Game6() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const actionsRef = useRef<GameInputEvent[]>([]);
   const fxRef = useRef<Fx[]>([]);
-  // 종료 연출: result 전환 추적 → 기본 플래시(폭발 없음)
+  // End effect: track result transition → default flash(no explosion)
   const endRef = useRef<EndTracker>(createEndTracker());
   const passedRef = useRef<WeakSet<Obstacle>>(new WeakSet());
   const reportedRef = useRef(false);
@@ -614,49 +615,49 @@ export default function Game6() {
   const botNextAtRef = useRef(0);
   const duckRef = useRef(false);
 
-  /** HUD 표시용 남은 시간(초 단위 양자화 — 리렌더 절약) */
+  /** Remaining time for HUD display(quantized to seconds — saves re-renders) */
   const [hudMs, setHudMs] = useState(GAME_DURATION * 1000);
-  /** W(숙이기)는 홀드 — 키캡을 점등 유지하기 위해 ducking 상태를 반영 */
+  /** W(duck) is a hold — reflects the ducking state to keep the keycap lit */
   const [ducking, setDucking] = useState(false);
 
   const [qLit, flashQ] = useKeyLamp();
   const [uLit, flashU] = useKeyLamp();
   const [iLit, flashI] = useKeyLamp();
 
-  // 온라인 렌더 훅(성능 구조 표준) — 이 게임(id 4)이 현재 서버 매치의 라운드면 isOnline.
-  //  · isOnline=false → 오프라인/직접진입(기존 로컬 시뮬·mock 봇 경로 100% 유지).
-  //  · isOnline=true  → 로컬 시뮬/봇/판정을 끄고 서버 state를 렌더 + 내 입력만 서버로 전송.
-  // 활성/역할만 '선택 구독'(라운드 경계에서만 리렌더), 서버 스냅샷(60Hz)은 stateRef/snapAtRef로
-  // 미러(리렌더 없음). per-snapshot 작업(디버그 브리지·HUD 시간)은 onSnapshot으로 위임.
+  // Online render hook(performance-structure standard) — isOnline when this game(id 4) is the round of the current server match.
+  //  · isOnline=false → offline/direct-entry(the existing local sim·mock bot path is 100% preserved).
+  //  · isOnline=true  → turns off local sim/bot/decisions and renders server state + sends only my input to the server.
+  // Only active/role are 'selectively subscribed'(re-render only at round boundaries); server snapshots(60Hz) are
+  // mirrored via stateRef/snapAtRef(no re-render). Per-snapshot work(debug bridge·HUD time) is delegated to onSnapshot.
   const { isOnline, myRole, stateRef, snapAtRef } = useOnlineRender<Game6State>(6, (s) => {
-    setDebugGame(s); // 디버그 브리지 — 스냅샷마다 갱신(리렌더 유발 안 함)
+    setDebugGame(s); // debug bridge — updated each snapshot(does not trigger a re-render)
     const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
-    setHudMs(Math.ceil(remainingMs / 1000) * 1000); // 초 양자화 → ~1/s만 리렌더
+    setHudMs(Math.ceil(remainingMs / 1000) * 1000); // quantize to seconds → re-render only ~1/s
   });
-  // 키보드 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref.
+  // ref so the keyboard handler(stable closure) sees the latest 'online active?'.
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
-  // 온라인 입력 액션음은 역할에 따라 의미가 달라짐(P1=주자→점프/숙이기, P2=스포너→장애물 생성).
-  // 키 핸들러 안정 클로저가 최신 역할을 보게 하는 ref.
+  // Online input action sounds change meaning by role(P1=runner→jump/duck, P2=spawner→obstacle spawn).
+  // ref so the key handler's stable closure sees the latest role.
   const myRoleRef = useRef(myRole);
   myRoleRef.current = myRole;
 
-  // 내 색(매치 고정, 역할과 독립) — 키캡/HUD 색은 이 값으로. match:start에서만 바뀌므로
-  // 원시값 선택 구독이라 60Hz 스냅샷엔 리렌더 없음(값 동일 시 useSyncExternalStore가 생략).
+  // My color(fixed per match, independent of role) — keycap/HUD colors use this value. It changes only at match:start,
+  // and being a primitive-value selective subscription, 60Hz snapshots cause no re-render(useSyncExternalStore skips when the value is unchanged).
   const myColor = useSyncExternalStore(
     onlineStore.subscribe,
     () => onlineStore.get().myColor ?? 'blue',
     () => onlineStore.get().myColor ?? 'blue',
   );
 
-  // direct-URL 복구 + 이탈 시 디버그 브리지 정리
+  // direct-URL recovery + debug-bridge cleanup on leave
   useEffect(() => {
     const f = getFlow();
     if (f.phase === 'idle' || f.gameId !== 6) startOfflineGame(6);
     return () => setDebugGame(null);
   }, []);
 
-  // 캔버스 해상도 초기화(dpr 스케일)
+  // Canvas resolution init(dpr scale)
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
@@ -666,44 +667,44 @@ export default function Game6() {
     c.getContext('2d')?.scale(dpr, dpr);
   }, []);
 
-  // 키보드 — 로컬 어댑터. GameInputEvent 큐 + 램프 점등.
-  // P1 Q=점프 / W=숙이기(홀드), P2 U=선인장 / I=새. 온라인이면 P2는 봇이 대행.
+  // Keyboard — local adapter. GameInputEvent queue + lamp lighting.
+  // P1 Q=jump / W=duck(hold), P2 U=cactus / I=bird. Online, P2 is handled by the bot.
   useEffect(() => {
     const detach = attachLocalKeyboard(
       () => performance.now() / 1000,
       (e) => {
-        // 진짜 서버 온라인이 활성이면: 내 입력만 서버로 전송(로컬 큐/봇 미사용).
-        // 어느 역할이든 서버가 role로 재기입하므로 4키 아무거나 눌러도 내 슬롯으로 감.
+        // If real server online is active: send only my input to the server(no local queue/bot).
+        // Whatever the role, the server rewrites by role, so pressing any of the 4 keys goes to my slot.
         if (isOnlineRef.current) {
-          // 온라인은 U/I 두 키만(요구사항). U=주키(slotA=점프), I=보조키(slotB=숙이기). Q/W는 무시.
+          // Online uses only the U/I two keys(requirement). U=primary key(slotA=jump), I=secondary key(slotB=duck). Q/W are ignored.
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           if (e.type === 'down') {
             if (e.code === 'KeyU') flashU();
             else flashI();
-            // 역할별 액션음: P1(주자)=U 점프/I 숙이기, P2(스포너)=U/I 장애물 생성
+            // Per-role action sound: P1(runner)=U jump/I duck, P2(spawner)=U/I obstacle spawn
             if (myRoleRef.current === 'P1') sfx(e.code === 'KeyU' ? 'g6-jump' : 'g6-duck');
             else sfx('g6-obstacle-spawn');
           }
-          // I(보조키=숙이기)는 홀드 — 로컬 시각용 ducking 반영
+          // I(secondary key=duck) is a hold — reflect ducking for local visuals
           if (e.code === 'KeyI') setDucking(e.type === 'down');
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
           onlineSendInput(slot, e.type, e.t);
           return;
         }
-        // ── 오프라인(+ mock-online 봇) 경로 — 기존 동작 그대로 ──
+        // ── Offline(+ mock-online bot) path — unchanged behavior ──
         const f = getFlow();
         const mockOnline = f.mode === 'online';
-        // KeyW(숙이기)는 홀드 — 램프는 ducking state가 담당(코어 판정 반영)하므로 flash 없음
+        // KeyW(duck) is a hold — the lamp is driven by the ducking state(reflecting the core decision), so no flash
         if (e.code === 'KeyQ') {
           if (e.type === 'down') {
             flashQ();
             sfx('g6-jump');
           }
         } else if (e.code === 'KeyW') {
-          // 숙이기(홀드) — 램프는 ducking state가 담당하지만 진입 keydown에 액션음
+          // duck(hold) — the lamp is driven by the ducking state, but the entering keydown plays an action sound
           if (e.type === 'down') sfx('g6-duck');
         } else if (e.code === 'KeyU') {
-          if (mockOnline) return; // 온라인 mock: P2(장애물)는 봇
+          if (mockOnline) return; // online mock: P2(obstacles) is a bot
           if (e.type === 'down') {
             flashU();
             sfx('g6-obstacle-spawn');
@@ -721,11 +722,11 @@ export default function Game6() {
     return detach;
   }, [flashQ, flashU, flashI]);
 
-  // 라운드 수명주기: state 생성 → rAF 루프(step + draw) → 결과 보고
+  // Round lifecycle: create state → rAF loop(step + draw) → report result
   useEffect(() => {
-    // ── 온라인(서버 권위): 로컬 시뮬/봇/판정 없이 서버 상태만 그린다(draw-only) ──
+    // ── Online(server authority): draw only server state, no local sim/bot/decision(draw-only) ──
     if (isOnline) {
-      // 첫 스냅샷 전이면 초기 create 상태를 렌더용으로만 세팅(판정 아님 — onSnapshot이 곧 덮어씀).
+      // Before the first snapshot, set the initial create state for rendering only(not a decision — onSnapshot soon overwrites it).
       if (!stateRef.current) {
         const seed = game6.create(Math.random);
         stateRef.current = seed;
@@ -733,7 +734,7 @@ export default function Game6() {
         setHudMs(GAME_DURATION * 1000);
       }
       let raf = 0;
-      // 온라인은 서버 스냅샷 구동 — 충돌 임팩트음을 result 전이(null→P2) 첫 프레임에 1회.
+      // Online is driven by server snapshots — play the collision impact sound once on the first frame of the result transition(null→P2).
       let crashPlayed = false;
       const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
@@ -746,8 +747,8 @@ export default function Game6() {
           }
           const disp = getPlayerDisplays(getFlow());
           fxRef.current = fxRef.current.filter((f) => now - f.t < 1200);
-          // 스냅샷 사이 외삽: 마지막 스냅샷을 경과 dt만큼 자기 속도로 전진(최대 50ms 캡).
-          // 종료(result) 시엔 외삽하지 않는다(파편/러쉬 연출을 서버 최종 상태 그대로 유지).
+          // Between-snapshot extrapolation: advance the last snapshot by the elapsed dt at its own velocity(capped at 50ms).
+          // On end(result), do not extrapolate(keep the shards/rush effect exactly at the server's final state).
           const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
           const view = extraDt > 0 && s.result === null ? extrapolate(s, extraDt) : s;
           drawScene(ctx, view, fxRef.current, now, disp.P1.isYou, disp.P2.isYou);
@@ -780,7 +781,7 @@ export default function Game6() {
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       if (isRoundIntroActive()) { last = now; return; }
-      // 초 단위 dt, 물리 안정성을 위해 100ms 클램프(대형 dt 시 점프/충돌 튀는 것 방지)
+      // dt in seconds, clamped to 100ms for physics stability(prevents jump/collision jitter on large dt)
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       let s = stateRef.current;
@@ -790,7 +791,7 @@ export default function Game6() {
         const events = actionsRef.current;
         actionsRef.current = [];
 
-        // 온라인 봇(P2, 장애물 생성): 쿨타임마다 무작위 장애물 투척 — 사람(P1)이 회피 가능하도록 딜레이
+        // Online bot(P2, obstacle spawn): throws a random obstacle each cooldown — delayed so the human(P1) can dodge
         if (getFlow().mode === 'online' && s.cooldown <= 0 && now >= botNextAtRef.current) {
           const code: 'KeyU' | 'KeyI' = Math.random() < 0.5 ? 'KeyU' : 'KeyI';
           const tSec = now / 1000;
@@ -799,36 +800,36 @@ export default function Game6() {
           botNextAtRef.current = now + 220 + Math.random() * 380;
         }
 
-        // step은 원본을 in-place mutate 후 동일 참조 반환 → 비교값은 호출 전에 스냅샷.
+        // step mutates the original in-place then returns the same reference → snapshot comparison values before the call.
         const prevGrounded = s.grounded;
         const prevSpawnAnim = s.spawnAnim;
 
         s = game6.step(s, events, dt);
         stateRef.current = s;
-        setDebugGame(s); // 디버그 브리지 — 매 틱
+        setDebugGame(s); // debug bridge — every tick
 
         const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
-        setHudMs(Math.ceil(remainingMs / 1000) * 1000); // 초 단위 양자화
+        setHudMs(Math.ceil(remainingMs / 1000) * 1000); // quantize to seconds
         if (s.ducking !== duckRef.current) {
           duckRef.current = s.ducking;
           setDucking(s.ducking);
         }
 
-        // ---- 렌더 전용 이펙트 파생 ----
-        // 점프 이륙 순간 먼지 / 착지 순간 먼지
+        // ---- Derive render-only effects ----
+        // dust at jump takeoff / dust at landing
         if (prevGrounded && !s.grounded) {
           fxRef.current.push({ kind: 'dust', x: G6.DINO_X, y: G6.GROUND_Y, t: now });
         } else if (!prevGrounded && s.grounded) {
           fxRef.current.push({ kind: 'dust', x: G6.DINO_X, y: G6.GROUND_Y, t: now });
         }
-        // P2 투척 순간(spawnAnim이 튀어오른 프레임) — 방금 생성된 장애물 레인에 섬광
+        // P2 throw moment(the frame spawnAnim jumped up) — flash in the lane of the just-spawned obstacle
         if (s.spawnAnim > prevSpawnAnim) {
           const newest = s.obstacles[s.obstacles.length - 1];
           const y =
             newest && newest.type === 'duck' ? G6.BIRD_TOP + G6.BIRD_H / 2 : G6.GROUND_Y - 24;
           fxRef.current.push({ kind: 'spawn', x: G6.W - 12, y, t: now });
         }
-        // 근접 통과 "SAFE!" — 장애물이 공룡을 완전히 지나친 순간(1회)
+        // Near-pass "SAFE!" — the moment an obstacle has fully passed the dino(once)
         if (s.result === null) {
           for (const o of s.obstacles) {
             const w = o.type === 'jump' ? G6.CACTUS_W : G6.BIRD_W;
@@ -846,11 +847,11 @@ export default function Game6() {
             }
           }
         }
-        // 판정 순간 연출(글리치는 승패 순간에만)
+        // Decision-moment effect(glitch only at the win/loss moment)
         if (s.result !== null && resultAtRef.current === 0) {
           resultAtRef.current = now;
           if (s.result === 'P2') {
-            // 공룡 충돌 = P2 승 (패자 임팩트음 — 승리 팡파레는 전역 레이어)
+            // dino collision = P2 win (loser impact sound — the victory fanfare is a global layer)
             sfx('g6-crash');
             fxRef.current.push(
               { kind: 'chroma', t: now },
@@ -866,7 +867,7 @@ export default function Game6() {
               },
             );
           } else {
-            // 10초 생존 = P1 승
+            // 10-second survival = P1 win
             fxRef.current.push(
               { kind: 'rush', t: now },
               {
@@ -882,8 +883,8 @@ export default function Game6() {
           }
         }
       } else if (!reportedRef.current && now - resultAtRef.current >= RESULT_FX_MS) {
-        // 충돌/생존 연출을 짧게 보여준 뒤 라운드 종료 1회 보고 → ResultOverlay
-        if (isOnline) return; // 온라인은 서버가 round:end 구동 — 화면은 관여 안 함
+        // After briefly showing the collision/survival effect, report the round end once → ResultOverlay
+        if (isOnline) return; // Online, the server drives round:end — the screen does not participate
         reportedRef.current = true;
         if (s.result) reportRoundEnd(toMatchResult(s.result));
       }
@@ -919,9 +920,9 @@ export default function Game6() {
             navigate('/');
           }}
         >
-          ◀ 나가기
+          ◀ Exit
         </Button>
-        <span className="g6-title font-display c-muted">게임6 · 공룡 달리기</span>
+        <span className="g6-title font-display c-muted">Game 6 · Dino Run</span>
       </div>
 
       <div className="g6-hudwrap">
@@ -936,47 +937,47 @@ export default function Game6() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g6-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g6-canvas" aria-label="게임6 스테이지 — 공룡 달리기" />
+        <canvas ref={canvasRef} className="g6-canvas" aria-label="Game 6 stage — Dino Run" />
       </div>
 
-      {/* 온스크린 키캡 — 실제 배정 키 표기(SPEC Q2), 입력 순간 램프 점등. W는 홀드라 ducking 반영 */}
+      {/* On-screen keycaps — show the actually-assigned keys(SPEC Q2), lit on input. W is a hold, so ducking is reflected */}
       {isOnline ? (
-        // 온라인: U/I 두 키만 쓰고 내 역할만 조작. 색은 내 플레이어색(myColor)으로,
-        // 동작 라벨/아이콘은 역할(myRole) 유지 — 비대칭 게임(P1=주자, P2=스포너).
+        // Online: use only the U/I two keys and operate only my role. Colors use my player color(myColor),
+        // while the action label/icon keep the role(myRole) — asymmetric game(P1=runner, P2=spawner).
         <div className="g6-keys g6-keys--online">
           <div className="g6-keys__group">
             <span
               className={`g6-keys__tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}
             >
-              YOU · {myColor === 'blue' ? '파랑' : '빨강'} · {myRole === 'P1' ? 'RUN' : 'SPAWN'}
+              YOU · {myColor === 'blue' ? 'BLUE' : 'RED'} · {myRole === 'P1' ? 'RUN' : 'SPAWN'}
             </span>
             <KeyCap
               role={myColor === 'blue' ? 'P1' : 'P2'}
               keyChar="U"
               icon={myRole === 'P1' ? '▲' : '▂'}
               lit={uLit}
-              label={myRole === 'P1' ? '점프' : '선인장'}
+              label={myRole === 'P1' ? 'Jump' : 'Cactus'}
             />
             <KeyCap
               role={myColor === 'blue' ? 'P1' : 'P2'}
               keyChar="I"
               icon={myRole === 'P1' ? '▼' : '▔'}
               lit={iLit}
-              label={myRole === 'P1' ? '숙이기' : '새'}
+              label={myRole === 'P1' ? 'Duck' : 'Bird'}
             />
           </div>
         </div>
       ) : (
         <div className="g6-keys">
           <div className="g6-keys__group">
-            <KeyCap role="P1" keyChar="Q" icon="▲" lit={qLit} label="점프" />
-            <KeyCap role="P1" keyChar="W" icon="▼" lit={ducking} label="숙이기" />
+            <KeyCap role="P1" keyChar="Q" icon="▲" lit={qLit} label="Jump" />
+            <KeyCap role="P1" keyChar="W" icon="▼" lit={ducking} label="Duck" />
             <span className="g6-keys__tag font-arcade c-p1">P1 · RUN</span>
           </div>
           <div className="g6-keys__group">
             <span className="g6-keys__tag font-arcade c-p2">P2 · SPAWN</span>
-            <KeyCap role="P2" keyChar="U" icon="▂" lit={uLit} label="선인장" />
-            <KeyCap role="P2" keyChar="I" icon="▔" lit={iLit} label="새" />
+            <KeyCap role="P2" keyChar="U" icon="▂" lit={uLit} label="Cactus" />
+            <KeyCap role="P2" keyChar="I" icon="▔" lit={iLit} label="Bird" />
           </div>
         </div>
       )}

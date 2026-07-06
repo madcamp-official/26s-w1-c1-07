@@ -1,6 +1,6 @@
 /**
- * 프리미티브 카탈로그 (아키텍트 소유 — 구현 에이전트 수정 금지, import만).
- * 각 파일 상단 주석에 사용법. ARCHITECTURE.md §4 참조.
+ * Primitive catalog (owned by the architect — implementation agents must not modify, import only).
+ * Usage is in the comment at the top of each file. See ARCHITECTURE.md §4.
  */
 export { Button, CoinButton } from './Button';
 export type { ButtonProps, ButtonVariant, CoinButtonProps } from './Button';

@@ -1,84 +1,84 @@
-# MADPUMP 로그인 설계 — 로스터 로그인 (v2, 2026-07-05)
+# MADPUMP login design — roster login (v2, 2026-07-05)
 
-> 이 문서는 **로그인 방식이 구글 OAuth → 로스터 로그인으로 바뀐 배경과 현재 설계의 정본**이다.
-> 협업자와 AI 에이전트는 인증 관련 작업 전에 이 문서를 먼저 읽을 것.
-> 스키마 정본은 `docs/ERD.md`(v2), 구현은 `server/src/index.ts` + `client/src/modals/Login.tsx`.
+> This document is **the source of truth for why login changed from Google OAuth to roster login, and for the current design**.
+> Collaborators and AI agents must read this document first before any auth-related work.
+> The schema source of truth is `docs/ERD.md` (v2); the implementation is `server/src/index.ts` + `client/src/modals/Login.tsx`.
 
-## 1. 왜 구글 OAuth를 폐기했나
+## 1. Why Google OAuth was dropped
 
-- 배포 환경이 **학교 내부망(KCLOUD)** 이고, 클라이언트는 VPN을 통해서만 접속한다.
-- 구글 로그인(GIS)은 브라우저가 `accounts.google.com` 에 접속할 수 있어야 하는데,
-  **내부망 정책상 외부 접근이 막혀 있어 OAuth 흐름 자체가 동작하지 않는다.**
-- 어차피 플레이어가 몰입캠프 수강생(55명)으로 한정되므로, **정교한 인증을 포기**하고
-  "분반 → 명단에서 자기 이름 선택" 방식으로 대체했다. 비밀번호/토큰 검증은 없다.
-  (보안상 누구나 아무 이름으로 로그인할 수 있음 — 내부망 한정 서비스라 의도적으로 수용한 트레이드오프)
-- 구글 OAuth 구현 전체가 필요해지면: `main` 브랜치의 커밋 `21c8f5c`(OAuth 로그인 구현)에 있다.
+- The deployment environment is a **school internal network (KCLOUD)**, and clients connect only through a VPN.
+- Google login (GIS) requires the browser to reach `accounts.google.com`, but
+  **the internal-network policy blocks external access, so the OAuth flow itself does not work.**
+- Since players are limited to the immersion-camp attendees (55 people) anyway, we **gave up on rigorous authentication**
+  and replaced it with a "class → pick your own name from the list" approach. There is no password/token verification.
+  (Security-wise, anyone can log in as any name — an intentional trade-off accepted because this is an internal-network-only service.)
+- If the entire Google OAuth implementation becomes needed again: it is in commit `21c8f5c` (OAuth login implementation) on the `main` branch.
 
-## 2. 로그인 흐름 (현재)
+## 2. Login flow (current)
 
 ```
-[S1 메인] "로그인" 버튼
-  → [로그인 모달 1단계] "몇 분반인가요?" — 1분반 / 2분반 / 3분반   (GET /api/roster)
-  → [로그인 모달 2단계] "유저 선택" — 분반 멤버 버튼 그리드
-  → 멤버 클릭 → POST /api/login { userId } → 세션 쿠키(mp_session) 발급 → S2 메인
+[S1 main] "Login" button
+  → [login modal step 1] "Which class are you in?" — Class 1 / Class 2 / Class 3   (GET /api/roster)
+  → [login modal step 2] "Pick user" — grid of class member buttons
+  → member click → POST /api/login { userId } → session cookie (mp_session) issued → S2 main
 ```
 
-- 비로그인 상태에서 "온라인 게임하기" → 로그인 요구 모달(S3) → "로그인" → 같은 모달 체인,
-  성공 시 온라인 패널(S6)로 연속 진입.
-- 세션은 서버 인메모리(`server/src/sessions.ts`) — 서버 재시작 시 재로그인 필요.
-- 새로고침 시 `GET /api/me` 로 세션 복원 (`client/src/main.tsx` → `restoreSession()`).
-- 온보딩(닉네임 입력) 화면은 폐기 — 닉네임/분반이 명단에 고정돼 있어 불필요.
+- From a logged-out state, "Play Online" → login-required modal (S3) → "Login" → the same modal chain,
+  and on success continues straight into the online panel (S6).
+- Sessions are server in-memory (`server/src/sessions.ts`) — re-login is required after a server restart.
+- On refresh, the session is restored via `GET /api/me` (`client/src/main.tsx` → `restoreSession()`).
+- The onboarding (nickname entry) screen is dropped — nickname/class are fixed in the roster, so it is unnecessary.
 
 ## 3. API
 
-| 메서드/경로 | 인증 | 설명 |
+| Method/path | Auth | Description |
 |---|---|---|
-| `GET /api/roster` | 불필요 | 분반 목록 + 분반별 멤버 `{ id, nickname }` (로그인 다이얼로그용) |
-| `POST /api/login` `{ userId }` | 불필요 | 해당 유저로 즉시 세션 발급. 없는 id면 404 |
-| `GET /api/me` | 쿠키 | 세션 유저 `{ id, nickname, imageUrl, groupName }` 또는 `ANON` |
-| `POST /api/auth/logout` | 쿠키 | 세션 파기 |
-| `GET /api/leaderboard` | 쿠키 | 내 분반 랭킹 (game_match 집계 × score_config) |
+| `GET /api/roster` | none | Class list + members per class `{ id, nickname }` (for the login dialog) |
+| `POST /api/login` `{ userId }` | none | Immediately issue a session for that user. 404 if the id does not exist |
+| `GET /api/me` | cookie | Session user `{ id, nickname, imageUrl, groupName }` or `ANON` |
+| `POST /api/auth/logout` | cookie | Destroy the session |
+| `GET /api/leaderboard` | cookie | My class ranking (game_match aggregation × score_config) |
 
-제거된 엔드포인트: `POST /api/dev/login`, `POST /api/auth/google`, `POST /api/auth/signup`.
-제거된 의존성: `google-auth-library`.
+Removed endpoints: `POST /api/dev/login`, `POST /api/auth/google`, `POST /api/auth/signup`.
+Removed dependency: `google-auth-library`.
 
-## 4. DB 변경 (마이그레이션 `20260705120000_roster_login`)
+## 4. DB change (migration `20260705120000_roster_login`)
 
-- `app_user`에서 제거: `google_sub`, `email`, `google_image_url` (+ 유니크 `uq_user_google`)
-- 닉네임 유니크 변경: 전역 `uq_user_nickname` → **분반 단위** `uq_user_group_nick(group_id, nickname)`
-  - 이유: 같은 이름이 다른 분반에 존재한다 (1분반 "이서진", 3분반 "이서진")
-- 유저 생성 경로 변경: 회원가입 없음 → **`prisma/seed.ts` 가 분반 3개 + 멤버 55명을 시드** (멱등 upsert)
+- Removed from `app_user`: `google_sub`, `email`, `google_image_url` (+ unique `uq_user_google`)
+- Nickname uniqueness changed: global `uq_user_nickname` → **per class** `uq_user_group_nick(group_id, nickname)`
+  - Reason: the same name exists in different classes (Class 1 "Lee Seojin", Class 3 "Lee Seojin")
+- User-creation path changed: no signup → **`prisma/seed.ts` seeds 3 classes + 55 members** (idempotent upsert)
 
-### 적용 절차 (DB가 있는 곳 — VM 또는 로컬)
+### Apply procedure (where the DB lives — VM or local)
 
 ```bash
-npm install                                            # google-auth-library 제거 반영
-npm --workspace @madpump/server run migrate:deploy     # 로스터 마이그레이션 적용
-npm --workspace @madpump/server run db:seed            # 분반 3개 + 55명 시드
-npm --workspace @madpump/server run db:cleanup-groups  # (선택) 1분반/2분반/3분반 외 정크 그룹 삭제
+npm install                                            # reflect removal of google-auth-library
+npm --workspace @madpump/server run migrate:deploy     # apply the roster migration
+npm --workspace @madpump/server run db:seed            # seed 3 classes + 55 members
+npm --workspace @madpump/server run db:cleanup-groups  # (optional) delete junk groups other than Class 1/2/3
 ```
 
-⚠️ 마이그레이션의 `CREATE UNIQUE INDEX uq_user_group_nick` 은 기존에 같은 (분반, 닉네임)
-중복 행이 있으면 실패한다. 기존 데이터는 전부 테스트 데이터이므로, 실패 시 가장 간단한 해법은
-초기화 후 재시드: `npm --workspace @madpump/server run db:reset` (migrate reset + seed 자동 실행).
+⚠️ The migration's `CREATE UNIQUE INDEX uq_user_group_nick` fails if there are existing duplicate (class, nickname)
+rows. All existing data is test data, so if it fails the simplest fix is to
+reset and reseed: `npm --workspace @madpump/server run db:reset` (migrate reset + seed run automatically).
 
-## 5. 분반별 로스터 (정본: `server/prisma/seed.ts`)
+## 5. Roster by class (source of truth: `server/prisma/seed.ts`)
 
-명단 수정은 seed.ts의 `ROSTER` 를 고치고 `db:seed` 재실행 (upsert라 몇 번 돌려도 안전).
-로그인 다이얼로그는 DB를 읽으므로(`GET /api/roster`) 클라 코드 수정 불필요.
+To edit the list, fix `ROSTER` in seed.ts and re-run `db:seed` (upsert, so safe to run any number of times).
+The login dialog reads the DB (`GET /api/roster`), so no client code changes are needed.
 
-- **1분반 (16명)**: 이지민, 박준서, 라태형, 이종혁, 유나연, 유영석, 김태현, 권순호, 이유담, 안종화, 허서준, 이서진, 정서영, 이예원, 김희서, 주성민
-- **2분반 (19명)**: 박서윤, 최재윤, 김민재, 이예지, 김경원, 이재준, 양우현, 주영준, 박지민, 황시우, 박채훈, 박소요, 원건희, 이서영, 임유빈, 박도현, 박정준, 김도현, 김도연
-- **3분반 (20명)**: 손기환, 김윤서, 양호성, 정유진, 김민, 조예준, 안소희, 이서진, 강우현, 송재훈, 이지오, 김재훈, 임성진, 박지호, 조준호, 김규민, 서영빈, 김혜리, 박수현, 박민수
+- **Class 1 (16 people)**: Lee Jimin, Park Junseo, Ra Taehyeong, Lee Jonghyeok, Yu Nayeon, Yu Yeongseok, Kim Taehyeon, Kwon Sunho, Lee Yudam, An Jonghwa, Heo Seojun, Lee Seojin, Jeong Seoyeong, Lee Yewon, Kim Huiseo, Ju Seongmin
+- **Class 2 (19 people)**: Park Seoyun, Choi Jaeyun, Kim Minjae, Lee Yeji, Kim Gyeongwon, Lee Jaejun, Yang Uhyeon, Ju Yeongjun, Park Jimin, Hwang Siu, Park Chaehun, Park Soyo, Won Geonhui, Lee Seoyeong, Im Yubin, Park Dohyeon, Park Jeongjun, Kim Dohyeon, Kim Doyeon
+- **Class 3 (20 people)**: Son Gihwan, Kim Yunseo, Yang Hoseong, Jeong Yujin, Kim Min, Jo Yejun, An Sohui, Lee Seojin, Kang Uhyeon, Song Jaehun, Lee Jio, Kim Jaehun, Im Seongjin, Park Jiho, Jo Junho, Kim Gyumin, Seo Yeongbin, Kim Hyeri, Park Suhyeon, Park Minsu
 
-## 6. 관련 파일 지도
+## 6. Related file map
 
-| 영역 | 파일 | 역할 |
+| Area | File | Role |
 |---|---|---|
-| 서버 | `server/src/index.ts` | `/api/roster`, `/api/login`, `/api/me`, `/api/leaderboard` |
-| 서버 | `server/src/sessions.ts` | 인메모리 세션 (sid 쿠키 → userId/nickname/groupName) |
-| 서버 | `server/prisma/seed.ts` | 분반·로스터·게임 사전·점수 설정 시드 (**명단 정본**) |
-| 서버 | `server/prisma/migrations/20260705120000_roster_login/` | 구글 컬럼 제거 마이그레이션 |
-| 클라 | `client/src/modals/Login.tsx` | 로그인 모달 2단계 (분반 → 멤버), `openLoginModal()` |
-| 클라 | `client/src/state/session.ts` | `restoreSession` / `fetchRoster` / `loginAs` / `logout` |
-| 클라 | `client/src/modals/LoginRequired.tsx` | S3 로그인 요구 모달 → 로그인 모달 체인 |
+| Server | `server/src/index.ts` | `/api/roster`, `/api/login`, `/api/me`, `/api/leaderboard` |
+| Server | `server/src/sessions.ts` | In-memory session (sid cookie → userId/nickname/groupName) |
+| Server | `server/prisma/seed.ts` | Class·roster·game dictionary·score config seed (**roster source of truth**) |
+| Server | `server/prisma/migrations/20260705120000_roster_login/` | Migration removing Google columns |
+| Client | `client/src/modals/Login.tsx` | Login modal 2 steps (class → member), `openLoginModal()` |
+| Client | `client/src/state/session.ts` | `restoreSession` / `fetchRoster` / `loginAs` / `logout` |
+| Client | `client/src/modals/LoginRequired.tsx` | S3 login-required modal → login modal chain |

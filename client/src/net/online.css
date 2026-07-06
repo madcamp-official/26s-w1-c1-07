@@ -36,7 +36,7 @@
 .onl-btn:hover { background: var(--surface-deep); }
 .onl-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* 라운드 카운트다운 색 안내 배너 — 내 역할(파랑/빨강)을 크게. 클릭 통과. */
+/* round countdown color banner — shows my role (blue/red) large. Click-through. */
 .onl-youbanner {
   position: fixed;
   inset: 0;
@@ -83,7 +83,7 @@
   .onl-youbanner__card { animation: none; }
 }
 
-/* 매치 종료 오버레이 — 코인 정산 표시 */
+/* match-end overlay — shows Coin settlement */
 .onl-coins {
   font-size: 16px;
   letter-spacing: 0.08em;
@@ -102,7 +102,7 @@
   font-size: 12px;
 }
 
-/* ── 리벤지 UI (OnlineController match-end) ── */
+/* ── rematch UI (OnlineController match-end) ── */
 .onl-revenge {
   display: flex;
   flex-direction: column;

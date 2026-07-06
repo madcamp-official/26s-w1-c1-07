@@ -1,17 +1,17 @@
 /**
- * MADPUMP 디자인 프로토타입용 mock 데이터 + 리더보드 산출 로직.
- * 백엔드가 붙기 전까지 10종 프로토타입이 공유하는 정본 mock.
+ * Mock data + leaderboard computation logic for the MADPUMP design prototype.
+ * The source-of-truth mock shared by the 10 prototypes until the backend is wired up.
  */
 import type { GameId, MatchResult } from './types';
 
 // ---------------------------------------------------------------------------
-// Mock 엔티티
+// Mock entities
 // ---------------------------------------------------------------------------
 
 export interface MockUser {
   id: string;
   nickname: string;
-  /** 이니셜 아바타 배경색 팔레트 인덱스 (0~7) */
+  /** Initial-avatar background color palette index (0~7) */
   avatarColorIndex: number;
   groupId: string;
 }
@@ -33,24 +33,24 @@ export interface MockMatch {
 }
 
 export const mockGroups: MockGroup[] = [
-  { id: 'g1', name: '1분반', isPublic: true },
-  { id: 'g2', name: '2분반', isPublic: true },
-  { id: 'g3', name: '3분반', isPublic: false },
-  { id: 'g4', name: '4분반', isPublic: true },
+  { id: 'g1', name: 'Class 1', isPublic: true },
+  { id: 'g2', name: 'Class 2', isPublic: true },
+  { id: 'g3', name: 'Class 3', isPublic: false },
+  { id: 'g4', name: 'Class 4', isPublic: true },
 ];
 
 export const mockUsers: MockUser[] = [
-  { id: 'u1', nickname: '펌프광인', avatarColorIndex: 0, groupId: 'g1' },
-  { id: 'u2', nickname: '질주본능', avatarColorIndex: 1, groupId: 'g1' },
-  { id: 'u3', nickname: '콩나물', avatarColorIndex: 2, groupId: 'g2' },
-  { id: 'u4', nickname: '번개손', avatarColorIndex: 3, groupId: 'g2' },
-  { id: 'u5', nickname: '슬로우스타터', avatarColorIndex: 4, groupId: 'g3' },
-  { id: 'u6', nickname: '막판뒤집기', avatarColorIndex: 5, groupId: 'g3' },
-  { id: 'u7', nickname: '평화주의자', avatarColorIndex: 6, groupId: 'g4' },
-  { id: 'u8', nickname: '무한도전', avatarColorIndex: 7, groupId: 'g4' },
+  { id: 'u1', nickname: 'PumpFiend', avatarColorIndex: 0, groupId: 'g1' },
+  { id: 'u2', nickname: 'SpeedDemon', avatarColorIndex: 1, groupId: 'g1' },
+  { id: 'u3', nickname: 'BeanSprout', avatarColorIndex: 2, groupId: 'g2' },
+  { id: 'u4', nickname: 'LightningHands', avatarColorIndex: 3, groupId: 'g2' },
+  { id: 'u5', nickname: 'SlowStarter', avatarColorIndex: 4, groupId: 'g3' },
+  { id: 'u6', nickname: 'ClutchKing', avatarColorIndex: 5, groupId: 'g3' },
+  { id: 'u7', nickname: 'Pacifist', avatarColorIndex: 6, groupId: 'g4' },
+  { id: 'u8', nickname: 'NeverGiveUp', avatarColorIndex: 7, groupId: 'g4' },
 ];
 
-/** 매치 기록 40건 (하드코딩) */
+/** 40 match records (hardcoded) */
 export const mockMatches: MockMatch[] = [
   { id: 'm01', gameId: 1, player1Id: 'u1', player2Id: 'u2', result: 'P1_WIN', playedAt: '2026-06-01T10:00:00Z' },
   { id: 'm02', gameId: 1, player1Id: 'u3', player2Id: 'u4', result: 'P2_WIN', playedAt: '2026-06-01T10:10:00Z' },
@@ -95,7 +95,7 @@ export const mockMatches: MockMatch[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// 점수 설정 + 리더보드
+// Score config + leaderboard
 // ---------------------------------------------------------------------------
 
 export interface ScoreConfig {
@@ -107,11 +107,11 @@ export interface ScoreConfig {
 export const scoreConfig: ScoreConfig = { win: 3, draw: 1, loss: 0 };
 
 export interface PerGameStats {
-  /** 해당 게임 플레이 수 */
+  /** Number of plays for this game */
   plays: number;
-  /** 해당 게임 승리 수 */
+  /** Number of wins for this game */
   wins: number;
-  /** 승률 (0~1). 플레이 0회면 0. */
+  /** Win rate (0~1). 0 if there are no plays. */
   winRate: number;
 }
 
@@ -119,26 +119,26 @@ export interface LeaderboardEntry {
   userId: string;
   nickname: string;
   score: number;
-  /** 동점자는 같은 등수 (competition ranking: 1, 1, 3, ...) */
+  /** Tied players share the same rank (competition ranking: 1, 1, 3, ...) */
   rank: number;
   totalPlays: number;
   wins: number;
   draws: number;
   losses: number;
-  /** 전체 승률 (0~1) */
+  /** Overall win rate (0~1) */
   winRate: number;
-  /** 게임(1~3)별 플레이 수/승수/승률 */
+  /** Plays/wins/win rate per game (1~3) */
   perGame: Record<GameId, PerGameStats>;
 }
 
 export interface Leaderboard {
-  /** 점수 내림차순 (동점 시 승수 내림차순 → userId 오름차순) */
+  /** Descending by score (on ties, descending by wins → ascending by userId) */
   entries: LeaderboardEntry[];
-  /** 상위 3명 (동점자 포함 없이 정렬 순 앞 3명) */
+  /** Top 3 (the first 3 in sort order, without including extra tied players) */
   top3: LeaderboardEntry[];
-  /** 특정 유저 등수 조회. 없는 유저면 null. */
+  /** Look up a specific user's rank. null if the user does not exist. */
   rankOf(userId: string): number | null;
-  /** 특정 유저 엔트리 조회. 없는 유저면 null. */
+  /** Look up a specific user's entry. null if the user does not exist. */
   entryOf(userId: string): LeaderboardEntry | null;
 }
 
@@ -151,10 +151,10 @@ function emptyPerGame(): Record<GameId, PerGameStats> {
 }
 
 /**
- * 유저별 점수를 합산해 리더보드를 만든다.
- * - 점수 = 승 * win + 무 * draw + 패 * loss
- * - 동점자는 같은 등수(competition ranking), 다음 등수는 인원수만큼 건너뜀
- * - 기능정의서: TOP3 + 내 등수, TOP3 유저별 플레이 수/승리 수/승률
+ * Sums up each user's score to build the leaderboard.
+ * - score = wins * win + draws * draw + losses * loss
+ * - Tied players share the same rank (competition ranking); the next rank skips ahead by the number of tied players
+ * - Feature spec: TOP3 + my rank, and plays/wins/win rate per TOP3 user
  */
 export function computeLeaderboard(
   users: MockUser[],
@@ -210,7 +210,7 @@ export function computeLeaderboard(
       userId: u.id,
       nickname: u.nickname,
       score: a.wins * config.win + a.draws * config.draw + a.losses * config.loss,
-      rank: 0, // 아래에서 채움
+      rank: 0, // filled in below
       totalPlays,
       wins: a.wins,
       draws: a.draws,
@@ -226,7 +226,7 @@ export function computeLeaderboard(
     return x.userId < y.userId ? -1 : x.userId > y.userId ? 1 : 0;
   });
 
-  // competition ranking: 동점(score 기준)은 같은 등수
+  // competition ranking: ties (by score) share the same rank
   let prevScore: number | null = null;
   let prevRank = 0;
   entries.forEach((e, i) => {

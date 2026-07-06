@@ -1,8 +1,8 @@
 /**
- * GamePictogram — 게임(1~10)별 스크린 픽토그램 (순수 장식).
- * GameSelect(S8) 내부에 있던 것을 온라인 매치 슬롯머신 인트로와 공유하려고 추출.
- * 고유 아트: 숫자맞추기=1 / 펜싱=2 / 미사일=4. 그 외는 pictograms.ts 의 SVG 씬(FINAL_PICTOS),
- * 안전망은 표시 번호(GAME_ORDER 위치). 클래스명은 기존 s8-· gp- 계열을 유지한다.
+ * GamePictogram — per-game (1~10) screen pictogram (purely decorative).
+ * Extracted from inside GameSelect(S8) to share with the online match slot-machine intro.
+ * Unique art: Number Guess=1 / fencing=2 / missile=4. Everything else uses the SVG scenes from pictograms.ts (FINAL_PICTOS),
+ * with the display number (GAME_ORDER position) as a fallback. Class names keep the existing s8- / gp- families.
  */
 import { GAME_ORDER } from '@madpump/shared';
 import type { GameId } from '@/shell';
@@ -46,7 +46,7 @@ export function GamePictogram({ id, displayNo }: { id: GameId; displayNo?: numbe
       </div>
     );
   }
-  // 대표 픽토그램 (pictograms.ts, 게임 내부 id 기준)
+  // representative pictogram (pictograms.ts, keyed by the game's internal id)
   const finalPicto = FINAL_PICTOS[id];
   if (finalPicto) {
     return (
@@ -59,7 +59,7 @@ export function GamePictogram({ id, displayNo }: { id: GameId; displayNo?: numbe
       </div>
     );
   }
-  // 안전망: 표시 번호 픽토그램
+  // fallback: display-number pictogram
   const no = displayNo ?? (GAME_ORDER as readonly number[]).indexOf(id) + 1;
   return (
     <div className="s8-picto s8-picto--gN" aria-hidden>

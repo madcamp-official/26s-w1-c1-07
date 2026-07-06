@@ -1,26 +1,26 @@
 /**
- * 게임9 · 줄다리기 (Tug of War) — NEON COIN-OP 화면. 담당: game10 에이전트.
- * 컨테이너 testid: scr-game10 / 부품: game-stage(CRT 베젤), hud-*(HudFrame 내장), btn-exit
+ * Game 9 · Tug of War — NEON COIN-OP screen. Owner: game10 agent.
+ * Container testid: scr-game10 / parts: game-stage(CRT bezel), hud-*(HudFrame embedded), btn-exit
  *
- * ── 원칙 ────────────────────────────────────────────────────────────
- *  · 로직/판정은 100% @madpump/shared game10 코어(create/step)로만 구동.
- *  · 화면·렌더링은 이 파일에서 처음부터 새로 작성한 네온 캔버스 씬 (game-lab 렌더러 미참조).
- *  · design-lab import 0줄 — 색/폰트는 theme.css 토큰값을 복사한 상수로만 사용.
+ * ── Principles ──────────────────────────────────────────────────────
+ *  · Logic/judgment is driven 100% by the @madpump/shared game10 core (create/step) only.
+ *  · Screen/rendering is a neon canvas scene written from scratch in this file (does not reference the game-lab renderer).
+ *  · 0 lines of design-lab import — colors/fonts are used only as constants copied from theme.css token values.
  *
- * ── 코어 상태(로직 파일 요약) → 화면 파생 ───────────────────────────
- *  · pos ∈ [-1,1]: 밧줄 매듭 위치. -1=P1 완승선(왼쪽·시안), +1=P2 완승선(오른쪽·핑크).
- *  · 각 팀은 두 키를 "교대"로 눌러 당긴다(P1 Q↔W, P2 U↔I). 같은 키 연타는 무효.
- *  · p1LastKey/p2LastKey → 다음에 눌러야 할 키(NEXT 힌트)로 시각화(순수 상태 파생).
- *  · p1Pulls/p2Pulls → 아케이드 스코어(당김 횟수), p1Flash/p2Flash → 당김 순간 야크 연출.
- *  · 완승선 도달 즉시 승리 / 10초 종료 시 매듭이 있는 쪽 승(정중앙 DRAW).
+ * ── Core state (logic file summary) → screen derivation ─────────────
+ *  · pos ∈ [-1,1]: rope knot position. -1=P1 win line (left·cyan), +1=P2 win line (right·pink).
+ *  · Each team pulls by pressing two keys "alternately" (P1 Q↔W, P2 U↔I). Mashing the same key is void.
+ *  · p1LastKey/p2LastKey → visualized as the next key to press (NEXT hint) (pure state derivation).
+ *  · p1Pulls/p2Pulls → arcade score (pull count), p1Flash/p2Flash → yank effect at the moment of a pull.
+ *  · Reaching a win line wins instantly / when the 10s timer ends the side holding the knot wins (dead center = DRAW).
  *
- * ── 배선(게임1·2와 동일 패턴) ──────────────────────────────────────
- *  mount → idle이거나 다른 게임이면 startOfflineGame(10) (direct-URL 복구)
- *  라운드마다 game10.create(Math.random) → rAF 루프에서 game10.step(state, events, dt초)
- *  step은 원본 mutate 후 동일 참조 반환 → stateRef로 연속성 유지, 매 틱 setDebugGame(state)
- *  입력 attachLocalKeyboard(GameInputEvent 큐): KeyQ/KeyW=P1, KeyU/KeyI=P2
- *  online 모드 → P2는 봇(U↔I 교대 연타 합성), 사람은 P1(q/w)
- *  result 확정 → 슬램 연출(RESULT_FX_MS) 후 reportRoundEnd(매핑) 1회 → <ResultOverlay />
+ * ── Wiring (same pattern as Game 1·2) ───────────────────────────────
+ *  mount → if idle or a different game, startOfflineGame(10) (direct-URL recovery)
+ *  each round game10.create(Math.random) → game10.step(state, events, dt seconds) in the rAF loop
+ *  step mutates the original then returns the same reference → continuity kept via stateRef, setDebugGame(state) every tick
+ *  input attachLocalKeyboard(GameInputEvent queue): KeyQ/KeyW=P1, KeyU/KeyI=P2
+ *  online mode → P2 is a bot (synthesizes U↔I alternating mashing), the human is P1 (q/w)
+ *  result confirmed → slam effect (RESULT_FX_MS) then reportRoundEnd(mapped) once → <ResultOverlay />
  */
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -48,45 +48,45 @@ import { sfx } from '@/audio';
 import './game10.css';
 
 // ---------------------------------------------------------------------------
-// 캔버스 상수 (논리 해상도 960×540 = 16:9, CSS로 반응형 스케일 · DPR 별도).
-// 코어의 유일한 좌표는 정규화된 pos(-1..1)뿐이라 나머지는 캔버스 px로 직접 배치.
+// Canvas constants (logical resolution 960×540 = 16:9, responsive scaling via CSS · DPR separate).
+// The core's only coordinate is the normalized pos(-1..1), so everything else is placed directly in canvas px.
 // ---------------------------------------------------------------------------
 const CW = 960;
 const CH = 540;
 
-const ROPE_Y = 292; // 밧줄 라인 y
+const ROPE_Y = 292; // rope line y
 const CENTER_X = 480; // pos=0
-const HALF_SPAN = 348; // pos=±1 까지의 좌우 거리
-const LEFT_GOAL_X = CENTER_X - HALF_SPAN; // 132 (pos=-1, P1 완승선)
-const RIGHT_GOAL_X = CENTER_X + HALF_SPAN; // 828 (pos=+1, P2 완승선)
-const LEFT_BASE_X = 66; // P1 앵커(팀 위치)
-const RIGHT_BASE_X = 894; // P2 앵커
+const HALF_SPAN = 348; // left/right distance to pos=±1
+const LEFT_GOAL_X = CENTER_X - HALF_SPAN; // 132 (pos=-1, P1 win line)
+const RIGHT_GOAL_X = CENTER_X + HALF_SPAN; // 828 (pos=+1, P2 win line)
+const LEFT_BASE_X = 66; // P1 anchor (team position)
+const RIGHT_BASE_X = 894; // P2 anchor
 const FLOOR_Y = ROPE_Y + 60;
 
 const ARCADE = '"Press Start 2P", monospace';
 
 /**
- * theme.css 토큰값 복사 (캔버스는 CSS 변수를 읽지 못하므로 hex 상수로).
- * p1/p2는 '역할'이 아니라 '플레이어 색'의 기준값이다: p1=파랑(blue,시안), p2=빨강(red,핑크).
- * drawScene 맨 위에서 functionColors()로 P1/P2 기능 엔티티의 실제 플레이어 색을 반영해 로컬 COL로 스왑한다.
+ * theme.css token values copied (canvas can't read CSS variables, so as hex constants).
+ * p1/p2 are not a 'role' but a 'player color' reference value: p1=blue (cyan), p2=red (pink).
+ * At the top of drawScene, functionColors() reflects the actual player colors of the P1/P2 functional entities and swaps them into the local COL.
  */
 const COL0 = {
   field: '#1a0b2e', // --bg-raised
   deep: '#160a33', // --surface-deep
   text: '#f4f0ff', // --text
   muted: '#9d8fbf', // --text-muted
-  accent: '#fdf500', // --accent (코인옐로)
-  accent2: '#d300c5', // --accent2 (네온퍼플)
-  p1: '#05d9e8', // 파랑(blue) 기준색 — 시안
-  p1dim: '#0a3a4a', // 파랑 dim
-  p2: '#ff2a6d', // 빨강(red) 기준색 — 핑크
-  p2dim: '#4a0a26', // 빨강 dim
+  accent: '#fdf500', // --accent (coin yellow)
+  accent2: '#d300c5', // --accent2 (neon purple)
+  p1: '#05d9e8', // blue reference color — cyan
+  p1dim: '#0a3a4a', // blue dim
+  p2: '#ff2a6d', // red reference color — pink
+  p2dim: '#4a0a26', // red dim
 } as const;
 
-/** 색 팔레트 타입 — 스왑된 로컬 COL(값이 리터럴이 아닌 string)도 담기 위함 */
+/** Color palette type — also holds the swapped local COL (values are string, not literals) */
 type Palette = { [K in keyof typeof COL0]: string };
 
-/** 판정 → 결과 오버레이 전환 사이 인게임 슬램 연출 시간 */
+/** In-game slam effect duration between judgment → result overlay transition */
 const RESULT_FX_MS = 620;
 
 const clampPos = (v: number) => Math.max(-1.03, Math.min(1.03, v));
@@ -94,7 +94,7 @@ const clampLean = (v: number) => Math.max(-6, Math.min(30, v));
 const markerXOf = (pos: number) => CENTER_X + clampPos(pos) * HALF_SPAN;
 
 // ---------------------------------------------------------------------------
-// 이펙트 (렌더 전용 — 로직 비침범)
+// Effects (render-only — does not intrude on logic)
 // ---------------------------------------------------------------------------
 type Fx =
   | { kind: 'shock'; side: 'P1' | 'P2'; t: number }
@@ -111,16 +111,16 @@ interface WhoYou {
   p2IsYou: boolean;
 }
 
-/** 코어 result → 셸 MatchResult */
+/** core result → shell MatchResult */
 function toMatchResult(r: 'P1' | 'P2' | 'DRAW'): 'P1_WIN' | 'P2_WIN' | 'DRAW' {
   return r === 'P1' ? 'P1_WIN' : r === 'P2' ? 'P2_WIN' : 'DRAW';
 }
 
 // ---------------------------------------------------------------------------
-// 렌더 헬퍼 (순수 그리기 — state는 읽기만)
+// Render helpers (pure drawing — state is read-only)
 // ---------------------------------------------------------------------------
 
-/** 발광 밧줄 세그먼트(약간의 처짐 + 안쪽 하이라이트 심지) */
+/** Glowing rope segment (slight sag + inner highlight wick) */
 function drawRopeSeg(
   ctx: CanvasRenderingContext2D,
   x1: number,
@@ -138,7 +138,7 @@ function drawRopeSeg(
   ctx.moveTo(x1, ROPE_Y);
   ctx.quadraticCurveTo(mx, ROPE_Y + 7, x2, ROPE_Y);
   ctx.stroke();
-  // 심지 하이라이트
+  // wick highlight
   ctx.shadowBlur = 0;
   ctx.lineWidth = 1.4;
   ctx.strokeStyle = 'rgba(244,240,255,0.85)';
@@ -149,7 +149,7 @@ function drawRopeSeg(
   ctx.restore();
 }
 
-/** 네온 스틱 파이터(줄다리기 자세: 몸은 바깥으로 젖히고 팔은 밧줄로) */
+/** Neon stick fighter (tug-of-war pose: body leaning outward, arms on the rope) */
 function drawPuller(
   ctx: CanvasRenderingContext2D,
   side: 'P1' | 'P2',
@@ -161,13 +161,13 @@ function drawPuller(
 ): void {
   const isP1 = side === 'P1';
   const color = isP1 ? col.p1 : col.p2;
-  const dir = isP1 ? -1 : 1; // 바깥(당기는) 방향
+  const dir = isP1 ? -1 : 1; // outward (pulling) direction
   const hipY = ROPE_Y + 30;
   const shoulderX = baseX + dir * lean;
   const shoulderY = ROPE_Y + 2;
   const headX = shoulderX + dir * 4;
   const headY = ROPE_Y - 16;
-  const gripX = baseX - dir * 24; // 손은 밧줄(중앙쪽)으로
+  const gripX = baseX - dir * 24; // hands toward the rope (center)
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -175,29 +175,29 @@ function drawPuller(
   ctx.shadowColor = color;
   ctx.shadowBlur = 8;
   ctx.lineWidth = 2.6;
-  // 몸통
+  // torso
   ctx.beginPath();
   ctx.moveTo(baseX, hipY);
   ctx.lineTo(shoulderX, shoulderY);
   ctx.stroke();
-  // 팔 → 밧줄 그립
+  // arm → rope grip
   ctx.beginPath();
   ctx.moveTo(shoulderX, shoulderY);
   ctx.lineTo(gripX, ROPE_Y);
   ctx.stroke();
-  // 다리 (바깥 버팀 + 안쪽 지지)
+  // legs (outer brace + inner support)
   ctx.beginPath();
   ctx.moveTo(baseX, hipY);
   ctx.lineTo(baseX + dir * 16, FLOOR_Y);
   ctx.moveTo(baseX, hipY);
   ctx.lineTo(baseX - dir * 10, FLOOR_Y);
   ctx.stroke();
-  // 머리
+  // head
   ctx.beginPath();
   ctx.arc(headX, headY, 8, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
-  // YOU 태그(온라인 내 쪽) — steps 점멸
+  // YOU tag (my side in online) — stepped blink
   if (isYou && Math.floor(now / 500) % 2 === 0) {
     ctx.save();
     ctx.font = `10px ${ARCADE}`;
@@ -210,7 +210,7 @@ function drawPuller(
   }
 }
 
-/** 밧줄 매듭 + 펜넌트 깃발 */
+/** Rope knot + pennant flag */
 function drawKnot(
   ctx: CanvasRenderingContext2D,
   markerX: number,
@@ -220,7 +220,7 @@ function drawKnot(
   col: Palette,
 ): void {
   const color = pos < -0.02 ? col.p1 : pos > 0.02 ? col.p2 : col.text;
-  // 매듭 (마름모)
+  // knot (diamond)
   ctx.save();
   ctx.translate(markerX, ROPE_Y);
   ctx.shadowColor = color;
@@ -229,14 +229,14 @@ function drawKnot(
   ctx.rotate(Math.PI / 4);
   ctx.fillRect(-9, -9, 18, 18);
   ctx.restore();
-  // 밝은 중심
+  // bright center
   ctx.save();
   ctx.fillStyle = col.text;
   ctx.beginPath();
   ctx.arc(markerX, ROPE_Y, 3.2, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
-  // 깃대 + 펜넌트(이기는 쪽을 향함)
+  // flagpole + pennant (points toward the winning side)
   ctx.save();
   ctx.strokeStyle = color;
   ctx.shadowColor = color;
@@ -267,9 +267,9 @@ function drawScene(
   who: WhoYou,
   reduce: boolean,
 ): void {
-  // 색은 플레이어 종속(역할 아님) — P1/P2 기능 엔티티의 실제 플레이어 색으로 칠한다.
-  //  P1엔티티 색이 파랑이면 COL0 그대로, 빨강이면 p1/p2(+dim) 스왑. 로컬 COL로 shadow → 아래 COL.p1/p2 자동 반영.
-  //  ('blue'=기존 P1색 시안, 'red'=기존 P2색 핑크. 오프라인/정보없음이면 fc={p1:'blue',p2:'red'}→스왑 없음.)
+  // Color is player-dependent (not role) — paint with the actual player colors of the P1/P2 functional entities.
+  //  If the P1 entity color is blue, keep COL0 as-is; if red, swap p1/p2(+dim). Local COL for shadow → COL.p1/p2 below auto-reflected.
+  //  ('blue'=existing P1 color cyan, 'red'=existing P2 color pink. If offline/no info, fc={p1:'blue',p2:'red'}→no swap.)
   const fc = functionColors();
   const COL: Palette =
     fc.p1 === 'red'
@@ -282,12 +282,12 @@ function drawScene(
   const winFx = fx.find((f): f is Extract<Fx, { kind: 'win' }> => f.kind === 'win');
   const winAge = winFx ? now - winFx.t : Infinity;
 
-  // --- 배경 ---
+  // --- background ---
   ctx.clearRect(0, 0, CW, CH);
   ctx.fillStyle = COL.field;
   ctx.fillRect(0, 0, CW, CH);
 
-  // 초대형 워터마크 "PULL" (비발광, 아주 옅게)
+  // giant watermark "PULL" (non-glowing, very faint)
   ctx.save();
   ctx.font = `bold 150px ${ARCADE}`;
   ctx.textAlign = 'center';
@@ -298,7 +298,7 @@ function drawScene(
   ctx.restore();
   ctx.textBaseline = 'alphabetic';
 
-  // 그리드 밴드
+  // grid bands
   ctx.save();
   ctx.strokeStyle = urgent ? 'rgba(255,42,109,0.10)' : 'rgba(211,0,197,0.08)';
   ctx.lineWidth = 1;
@@ -316,7 +316,7 @@ function drawScene(
   }
   ctx.restore();
 
-  // 바닥 라인
+  // floor line
   ctx.save();
   ctx.strokeStyle = 'rgba(211,0,197,0.30)';
   ctx.lineWidth = 1;
@@ -326,7 +326,7 @@ function drawScene(
   ctx.stroke();
   ctx.restore();
 
-  // --- 완승선 존 (양쪽) ---
+  // --- win line zones (both sides) ---
   for (const side of ['P1', 'P2'] as const) {
     const isP1 = side === 'P1';
     const color = isP1 ? COL.p1 : COL.p2;
@@ -334,14 +334,14 @@ function drawScene(
     const goalX = isP1 ? LEFT_GOAL_X : RIGHT_GOAL_X;
     const zoneX = isP1 ? 0 : RIGHT_GOAL_X;
     const zoneW = isP1 ? LEFT_GOAL_X : CW - RIGHT_GOAL_X;
-    const near = Math.max(0, isP1 ? -pos : pos); // 이 완승선에 얼마나 근접(0..1)
-    // dim 바탕(근접할수록 진해짐)
+    const near = Math.max(0, isP1 ? -pos : pos); // how close to this win line (0..1)
+    // dim background (darker the closer it gets)
     ctx.save();
     ctx.fillStyle = dim;
     ctx.globalAlpha = 0.4 + near * 0.4;
     ctx.fillRect(zoneX, 0, zoneW, CH);
     ctx.restore();
-    // 완승선(근접/승리 시 굵고 명멸)
+    // win line (thick and flickering when near/winning)
     const hot = near > 0.72 || (winFx && winFx.winner === side);
     const blur = hot ? (reduce ? 16 : 12 + (Math.sin(now / 80) + 1) * 6) : 8;
     ctx.save();
@@ -356,7 +356,7 @@ function drawScene(
     ctx.restore();
   }
 
-  // --- 중앙 배틀라인 ---
+  // --- center battle line ---
   ctx.save();
   ctx.strokeStyle = 'rgba(211,0,197,0.55)';
   ctx.setLineDash([4, 6]);
@@ -367,7 +367,7 @@ function drawScene(
   ctx.stroke();
   ctx.restore();
 
-  // --- 매듭 잔상 ---
+  // --- knot afterimage ---
   ctx.save();
   for (const tr of trail) {
     const age = now - tr.t;
@@ -378,20 +378,20 @@ function drawScene(
   }
   ctx.restore();
 
-  // --- 밧줄 (매듭 기준 좌=시안 / 우=핑크) ---
+  // --- rope (relative to knot: left=cyan / right=pink) ---
   drawRopeSeg(ctx, LEFT_BASE_X + 16, markerX, COL.p1);
   drawRopeSeg(ctx, markerX, RIGHT_BASE_X - 16, COL.p2);
 
-  // --- 파이터 (당김 순간 야크 + 우세 시 젖힘) ---
+  // --- fighters (yank at the moment of a pull + lean when leading) ---
   const p1Lean = 8 + Math.max(0, -pos) * 16 + (s.p1Flash > 0 ? (s.p1Flash / G10.FLASH) * 6 : 0);
   const p2Lean = 8 + Math.max(0, pos) * 16 + (s.p2Flash > 0 ? (s.p2Flash / G10.FLASH) * 6 : 0);
   drawPuller(ctx, 'P1', LEFT_BASE_X, clampLean(p1Lean), who.p1IsYou, now, COL);
   drawPuller(ctx, 'P2', RIGHT_BASE_X, clampLean(p2Lean), who.p2IsYou, now, COL);
 
-  // --- 매듭 + 깃발 ---
+  // --- knot + flag ---
   drawKnot(ctx, markerX, pos, now, reduce, COL);
 
-  // --- 당김 충격파 링 ---
+  // --- pull shockwave rings ---
   for (const f of fx) {
     if (f.kind !== 'shock') continue;
     const age = now - f.t;
@@ -410,16 +410,16 @@ function drawScene(
     ctx.restore();
   }
 
-  // --- 캔버스 라벨: 완승선 / NEXT 힌트 / 당김 스코어 (Press Start 2P ≥10px) ---
+  // --- canvas labels: win lines / NEXT hint / pull score (Press Start 2P ≥10px) ---
   ctx.save();
   ctx.textAlign = 'center';
-  // 완승선 캡션
+  // win line caption
   ctx.font = `12px ${ARCADE}`;
   ctx.fillStyle = COL.p1;
   ctx.fillText('P1 WIN', LEFT_GOAL_X / 2 + 8, 32);
   ctx.fillStyle = COL.p2;
   ctx.fillText('P2 WIN', (RIGHT_GOAL_X + CW) / 2 - 8, 32);
-  // NEXT 키 힌트(교대 강제 시각화 — p1/p2LastKey 파생)
+  // NEXT key hint (visualizes the forced alternation — derived from p1/p2LastKey)
   const p1Next = s.p1LastKey === 'KeyQ' ? 'W' : s.p1LastKey === 'KeyW' ? 'Q' : 'Q W';
   const p2Next = s.p2LastKey === 'KeyU' ? 'I' : s.p2LastKey === 'KeyI' ? 'U' : 'U I';
   ctx.font = `10px ${ARCADE}`;
@@ -435,7 +435,7 @@ function drawScene(
   ctx.shadowColor = COL.p2;
   ctx.fillText(p2Next, RIGHT_BASE_X - 34, ROPE_Y - 82);
   ctx.shadowBlur = 0;
-  // 당김 스코어
+  // pull score
   ctx.font = `10px ${ARCADE}`;
   ctx.fillStyle = COL.muted;
   ctx.fillText('PULLS', LEFT_BASE_X + 34, CH - 40);
@@ -447,7 +447,7 @@ function drawScene(
   ctx.fillText(String(s.p2Pulls), RIGHT_BASE_X - 34, CH - 20);
   ctx.restore();
 
-  // --- 승리 슬램 오버레이 (승패 순간에만) ---
+  // --- win slam overlay (only at the win/loss moment) ---
   if (winFx && winAge < RESULT_FX_MS + 300) {
     const color =
       winFx.winner === 'P1' ? COL.p1 : winFx.winner === 'P2' ? COL.p2 : COL.accent2;
@@ -471,7 +471,7 @@ function drawScene(
     }
   }
 
-  // --- 크로마틱 글리치 1프레임 (승패 순간, reduced-motion 존중) ---
+  // --- chromatic glitch 1 frame (at the win/loss moment, respects reduced-motion) ---
   const chroma = fx.find((f) => f.kind === 'chroma');
   if (!reduce && chroma && now - chroma.t < 90) {
     ctx.save();
@@ -485,21 +485,21 @@ function drawScene(
 }
 
 // ---------------------------------------------------------------------------
-// 컴포넌트
+// Component
 // ---------------------------------------------------------------------------
 export default function Game10() {
   useDebugScreen('scr-game10');
   const flow = useFlow();
   const navigate = useNavigate();
 
-  // 온라인 렌더 훅(성능 표준). 활성/역할만 선택 구독 → 라운드 경계에서만 리렌더.
-  // 서버 스냅샷은 stateRef로 미러(리렌더 없이)하고, per-snapshot HUD/디버그 반영만 onSnapshot에서.
+  // Online render hook (performance standard). Selectively subscribes to active/role only → rerenders only at round boundaries.
+  // Server snapshots are mirrored via stateRef (no rerender), and only per-snapshot HUD/debug reflection happens in onSnapshot.
   const { isOnline, myRole, stateRef } = useOnlineRender<Game10State>(10, (s) => {
     setDebugGame(s);
     const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
     setHudMs(Math.ceil(remainingMs / 1000) * 1000);
   });
-  // stale closure 방지: 키보드 콜백이 항상 최신 '온라인 활성 여부'를 보게 ref 미러.
+  // Prevent stale closure: ref mirror so the keyboard callback always sees the latest 'online active state'.
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
 
@@ -510,10 +510,10 @@ export default function Game10() {
   const trailRef = useRef<Trail[]>([]);
   const reportedRef = useRef(false);
   const resultAtRef = useRef(0);
-  // 종료 연출: result 전환 추적 → 기본 플래시(폭발 없음)
+  // End effect: track result transition → basic flash (no explosion)
   const endRef = useRef<EndTracker>(createEndTracker());
 
-  /** HUD 표시용 남은 시간 (초 단위 양자화 — 리렌더 절약) */
+  /** Remaining time for HUD display (quantized to seconds — saves rerenders) */
   const [hudMs, setHudMs] = useState(GAME_DURATION * 1000);
 
   const [qLit, flashQ] = useKeyLamp();
@@ -523,14 +523,14 @@ export default function Game10() {
   const lampRef = useRef({ flashU, flashI });
   lampRef.current = { flashU, flashI };
 
-  // direct-URL 복구 + 이탈 시 디버그 브리지 정리
+  // direct-URL recovery + clean up debug bridge on unmount
   useEffect(() => {
     const f = getFlow();
     if (f.phase === 'idle' || f.gameId !== 10) startOfflineGame(10);
     return () => setDebugGame(null);
   }, []);
 
-  // 캔버스 해상도 초기화 (DPR 스케일)
+  // Initialize canvas resolution (DPR scale)
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
@@ -540,17 +540,17 @@ export default function Game10() {
     c.getContext('2d')?.scale(dpr, dpr);
   }, []);
 
-  // 키보드 — 로컬 어댑터. GameInputEvent 큐 적재 + 램프 점등.
-  // 온라인이면 P2 키는 봇이 대행하므로 흡수하지 않는다.
+  // Keyboard — local adapter. Loads the GameInputEvent queue + lights lamps.
+  // When online, the P2 keys are handled by the bot, so they are not absorbed.
   useEffect(() => {
     const detach = attachLocalKeyboard(
       () => performance.now() / 1000,
       (e) => {
-        // 진짜 서버 온라인: 로컬 큐/봇 미사용 — 내 입력만 서버로 전송.
-        // 4키 아무거나 눌러도 내 슬롯으로 감(서버가 role로 슬롯을 재기입).
-        //   슬롯A = 주키(KeyQ/KeyU), 슬롯B = 보조키(KeyW/KeyI).
+        // True server online: no local queue/bot — only my input is sent to the server.
+        // Any of the 4 keys maps to my slot (the server rewrites the slot by role).
+        //   slot A = primary key (KeyQ/KeyU), slot B = secondary key (KeyW/KeyI).
         if (isOnlineRef.current) {
-          // 온라인은 U/I 두 키만(요구사항). U=주키(slotA), I=보조키(slotB). Q/W는 무시.
+          // Online uses only the U/I two keys (requirement). U=primary key (slotA), I=secondary key (slotB). Q/W are ignored.
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           if (e.type === 'down') {
             if (e.code === 'KeyU') flashU();
@@ -561,11 +561,11 @@ export default function Game10() {
           return;
         }
 
-        // --- 오프라인(로컬 2인 / 로컬 online mock 봇) : 기존 그대로 ---
+        // --- offline (local 2-player / local online mock bot): unchanged ---
         const f = getFlow();
         const localOnline = f.mode === 'online';
         const isP2 = e.code === 'KeyU' || e.code === 'KeyI';
-        if (localOnline && isP2) return; // 온라인 P2 = 봇
+        if (localOnline && isP2) return; // online P2 = bot
         if (e.type === 'down') {
           if (e.code === 'KeyQ') flashQ();
           else if (e.code === 'KeyW') flashW();
@@ -578,13 +578,13 @@ export default function Game10() {
     return detach;
   }, [flashQ, flashW, flashU, flashI]);
 
-  // 라운드 수명주기: state 생성 → rAF 루프(step + draw) → 결과 보고
+  // Round lifecycle: create state → rAF loop (step + draw) → report result
   useEffect(() => {
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
-    // ── 온라인: 서버 상태만 그리는 draw-only 루프(step·봇·result보고 없음) ──
+    // ── Online: draw-only loop that draws only server state (no step·bot·result reporting) ──
     if (isOnline) {
-      // 첫 스냅샷 전에도 그릴 게 있도록 중립 초기 상태를 준비(렌더 전용, step 안 함)
+      // Prepare a neutral initial state so there is something to draw even before the first snapshot (render-only, no step)
       if (!stateRef.current) {
         stateRef.current = game10.create(Math.random);
         setDebugGame(stateRef.current);
@@ -597,7 +597,7 @@ export default function Game10() {
         const s = stateRef.current;
         const ctx = canvasRef.current?.getContext('2d');
         if (!s || !ctx) return;
-        // 서버 스냅샷의 유효 당김(pull 카운트 증가)이 이번 프레임 처음 감지된 순간만 1회.
+        // Only once, at the moment a valid pull (pull count increase) in the server snapshot is first detected this frame.
         if (s.p1Pulls > prevP1Pulls) sfx('g10-pull');
         if (s.p2Pulls > prevP2Pulls) sfx('g10-pull');
         prevP1Pulls = s.p1Pulls;
@@ -620,7 +620,7 @@ export default function Game10() {
       return () => cancelAnimationFrame(raf);
     }
 
-    // ── 오프라인(로컬 시뮬 + 봇 + 결과 보고) : 기존 그대로 ──
+    // ── Offline (local sim + bot + result reporting): unchanged ──
     if (flow.gameId !== 10 || flow.phase !== 'playing') return;
 
     const st = game10.create(Math.random);
@@ -649,7 +649,7 @@ export default function Game10() {
         const events = actionsRef.current;
         actionsRef.current = [];
 
-        // 온라인 봇(P2): U↔I 교대 연타 합성 (사람 P1이 이길 여지가 있게 중간 템포)
+        // Online bot (P2): synthesizes U↔I alternating mashing (medium tempo so the human P1 has a chance to win)
         if (getFlow().mode === 'online' && now >= botRef.current.nextAt) {
           const nk: 'KeyU' | 'KeyI' = botRef.current.last === 'KeyU' ? 'KeyI' : 'KeyU';
           events.push({ code: nk, type: 'down', t: now / 1000 });
@@ -658,7 +658,7 @@ export default function Game10() {
           botRef.current.nextAt = now + 120 + Math.random() * 70;
         }
 
-        // step은 원본 mutate 후 동일 참조 반환 → 비교값은 호출 전에 스칼라로 스냅샷
+        // step mutates the original then returns the same reference → snapshot comparison values as scalars before the call
         const prevP1Pulls = s.p1Pulls;
         const prevP2Pulls = s.p2Pulls;
         const prevPos = s.pos;
@@ -668,7 +668,7 @@ export default function Game10() {
         const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
         setHudMs(Math.ceil(remainingMs / 1000) * 1000);
 
-        // ---- 렌더 전용 파생 ----
+        // ---- render-only derivation ----
         if (s.p1Pulls > prevP1Pulls) { fxRef.current.push({ kind: 'shock', side: 'P1', t: now }); sfx('g10-pull'); }
         if (s.p2Pulls > prevP2Pulls) { fxRef.current.push({ kind: 'shock', side: 'P2', t: now }); sfx('g10-pull'); }
         const mxPrev = markerXOf(prevPos);
@@ -676,16 +676,16 @@ export default function Game10() {
         if (Math.abs(mxNow - mxPrev) > 0.3) trailRef.current.push({ x: mxPrev, t: now });
         trailRef.current = trailRef.current.filter((tr) => now - tr.t < 220);
 
-        // 판정 순간 (글리치는 승패 순간에만)
+        // judgment moment (glitch only at the win/loss moment)
         if (s.result !== null && resultAtRef.current === 0) {
           resultAtRef.current = now;
           fxRef.current.push({ kind: 'win', winner: s.result, t: now });
           if (!reduce) fxRef.current.push({ kind: 'chroma', t: now });
         }
       } else if (!reportedRef.current && now - resultAtRef.current >= RESULT_FX_MS) {
-        // 온라인은 서버가 round:end를 구동하므로 화면은 보고하지 않는다.
+        // When online the server drives round:end, so the screen does not report.
         if (isOnline) return;
-        // 슬램 연출을 짧게 보여준 뒤 라운드 종료 1회 보고 → ResultOverlay
+        // Briefly show the slam effect, then report round end once → ResultOverlay
         reportedRef.current = true;
         if (s.result) reportRoundEnd(toMatchResult(s.result));
       }
@@ -716,7 +716,7 @@ export default function Game10() {
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
   const urgent = flow.phase === 'playing' && hudMs <= 5000;
-  // 내 색(매치 고정, 역할과 독립) — 키캡 색은 이 색으로. 매치 내 불변이라 비반응 읽기로 충분.
+  // My color (fixed per match, independent of role) — keycap color uses this. Immutable within a match, so a non-reactive read suffices.
   const myColor = isOnline ? (onlineStore.get().myColor ?? 'blue') : 'blue';
 
   return (
@@ -732,9 +732,9 @@ export default function Game10() {
             navigate('/');
           }}
         >
-          ◀ 나가기
+          ◀ Exit
         </Button>
-        <span className="g10-title font-arcade c-muted">게임10 · 줄다리기</span>
+        <span className="g10-title font-arcade c-muted">Game 10 · Tug of War</span>
       </div>
 
       <div className="g10-hudwrap">
@@ -749,48 +749,48 @@ export default function Game10() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g10-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g10-canvas" aria-label="게임10 스테이지 — 줄다리기" />
+        <canvas ref={canvasRef} className="g10-canvas" aria-label="Game 10 stage — Tug of War" />
       </div>
 
-      {/* 온스크린 키캡. 온라인은 U/I 두 키만 쓰므로, 내 역할(색) 쪽 컨트롤만 표기·점등한다.
-          오프라인은 기존 2인 레이아웃(Q/W ↔ U/I) 유지. */}
+      {/* On-screen keycaps. Online uses only the U/I two keys, so it only shows/lights the controls on my role (color) side.
+          Offline keeps the existing 2-player layout (Q/W ↔ U/I). */}
       {isOnline ? (
         <div className="g10-keys g10-keys--online">
           <div className="g10-keys__group">
             <span
               className={`g10-keys__tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}
             >
-              YOU · {myColor === 'blue' ? '파랑' : '빨강'} · 번갈아 당기기
+              YOU · {myColor === 'blue' ? 'BLUE' : 'RED'} · pull alternately
             </span>
             <KeyCap
               role={myColor === 'blue' ? 'P1' : 'P2'}
               keyChar="U"
               icon={myRole === 'P1' ? '◀' : '▶'}
               lit={uLit}
-              label="당기기"
+              label="Pull"
             />
             <KeyCap
               role={myColor === 'blue' ? 'P1' : 'P2'}
               keyChar="I"
               icon={myRole === 'P1' ? '◀' : '▶'}
               lit={iLit}
-              label="당기기"
+              label="Pull"
             />
           </div>
-          <span className="g10-keys__hint font-arcade c-muted">U↔I 교대 연타!</span>
+          <span className="g10-keys__hint font-arcade c-muted">Mash U↔I alternately!</span>
         </div>
       ) : (
         <div className="g10-keys">
           <div className="g10-keys__group">
-            <KeyCap role="P1" keyChar="Q" icon="◀" lit={qLit} label="당기기" />
-            <KeyCap role="P1" keyChar="W" icon="◀" lit={wLit} label="당기기" />
-            <span className="g10-keys__tag font-arcade c-p1">P1 · 번갈아 당기기</span>
+            <KeyCap role="P1" keyChar="Q" icon="◀" lit={qLit} label="Pull" />
+            <KeyCap role="P1" keyChar="W" icon="◀" lit={wLit} label="Pull" />
+            <span className="g10-keys__tag font-arcade c-p1">P1 · pull alternately</span>
           </div>
-          <span className="g10-keys__hint font-arcade c-muted">Q↔W · U↔I 교대 연타!</span>
+          <span className="g10-keys__hint font-arcade c-muted">Mash Q↔W · U↔I alternately!</span>
           <div className="g10-keys__group">
-            <span className="g10-keys__tag font-arcade c-p2">P2 · 번갈아 당기기</span>
-            <KeyCap role="P2" keyChar="U" icon="▶" lit={uLit} label="당기기" />
-            <KeyCap role="P2" keyChar="I" icon="▶" lit={iLit} label="당기기" />
+            <span className="g10-keys__tag font-arcade c-p2">P2 · pull alternately</span>
+            <KeyCap role="P2" keyChar="U" icon="▶" lit={uLit} label="Pull" />
+            <KeyCap role="P2" keyChar="I" icon="▶" lit={iLit} label="Pull" />
           </div>
         </div>
       )}

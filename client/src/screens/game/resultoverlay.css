@@ -1,4 +1,4 @@
-/* ResultOverlay 전용 스타일 — game1 에이전트 소유 (전 게임 S9~S12 공용, PLAN 인게임 공통) */
+/* ResultOverlay-specific styles — owned by the game1 agent (shared across all games S9~S12, common PLAN in-game) */
 
 .rov {
   position: fixed;
@@ -11,7 +11,7 @@
   padding: 24px;
 }
 
-/* 하이스코어 등록 화면 무드의 패널 — 승패색 보더 + 코너 브래킷 + 글로우 */
+/* Panel with a high-score entry screen mood — win/loss color border + corner brackets + glow */
 .rov__panel {
   --rov-color: var(--accent2);
   --bracket-color: var(--rov-color);
@@ -37,7 +37,7 @@
   color: var(--text-muted);
 }
 
-/* WINNER 네온 사인 — sign-on 플리커(theme) + 판정 순간 글리치 1회 (PLAN §1.4) */
+/* WINNER neon sign — sign-on flicker (theme) + a single glitch at the moment of judgment (PLAN §1.4) */
 @keyframes rov-glitch {
   0% {
     text-shadow: -2px 0 var(--p1), 2px 0 var(--p2);
@@ -85,7 +85,7 @@
   color: var(--text-muted);
 }
 
-/* 매치 최종 — 라운드별 결과 순위표 (HI-SCORE 테이블 문법 축소판) */
+/* Match final — per-round result standings table (a condensed version of the HI-SCORE table grammar) */
 .rov__table {
   border: 2px solid var(--p1);
   box-shadow: 0 0 6px color-mix(in srgb, var(--p1) 60%, transparent);

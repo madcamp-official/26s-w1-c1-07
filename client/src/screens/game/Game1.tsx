@@ -1,30 +1,30 @@
 /**
- * S9 게임1 — 숫자 맞추기 (NEON COIN-OP). 담당: game1 에이전트.
- * 컨테이너 testid: scr-game1 / 부품: game-stage(CRT 베젤), hud-*(HudFrame 내장), btn-exit
+ * S9 Game 1 — Number Guess (NEON COIN-OP). Owner: game1 agent.
+ * Container testid: scr-game1 / parts: game-stage(CRT bezel), hud-*(HudFrame built-in), btn-exit
  *
- * 화면(UI·컴포넌트·CSS 클래스·연출)은 100% 유지하고, 게임 로직만 @madpump/shared game1 코어로 구동한다.
+ * The screen (UI, components, CSS classes, effects) is kept 100% intact; only the game logic is driven by the @madpump/shared game1 core.
  *
- * PLAN §2-S9 + §3.1 "세 개의 스코어보드, 하나의 잭팟":
- *   - 중앙 타겟 스코어보드(#000 박스 + 옐로 초대형 숫자 + TARGET 캡션)
- *   - 좌 P1 시안 / 우 P2 핑크 현재숫자 패널(dim 바탕 + 2px 플레이어색 보더)
- *   - 값 변경 = 하드 스텝 + 80ms 글로우 버스트, ▲/▼ 램프 1프레임 점등
- *   - 근접 피드백: |diff|≤5 옐로 보더, ≤2 보더 글로우 맥동(300ms steps)
+ * PLAN §2-S9 + §3.1 "Three scoreboards, one jackpot":
+ *   - Center target scoreboard (#000 box + yellow oversized number + TARGET caption)
+ *   - Left P1 cyan / right P2 pink current-number panel (dim background + 2px player-color border)
+ *   - Value change = hard step + 80ms glow burst, ▲/▼ lamp lit for 1 frame
+ *   - Proximity feedback: |diff|≤5 yellow border, ≤2 border glow pulse (300ms steps)
  *
- * 새 코어 매핑(설계 지시):
- *   - value  = state.p1 | state.p2 (float) → 표시/판정은 Math.round(value)
+ * New core mapping (design directive):
+ *   - value  = state.p1 | state.p2 (float) → display/judgement uses Math.round(value)
  *   - matched = |round(value)-target| < G1.MATCH_TOL
- *   - hold(초) = state.p1Hold | p2Hold, 승리 유지시간 = G1.HOLD_TO_WIN(=1초)
+ *   - hold(sec) = state.p1Hold | p2Hold, win hold time = G1.HOLD_TO_WIN(=1 sec)
  *   - timeRemainingMs = (GAME_DURATION - state.elapsed) * 1000
- *   - 새 메커니즘 "누적 속도 게이지(0~100)" → 각 패널에 네온 게이지 바 추가(--p1/--p2)
- *   - "1초 락인"을 기존 3-램프 연출로 재해석(진행을 3분할). 하단 힌트 "HOLD 1 SEC"
+ *   - New mechanic "accumulated speed gauge (0~100)" → adds a neon gauge bar to each panel (--p1/--p2)
+ *   - Reinterprets "1-second lock-in" via the existing 3-lamp effect (splitting progress into thirds). Bottom hint "HOLD 1 SEC"
  *
- * 배선(설계 지시):
- *   - game1.create(Math.random) / game1.step(state, events, dt초)
- *   - attachLocalKeyboard(now, push): KeyQ/KeyW=P1, KeyU/KeyI=P2 (down/up 모두 큐에 push)
- *   - step은 원본을 mutate 후 반환 → 반환값을 state로 교체 + setState는 새 참조(clone)로 강제 리렌더
- *   - state.result 확정 → reportRoundEnd(map) 1회 → <ResultOverlay />
- *   - 온라인 모드(flow.mode==='online')면 P2는 봇: 타겟으로 서서히 수렴하는 휴리스틱
- *   - 매 틱 setDebugGame(state), 언마운트 시 setDebugGame(null)
+ * Wiring (design directive):
+ *   - game1.create(Math.random) / game1.step(state, events, dt sec)
+ *   - attachLocalKeyboard(now, push): KeyQ/KeyW=P1, KeyU/KeyI=P2 (push both down/up to the queue)
+ *   - step mutates the original then returns it → replace state with the return value + setState forces a re-render with a new reference (clone)
+ *   - state.result finalized → reportRoundEnd(map) once → <ResultOverlay />
+ *   - In online mode (flow.mode==='online') P2 is a bot: a heuristic that gradually converges on the target
+ *   - setDebugGame(state) every tick, setDebugGame(null) on unmount
  */
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
@@ -59,10 +59,10 @@ interface ValuePulse {
 }
 
 // ---------------------------------------------------------------------------
-// 스냅샷 사이 보간(외삽) — 서버 스냅샷을 dt초만큼 각 플레이어 값을 '자기 속도'로 전진시킨
-// 표시용 상태를 만든다. 속도=rate×(gauge/GAUGE_REF)·방향=up−down (코어 advance와 동일 공식).
-// 스냅샷에 rate/gauge/down/up이 모두 있어 ID 매칭 불필요·추가 지연 0. 다음 스냅샷이 즉시 교정한다.
-// 30/60Hz 스냅샷을 60fps 렌더로 부드럽게 잇는 게 목적(빠른 카운트업의 계단 제거 → 오프라인 캐던스와 일치).
+// Interpolation (extrapolation) between snapshots — advances each player's value from the server snapshot
+// by dt seconds at 'its own speed' to build a display state. speed=rate×(gauge/GAUGE_REF)·direction=up−down (same formula as core advance).
+// The snapshot has rate/gauge/down/up all present, so no ID matching is needed and added latency is 0. The next snapshot corrects it immediately.
+// The goal is to smoothly bridge 30/60Hz snapshots into a 60fps render (removing the stair-stepping of fast count-ups → matching the offline cadence).
 // ---------------------------------------------------------------------------
 
 const clampValue = (v: number): number => Math.min(G1.RANGE_MAX, Math.max(G1.RANGE_MIN, v));
@@ -84,12 +84,12 @@ export default function Game1() {
   const flow = useFlow();
   const navigate = useNavigate();
 
-  // 온라인 렌더 훅(성능 표준): 활성/역할만 선택 구독(라운드 경계에서만 리렌더) +
-  // 서버 스냅샷을 stateRef에 미러(리렌더 없이). per-snapshot 작업(디버그 브리지)은 콜백으로 위임.
+  // Online render hook (performance standard): subscribes only to active/role (re-renders only at round boundaries) +
+  // mirrors server snapshots into stateRef (without re-rendering). per-snapshot work (debug bridge) is delegated to a callback.
   const { isOnline, myRole, stateRef, snapAtRef } = useOnlineRender<Game1State>(1, (s) => {
     setDebugGame(s);
   });
-  // 입력 핸들러(빈 deps effect)가 항상 최신 '온라인 활성 여부'를 보게 하는 stale-closure 방지 ref.
+  // A ref preventing stale closures so the input handler (empty-deps effect) always sees the latest 'online active' state.
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
 
@@ -98,12 +98,12 @@ export default function Game1() {
   const eventsRef = useRef<GameInputEvent[]>([]);
   const reportedRef = useRef(false);
   const pulseRef = useRef<Record<PlayerRole, ValuePulse | null>>({ P1: null, P2: null });
-  // g1-gauge-max: 플레이어별 게이지가 처음 최대(≈100)에 도달한 순간 1회만 울리기 위한 가드.
+  // g1-gauge-max: a guard so it fires only once, the moment each player's gauge first reaches max (≈100).
   const gaugeMaxRef = useRef<Record<PlayerRole, boolean>>({ P1: false, P2: false });
   const botNextAtRef = useRef(0);
   const botHeldRef = useRef<'up' | 'down' | null>(null);
 
-  // 온스크린 키캡 램프 4개 (즉발 점등 → 80ms 소등, PLAN §1.4)
+  // 4 on-screen keycap lamps (instant on → off after 80ms, PLAN §1.4)
   const [p1DownLit, flashP1Down] = useKeyLamp();
   const [p1UpLit, flashP1Up] = useKeyLamp();
   const [p2DownLit, flashP2Down] = useKeyLamp();
@@ -111,20 +111,20 @@ export default function Game1() {
   const lampRef = useRef({ flashP1Down, flashP1Up, flashP2Down, flashP2Up });
   lampRef.current = { flashP1Down, flashP1Up, flashP2Down, flashP2Up };
 
-  // direct-URL 진입 복구 (idle이거나 다른 게임이면 오프라인 매치로 시작)
+  // direct-URL entry recovery (if idle or a different game, start an offline match)
   useEffect(() => {
     const f = getFlow();
     if (f.phase === 'idle' || f.gameId !== 1) startOfflineGame(1);
   }, []);
 
-  // 키보드 입력 (P1 q/w, P2 u/i). down/up 모두 큐에 push해 코어가 방향 상태를 갱신하게 한다.
-  // 온라인이면 P2 입력은 봇 대행이므로 무시. 램프는 down 순간에만 점등.
+  // Keyboard input (P1 q/w, P2 u/i). Push both down/up to the queue so the core updates the direction state.
+  // When online, P2 input is handled by the bot, so it is ignored. Lamps light only at the down moment.
   useEffect(() => {
     const push = (e: GameInputEvent) => {
-      // 서버 온라인 활성: 로컬 큐/봇 없이 서버로만 전송. 램프는 시각 피드백으로 유지.
+      // Server online active: send only to the server, no local queue/bot. Lamps remain as visual feedback.
       if (isOnlineRef.current) {
-        // 온라인은 U/I 두 키만(요구사항). U=주키(slotA), I=보조키(slotB). Q/W는 무시.
-        // 서버가 슬롯을 내 role의 물리키로 재기입하므로 접속자는 자기 캐릭터를 조종한다.
+        // Online uses only the two U/I keys (requirement). U=main key (slotA), I=secondary key (slotB). Q/W are ignored.
+        // The server rewrites the slot to my role's physical key, so each connected player controls their own character.
         if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
         if (e.type === 'down') {
           if (e.code === 'KeyU') lampRef.current.flashP2Down();
@@ -138,7 +138,7 @@ export default function Game1() {
 
       const f = getFlow();
       const isP2 = e.code === 'KeyU' || e.code === 'KeyI';
-      if (f.mode === 'online' && isP2) return; // 온라인 P2 = 봇
+      if (f.mode === 'online' && isP2) return; // online P2 = bot
       if (e.type === 'down') {
         sfx('g1-tap');
         switch (e.code) {
@@ -166,7 +166,7 @@ export default function Game1() {
     };
   }, []);
 
-  // 라운드 시작(마운트/nextRound) → 새 game1 코어 state 생성
+  // Round start (mount/nextRound) → create a new game1 core state
   useEffect(() => {
     if (flow.phase !== 'playing' || flow.gameId !== 1) return;
     const s = game1.create(Math.random);
@@ -181,17 +181,17 @@ export default function Game1() {
     setDebugGame(s);
   }, [flow.currentRound, flow.phase, flow.gameId]);
 
-  // (서버 권위 상태 미러링은 useOnlineRender가 담당 — 스냅샷마다 stateRef에 미러하고
-  //  per-snapshot 작업(setDebugGame)은 위 훅 콜백으로 위임. 별도 미러 effect 불필요.)
+  // (Server-authoritative state mirroring is handled by useOnlineRender — it mirrors into stateRef every snapshot and
+  //  delegates per-snapshot work (setDebugGame) to the hook callback above. No separate mirror effect is needed.)
 
-  // rAF 게임 루프 — step + 디버그 브리지 + 결과 보고.
-  // 탭이 백그라운드/오클루전이면 rAF가 멈추므로 interval 워치독이 대신 스텝을 밟는다 (QA 자동화 대응).
+  // rAF game loop — step + debug bridge + result reporting.
+  // When the tab is backgrounded/occluded, rAF stops, so an interval watchdog steps in its place (for QA automation).
   useEffect(() => {
-    // 온라인(서버 권위): 로컬 step·봇·결과보고 없이 서버 스냅샷(stateRef)만 매 프레임 페인트한다.
-    // 이 화면의 페인트 = 상태를 새 참조로 setGame 하는 React 리렌더(DOM 게임이라 캔버스 blit 대신 리렌더).
-    // 스냅샷 churn은 useOnlineRender가 흡수(리렌더 없이 stateRef 미러) → 여기서는 프레임당 1회만 렌더.
+    // Online (server-authoritative): no local step/bot/result reporting — paint only the server snapshot (stateRef) each frame.
+    // A paint on this screen = a React re-render via setGame with a new reference (this is a DOM game, so we re-render instead of a canvas blit).
+    // Snapshot churn is absorbed by useOnlineRender (mirroring into stateRef without re-rendering) → here we render only once per frame.
     if (isOnline) {
-      // 첫 스냅샷 전이면 초기 create 상태를 렌더용으로만 세팅(판정 아님 — onSnapshot이 곧 덮어씀).
+      // Before the first snapshot, set the initial create state for rendering only (not judgement — onSnapshot overwrites it soon).
       if (!stateRef.current) {
         const seed = game1.create(Math.random);
         stateRef.current = seed;
@@ -204,7 +204,7 @@ export default function Game1() {
         raf = requestAnimationFrame(loop);
         const s = stateRef.current;
         if (!s) return;
-        // g1-gauge-max: 서버 스냅샷 게이지가 최대(≈100)에 근접한 첫 순간에 플레이어별 1회.
+        // g1-gauge-max: once per player, the first moment the server-snapshot gauge nears max (≈100).
         if (!gaugeMaxRef.current.P1 && s.p1Gauge >= G1.GAUGE_MAX - 10) {
           gaugeMaxRef.current.P1 = true;
           sfx('g1-gauge-max');
@@ -213,11 +213,11 @@ export default function Game1() {
           gaugeMaxRef.current.P2 = true;
           sfx('g1-gauge-max');
         }
-        // 스냅샷 사이 외삽: 마지막 스냅샷을 경과 dt(≤50ms)만큼 각 플레이어 값을 '자기 속도'로 전진.
-        // 값(p1/p2)만 대상 — 코어 advance와 동일 공식. 종료(result≠null) 시엔 외삽하지 않는다.
+        // Extrapolation between snapshots: advance each player's value from the last snapshot by elapsed dt (≤50ms) at 'its own speed'.
+        // Only values (p1/p2) are affected — same formula as core advance. Do not extrapolate once ended (result≠null).
         const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
         const view = extraDt > 0 && s.result === null ? extrapolate(s, extraDt) : s;
-        setGame({ ...view }); // 새 참조로 강제 리렌더(스냅샷/외삽 객체를 clone)
+        setGame({ ...view }); // force re-render with a new reference (clone the snapshot/extrapolated object)
       };
       raf = requestAnimationFrame(loop);
       return () => cancelAnimationFrame(raf);
@@ -230,7 +230,7 @@ export default function Game1() {
 
     const step = (now: number) => {
       if (stopped) return;
-      // 라운드 인트로 중엔 시뮬 정지(코어 step 스킵) + last 갱신으로 재개 시 dt 점프 방지
+      // During the round intro, pause the sim (skip core step) + update last to prevent a dt jump on resume
       if (isRoundIntroActive()) {
         last = now;
         return;
@@ -240,13 +240,13 @@ export default function Game1() {
       last = now;
       const cur = gameRef.current;
 
-      // 온라인 봇(P2): 타겟으로 서서히 수렴 — 방향키를 눌러 게이지를 채워 이동, 타겟 도달 시 손 떼고 홀드
+      // Online bot (P2): gradually converges on the target — presses direction keys to fill the gauge and move, then releases and holds on reaching the target
       if (getFlow().mode === 'online' && cur.result === null && now >= botNextAtRef.current) {
         const t = now / 1000;
         const p2r = Math.round(cur.p2);
         const diff = cur.target - p2r;
         if (diff === 0) {
-          // 타겟 도달 — 누르던 키를 떼서 정지 유지(홀드)
+          // Reached the target — release the held key to stay stopped (hold)
           if (botHeldRef.current) {
             eventsRef.current.push({
               code: botHeldRef.current === 'up' ? 'KeyI' : 'KeyU',
@@ -268,7 +268,7 @@ export default function Game1() {
             });
             botHeldRef.current = null;
           }
-          eventsRef.current.push({ code, type: 'down', t }); // 게이지 +30 누적
+          eventsRef.current.push({ code, type: 'down', t }); // gauge +30 accumulated
           botHeldRef.current = dir;
           (wantUp ? lampRef.current.flashP2Up : lampRef.current.flashP2Down)();
           const dist = Math.abs(diff);
@@ -276,7 +276,7 @@ export default function Game1() {
         }
       }
 
-      // ▲/▼ 램프: step 전 값을 스냅샷(step이 원본을 mutate하므로 반드시 호출 전에 캡처)
+      // ▲/▼ lamps: snapshot the value before step (step mutates the original, so capture it before the call)
       const prevP1 = Math.round(cur.p1);
       const prevP2 = Math.round(cur.p2);
 
@@ -289,8 +289,8 @@ export default function Game1() {
       const d2 = Math.round(next.p2) - prevP2;
       if (d2 !== 0) pulseRef.current.P2 = { dir: d2 > 0 ? 'up' : 'down', until: now + 160 };
 
-      // g1-gauge-max: 게이지가 최대(≈100)에 근접한 첫 순간에 플레이어별 1회.
-      // (코어가 매 step 감쇠를 적용하므로 저장값은 100에 정확히 닿지 않는다 → 상한 근접 임계치로 판정.)
+      // g1-gauge-max: once per player, the first moment the gauge nears max (≈100).
+      // (The core applies decay every step, so the stored value never touches exactly 100 → judged by a near-upper-bound threshold.)
       if (!gaugeMaxRef.current.P1 && next.p1Gauge >= G1.GAUGE_MAX - 10) {
         gaugeMaxRef.current.P1 = true;
         sfx('g1-gauge-max');
@@ -300,13 +300,13 @@ export default function Game1() {
         sfx('g1-gauge-max');
       }
 
-      gameRef.current = next; // 다음 프레임 입력용(코어가 계속 mutate)
-      setGame({ ...next }); // 새 참조로 강제 리렌더(코어는 동일 객체를 반환하므로 clone 필수)
+      gameRef.current = next; // for next-frame input (the core keeps mutating)
+      setGame({ ...next }); // force re-render with a new reference (the core returns the same object, so cloning is required)
       setDebugGame(next);
 
       if (next.result !== null) {
-        stopped = true; // 루프 정지 — ResultOverlay가 phase를 보고 표시
-        if (isOnlineRef.current) return; // 온라인: 서버가 round:end 구동, 화면은 결과 보고에 관여 안 함
+        stopped = true; // stop the loop — ResultOverlay displays based on phase
+        if (isOnlineRef.current) return; // online: the server drives round:end, the screen does not take part in result reporting
         if (!reportedRef.current) {
           reportedRef.current = true;
           reportRoundEnd(
@@ -323,7 +323,7 @@ export default function Game1() {
     raf = requestAnimationFrame(loop);
     const watchdog = setInterval(() => {
       const now = performance.now();
-      if (now - last > 280) step(now); // rAF가 살아있으면 개입하지 않음
+      if (now - last > 280) step(now); // do not intervene if rAF is alive
     }, 250);
 
     return () => {
@@ -335,8 +335,8 @@ export default function Game1() {
 
   const displays = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
-  // 색은 플레이어 종속(역할 아님). fc.p1/.p2 = 이 라운드 P1/P2 기능 엔티티의 실제 플레이어 색.
-  // 오프라인/색 정보 없음 = 기본 {p1:'blue', p2:'red'} → 기존 동작과 동일. myColor = 내 색(YOU 표시용).
+  // Color depends on the player (not the role). fc.p1/.p2 = the actual player color of this round's P1/P2 functional entity.
+  // Offline / no color info = default {p1:'blue', p2:'red'} → same as existing behavior. myColor = my color (for the YOU display).
   const fc = functionColors();
   const myColor = onlineStore.get().myColor ?? 'blue';
   const timeRemainingMs = Math.max(0, (GAME_DURATION - game.elapsed) * 1000);
@@ -355,13 +355,13 @@ export default function Game1() {
     const holdProgress = Math.min(1, hold / G1.HOLD_TO_WIN);
     const near = !matched && Math.abs(diff) <= 5;
     const close = !matched && Math.abs(diff) <= 2;
-    // 1초 락인을 기존 3-램프로 재해석: 진행을 3분할 점등
+    // Reinterpret the 1-second lock-in with the existing 3 lamps: light up in thirds of progress
     const holdLit = Math.min(3, Math.floor(holdProgress * 3));
 
     const pl = pulseRef.current[role];
     const dir = pl && pl.until > performance.now() ? pl.dir : null;
-    // 이 엔티티(P1/P2 기능)의 실제 플레이어 색으로 칠한다(역할 아님).
-    // 'blue'=기존 P1색(시안 --p1), 'red'=기존 P2색(핑크 --p2). 색으로 패널 클래스/게이지·램프색 선택.
+    // Paint with the actual player color of this entity (P1/P2 function), not the role.
+    // 'blue'=existing P1 color (cyan --p1), 'red'=existing P2 color (pink --p2). Color selects the panel class/gauge/lamp color.
     const isBlue = (isP1 ? fc.p1 : fc.p2) === 'blue';
     const color = isBlue ? 'var(--p1)' : 'var(--p2)';
     const cls = [
@@ -388,7 +388,7 @@ export default function Game1() {
         <span key={value} className="g1-panel__num font-arcade">
           {value}
         </span>
-        {/* 새 메커니즘: 누적 속도 게이지(0~100) — 네온 바 (neon-coinop 컨셉) */}
+        {/* New mechanic: accumulated speed gauge (0~100) — neon bar (neon-coinop concept) */}
         <div className="g1-gauge-wrap">
           <span className="g1-gauge__cap font-arcade">SPEED</span>
           <div className="g1-gauge" aria-hidden>
@@ -403,7 +403,7 @@ export default function Game1() {
             />
           </div>
         </div>
-        {/* 코인 락인: 일치 유지 진행 램프 3개 (1초 락인을 3분할, 이탈 시 소등 — §3.1) */}
+        {/* Coin lock-in: 3 match-hold progress lamps (splitting the 1-second lock-in into thirds, off on leaving — §3.1) */}
         <div className={`g1-hold ${matched ? '' : 'g1-hold--off'}`}>
           {[0, 1, 2].map((i) => (
             <span
@@ -433,7 +433,7 @@ export default function Game1() {
             navigate('/');
           }}
         >
-          ◀ 나가기
+          ◀ Exit
         </Button>
       </header>
 
@@ -462,32 +462,32 @@ export default function Game1() {
         <EndFlash active={game?.result != null} />
       </section>
 
-      {/* 하단 조작키 안내 — 실제 배정 키 표기 (SPEC Q2) + 입력 순간 램프 점등 */}
-      {/* 온라인은 U/I 두 키만 쓰므로 내 역할(role) 컨트롤만 내 색으로 표시. 오프라인은 기존 2인 레이아웃 유지. */}
+      {/* Bottom control-key guide — shows the actually assigned keys (SPEC Q2) + lamps light at the input moment */}
+      {/* Online uses only the two U/I keys, so it shows only my role's control in my color. Offline keeps the existing 2-player layout. */}
       {isOnline ? (
         <footer className="g1-pads g1-pads--online">
           <div className="g1-pad-group">
-            {/* 색은 내 플레이어 색(myColor)으로 — 역할이 색을 정하지 않는다. 동작 라벨/아이콘은 유지. */}
+            {/* Color is my player color (myColor) — the role does not decide color. Action labels/icons are kept. */}
             <span
               className={`g1-pads-tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}
             >
-              YOU · {myColor === 'blue' ? '파랑' : '빨강'}
+              YOU · {myColor === 'blue' ? 'BLUE' : 'RED'}
             </span>
-            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="▼" label="내리기" lit={p2DownLit} />
-            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="▲" label="올리기" lit={p2UpLit} />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="▼" label="Down" lit={p2DownLit} />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="▲" label="Up" lit={p2UpLit} />
           </div>
           <span className="g1-pads-hint font-arcade">MATCH THE TARGET · HOLD 1 SEC</span>
         </footer>
       ) : (
         <footer className="g1-pads">
           <div className="g1-pad-group">
-            <KeyCap role="P1" keyChar="Q" icon="▼" label="내리기" lit={p1DownLit} />
-            <KeyCap role="P1" keyChar="W" icon="▲" label="올리기" lit={p1UpLit} />
+            <KeyCap role="P1" keyChar="Q" icon="▼" label="Down" lit={p1DownLit} />
+            <KeyCap role="P1" keyChar="W" icon="▲" label="Up" lit={p1UpLit} />
           </div>
           <span className="g1-pads-hint font-arcade">MATCH THE TARGET · HOLD 1 SEC</span>
           <div className="g1-pad-group">
-            <KeyCap role="P2" keyChar="U" icon="▼" label="내리기" lit={p2DownLit} />
-            <KeyCap role="P2" keyChar="I" icon="▲" label="올리기" lit={p2UpLit} />
+            <KeyCap role="P2" keyChar="U" icon="▼" label="Down" lit={p2DownLit} />
+            <KeyCap role="P2" keyChar="I" icon="▲" label="Up" lit={p2UpLit} />
           </div>
         </footer>
       )}

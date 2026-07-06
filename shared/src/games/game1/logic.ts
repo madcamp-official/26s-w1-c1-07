@@ -2,37 +2,37 @@ import type { GameInputEvent, GameResult } from '../types'
 import { GAME_DURATION } from '../types'
 
 /**
- * 게임1 = 숫자 맞추기 · "누적 속도 게이지".
- *  · 게이지는 keyup으로 초기화되지 않는다(누적형).
- *  · keydown마다 게이지가 PRESS_GAIN(=30%p)씩 누적되어 최대 100%까지 오른다.
- *  · 게이지는 항상 sqrt 양상으로 감소한다(dg/dt = -DECAY_K·√g). 손을 떼면
- *    이 감쇠로 자연스럽게 0까지 내려간다(즉시 0이 아니라 서서히).
- *  → 빠르게 연타할수록 +30%p 누적이 감쇠를 앞질러 게이지가 100%로 차오르고,
- *    꾹 누르면 1회 +30%p 뒤 감쇠만 남아 사그라든다.
- *  · 넘버 증감 속도 = baseRate × (게이지 / GAUGE_REF).
- *    이번엔 GAUGE_REF=30 → "게이지 30% 부근의 속도 = 기존 홀드 속도".
- *    (게이지 100%면 약 3.3배까지 빨라진다.)
+ * Game 1 = Number Guess · "cumulative speed gauge".
+ *  · The gauge is not reset on keyup (it accumulates).
+ *  · Each keydown accumulates PRESS_GAIN (=30%p) on the gauge, up to a max of 100%.
+ *  · The gauge always decays in a sqrt pattern (dg/dt = -DECAY_K·√g). When you release,
+ *    this decay naturally brings it down to 0 (gradually, not instantly).
+ *  → The faster you tap, the more the +30%p accumulation outpaces the decay and the gauge fills to 100%,
+ *    while holding gives a single +30%p and then only decay remains, so it fades out.
+ *  · Number increment/decrement speed = baseRate × (gauge / GAUGE_REF).
+ *    This time GAUGE_REF=30 → "speed around 30% gauge = the old hold speed".
+ *    (At 100% gauge it speeds up to about 3.3x.)
  *
- * 그 외(손 떼고 타겟에서 1초 정지 시 승리, 10초 종료 시 근접 판정, 범위 1~1000)는 동일.
+ * Everything else (win on releasing and holding on target for 1s, proximity check at the 10s end, range 1~1000) is the same.
  */
 export const G1 = {
-  /** 게이지 GAUGE_REF%일 때의 속도 = 기존 홀드 속도. 플레이어별 이 범위에서 랜덤 */
+  /** Speed at GAUGE_REF% gauge = the old hold speed. Randomized per player within this range */
   RATE_MIN: 42,
   RATE_MAX: 88,
   MATCH_TOL: 0.5,
   HOLD_TO_WIN: 1,
   RANGE_MIN: 1,
   RANGE_MAX: 1000,
-  /** keydown 1회당 누적되는 게이지(%p) */
+  /** Gauge accumulated per keydown (%p) */
   PRESS_GAIN: 30,
-  /** 방향키 홀드 중 초당 충전(%p/s) — 홀드하면 게이지가 GAUGE_REF(=기준속도)까지 차오른다.
-   *  (없으면 홀드 시 감쇠로 0까지 떨어져 speed가 안 오르던 버그) equilibrium≈(HOLD_GAIN/DECAY_K)² */
+  /** Charge per second while holding a direction key (%p/s) — holding fills the gauge up to GAUGE_REF (=base speed).
+   *  (Without this, holding would decay to 0 and speed wouldn't rise — a bug) equilibrium≈(HOLD_GAIN/DECAY_K)² */
   HOLD_GAIN: 88,
-  /** 게이지 상한(%) */
+  /** Gauge upper limit (%) */
   GAUGE_MAX: 100,
-  /** 이 게이지(%)에서 속도 = 플레이어 base rate  */
+  /** At this gauge (%), speed = player base rate  */
   GAUGE_REF: 30,
-  /** sqrt 감쇠 계수: dg/dt = -DECAY_K·√g (항상 적용) */
+  /** sqrt decay coefficient: dg/dt = -DECAY_K·√g (always applied) */
   DECAY_K: 16,
 } as const
 
@@ -46,7 +46,7 @@ export interface Game1State {
   p1Up: boolean
   p2Down: boolean
   p2Up: boolean
-  /** 속도 게이지 (0~100), 누적형 */
+  /** Speed gauge (0~100), cumulative */
   p1Gauge: number
   p2Gauge: number
   p1Hold: number
@@ -95,13 +95,13 @@ interface PlayerIO {
   hold: number
 }
 
-/** 게이지 감쇠(항상) + 값 갱신 + 정지-유지 판정 */
+/** Gauge decay (always) + value update + stop-and-hold check */
 function advance(io: PlayerIO, target: number, dt: number) {
   const dir = (io.up ? 1 : 0) - (io.down ? 1 : 0)
-  // 방향키를 누르고 있으면 게이지가 기준(GAUGE_REF)까지 차오른다 — 홀드=기준속도, 연타로 그 위 부스트.
-  //  (예전엔 keydown 순간에만 +PRESS_GAIN이라 홀드 시 감쇠로 0까지 떨어져 speed가 안 오르던 버그)
+  // While a direction key is held, the gauge fills up to the reference (GAUGE_REF) — hold=base speed, tap to boost above it.
+  //  (Previously +PRESS_GAIN only happened at the moment of keydown, so holding decayed to 0 and speed wouldn't rise — a bug)
   if (dir !== 0) io.gauge = Math.min(G1.GAUGE_MAX, io.gauge + G1.HOLD_GAIN * dt)
-  // sqrt 양상 감쇠 — 누르든 안 누르든 항상 적용
+  // sqrt-pattern decay — always applied, whether pressed or not
   io.gauge = Math.max(0, io.gauge - G1.DECAY_K * Math.sqrt(io.gauge) * dt)
 
   const speed = io.rate * (io.gauge / G1.GAUGE_REF)
@@ -121,7 +121,7 @@ export function step(state: Game1State, events: GameInputEvent[], dt: number): G
   if (state.result) return state
   state.elapsed += dt
 
-  // 입력: keydown → 게이지 +30%p 누적(상한 100). keyup → 홀드 해제만(게이지 유지, 감쇠로 내려감)
+  // Input: keydown → accumulate +30%p on the gauge (cap 100). keyup → release hold only (gauge stays, decays down)
   for (const e of events) {
     const down = e.type === 'down'
     switch (e.code) {

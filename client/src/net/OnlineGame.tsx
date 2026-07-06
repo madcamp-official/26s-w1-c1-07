@@ -1,12 +1,13 @@
 /**
- * OnlineGame — 온라인 매치 전용 라우트(`/online/game/:gameId`) 디스패처.
+ * OnlineGame — dispatcher for the online-match-only route (`/online/game/:gameId`).
  *
- * 온라인 매치는 오프라인(`/game/N`)과 URL을 구분한다:
- *   · 라이브 매치 컨텍스트(online store에 gameId)가 있으면 해당 게임 화면을 렌더.
- *   · 컨텍스트가 없으면(주소 직접 접속 / 새로고침으로 소켓이 끊긴 경우) — 매치는
- *     서버 상태라 URL만으로 이어갈 수 없으므로 메인으로 돌려보낸다(오프라인으로 빠지지 않음).
+ * Online matches use a distinct URL from offline (`/game/N`):
+ *   · If a live match context exists (gameId in the online store), render that game screen.
+ *   · If there is no context (direct URL access / socket dropped on refresh) — the match is
+ *     server state and can't be resumed from the URL alone, so send the user back to main
+ *     (do not fall through to offline).
  *
- * (오프라인 `/game/N` 은 그대로 각 GameN 컴포넌트가 직접 처리 — 직접 접속 시 오프라인 시작)
+ * (Offline `/game/N` is still handled directly by each GameN component — direct access starts offline.)
  */
 import { useEffect } from 'react';
 import type { ComponentType } from 'react';
@@ -41,13 +42,13 @@ export default function OnlineGame() {
   const o = useOnline();
   const navigate = useNavigate();
 
-  // 라이브 온라인 매치 컨텍스트가 없으면(직접 접속·새로고침) 메인으로 — 매치는 서버 상태라 URL로 못 이어감.
+  // If there's no live online-match context (direct access / refresh), go to main — the match is server state and can't be resumed from the URL.
   useEffect(() => {
     if (o.gameId == null) navigate('/', { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (o.gameId == null) return null; // 리다이렉트 중
+  if (o.gameId == null) return null; // redirecting
   const G = GAMES[Number(gameId)];
   return G ? <G /> : <Navigate to="/" replace />;
 }

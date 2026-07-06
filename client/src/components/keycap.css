@@ -1,4 +1,4 @@
-/* KeyCap 스타일 (아키텍트 소유) — PLAN §1.5 키캡 */
+/* KeyCap styles (owned by the architect) — PLAN §1.5 keycap */
 
 .nc-keycap {
   --kc-color: var(--p1);
@@ -11,14 +11,14 @@
   padding: 8px 10px;
   background: var(--surface-deep);
   border: 2px solid var(--kc-color);
-  border-radius: 6px; /* 키캡만 6px (§1.3 예외) */
+  border-radius: 6px; /* keycap only 6px (§1.3 exception) */
   color: var(--kc-color);
 }
 
 .nc-keycap--p1 { --kc-color: var(--p1); }
 .nc-keycap--p2 { --kc-color: var(--p2); }
 
-/* 입력 순간 램프 점등 — 트랜지션 없는 순간 반응 (§1.4) */
+/* Lamp lights on the instant of input — instant response with no transition (§1.4) */
 .nc-keycap.lit {
   background: color-mix(in srgb, var(--kc-color) 22%, var(--surface-deep));
   box-shadow:

@@ -1,102 +1,102 @@
-# 온라인 매치 — 9라운드 슬롯 + 리벤지 (v1, 2026-07-06, branch online-match)
+# Online Match — 9-round slots + rematch (v1, 2026-07-06, branch online-match)
 
-> 온라인 매치(빠른 시작·코드방 공통)의 매치 구조와 리벤지 제도의 정본.
-> 코인 정산 규칙 자체는 `docs/COINS.md`, 프로토콜 타입은 `shared/src/net/events.ts`.
+> Canonical source for the match structure of online matches (common to quick-start·code-room) and the rematch system.
+> The coin-settlement rules themselves are in `docs/COINS.md`; the protocol types are in `shared/src/net/events.ts`.
 
-## 1. 매치 구조: 9라운드 + 슬롯머신
+## 1. Match structure: 9 rounds + slot machine
 
-- 온라인 매치는 **항상 9라운드** (설정의 라운드 수 UI는 제거됨 — 게임 체크박스만 남음).
-- 매치 성사 시 서버가 **슬롯 3릴** = 게임 3개를 추첨해 `match:start`의 `slotGames`로 내려준다.
-  - **라운드 r의 게임 = `slotGames[(r-1) % 3]`** → 릴1 = 1·4·7라운드, 릴2 = 2·5·8, 릴3 = 3·6·9.
-  - 후보 풀 = 방 설정 게임 체크박스(빠른시작은 전체 10종). **풀 ≥ 3이면 서로 다른 3개**,
-    풀이 1~2개면 그 안에서 중복 허용.
-- **인트로 타임라인** (서버 `INTRO_MS`=4.7s 동안 1라운드 시작을 지연):
-  | 시각 | 연출 (클라 `MatchIntro.tsx`) |
+- An online match is **always 9 rounds** (the round-count UI in Settings is removed — only the game checkboxes remain).
+- When a match is made, the server draws **3 slot reels** = 3 games and sends them down as `slotGames` in `match:start`.
+  - **The game for round r = `slotGames[(r-1) % 3]`** → reel1 = rounds 1·4·7, reel2 = 2·5·8, reel3 = 3·6·9.
+  - Candidate pool = the room's game checkboxes (quick-start = all 10). **If pool ≥ 3, three distinct games**;
+    if the pool is 1~2, duplicates are allowed within it.
+- **Intro timeline** (the server delays round 1's start for `INTRO_MS`=4.7s):
+  | Time | Presentation (client `MatchIntro.tsx`) |
   |---|---|
-  | 0s | 슬롯 3릴 스핀 시작 (게임 픽토그램 스트립 회전) |
-  | 1.2s / 1.5s / 1.8s | 릴1→2→3 **0.3초 간격** 순차 정지 |
-  | 2.5s | **VS 화면**: 양측 닉네임·색·베팅 코인 2초 공개 |
-  | 4.7s | 서버 `round:start` → 3초 카운트다운 → 1라운드 |
-- **ALL-IN 표시**: 베팅액 = 참가 시점 보유 전액이면 `match:start`의 `yourAllIn/oppAllIn`이 true →
-  VS 화면에 빨간 ALL-IN 뱃지. (리벤지 여부와 무관하게 모든 매치에 적용)
-- match:end의 코인 정산 규칙은 기존과 동일 (quick: ±자기 베팅 / code: 승자가 패자 베팅 흡수).
+  | 0s | 3 slot reels start spinning (game-pictogram strip rotates) |
+  | 1.2s / 1.5s / 1.8s | reels 1→2→3 stop sequentially at **0.3s intervals** |
+  | 2.5s | **VS screen**: both sides' nickname·color·bet coins revealed for 2 seconds |
+  | 4.7s | server `round:start` → 3-second countdown → round 1 |
+- **ALL-IN display**: if the bet = the full holdings at join time, `match:start`'s `yourAllIn/oppAllIn` are true →
+  red ALL-IN badge on the VS screen. (Applies to every match regardless of whether it's a rematch.)
+- The coin-settlement rule for match:end is the same as before (quick: ±own bet / code: winner absorbs loser's bet).
 
-## 2. 리벤지 매치
+## 2. Rematch
 
-패자가 직전 승자에게 **각자 직전 베팅의 2배**를 걸고 재도전하는 제도.
+A system where the loser challenges the immediate winner again, each staking **twice their previous bet**.
 
-### 스테이크 규칙
-- `stake = min(직전 자기 베팅 × 2, 현재 보유 코인)` — **2배가 안 되면 보유 전액 ALL-IN**.
-- 신청자(패자)든 수락자(승자)든 동일 규칙. 단 **보유 0이면 참여 불가**
-  (패자: REVENGE 버튼 미노출 / 승자: 신청 자체가 거부됨).
-- 정산 방식(quick/code)은 **원 매치의 종류를 상속**한다 (같은 방에서 재시작).
+### Stake rules
+- `stake = min(previous own bet × 2, current coin holdings)` — **if 2× isn't affordable, full-holdings ALL-IN**.
+- Same rule whether requester (loser) or accepter (winner). But **if holdings are 0, can't participate**
+  (loser: REVENGE button not shown / winner: the request itself is rejected).
+- The settlement mode (quick/code) is **inherited from the original match** (restarted in the same room).
 
-### 흐름
+### Flow
 ```
-match:end ─ 패자에게 revenge:{stake, allIn} 자격 동봉 (없으면 null → 버튼 미노출)
-  → 패자 [REVENGE] 클릭 → revenge:request (ack)
-     ├─ 승자가 방을 떠남/접속 끊김/코인 0 → ack 실패 → 패자는 자동으로 메인 복귀 (명세 2c)
-     └─ OK → 승자에게 revenge:offer { fromNickname, yourStake/allIn, oppStake/allIn, timeoutMs }
-  → 승자 다이얼로그 "{패자} 님이 베팅 코인의 2배를 걸고 리벤지 매치를 신청하셨습니다…"
-     ├─ [수락] → revenge:result{accepted:true} 양측 → 같은 방에서 새 매치 (슬롯 재추첨, 베팅=스테이크)
-     ├─ [거절] → revenge:result{DECLINED} → 양측 메인 복귀
-     ├─ 10초 무응답 → revenge:result{TIMEOUT} (서버 `REVENGE_TIMEOUT_MS`)
-     └─ 패자 [취소] → revenge:result{CANCELLED}
+match:end ─ enclose revenge:{stake, allIn} eligibility to the loser (null if none → button not shown)
+  → loser clicks [REVENGE] → revenge:request (ack)
+     ├─ winner left the room / disconnected / 0 coins → ack fails → loser auto-returns to main (spec 2c)
+     └─ OK → revenge:offer { fromNickname, yourStake/allIn, oppStake/allIn, timeoutMs } to the winner
+  → winner dialog "{loser} has staked double their bet coins and challenged you to a rematch…"
+     ├─ [Accept] → revenge:result{accepted:true} to both → new match in the same room (slots re-drawn, bet=stake)
+     ├─ [Decline] → revenge:result{DECLINED} → both return to main
+     ├─ 10s no response → revenge:result{TIMEOUT} (server `REVENGE_TIMEOUT_MS`)
+     └─ loser [Cancel] → revenge:result{CANCELLED}
 ```
 
-### 자격 (match:end의 revenge가 non-null일 조건)
-1. 무승부가 아니고 내가 패자
-2. **내가 직전 매치의 리벤지 신청자가 아님** — 연속 신청 금지 (명세 2e)
-   - 원 승자가 리벤지에서 패배한 경우: 그는 신청자가 아니었으므로 신청 가능 (명세 2f)
-3. 정산 후 보유 코인 ≥ 1
+### Eligibility (conditions for match:end's revenge to be non-null)
+1. Not a draw and I am the loser
+2. **I was not the rematch requester of the immediately previous match** — consecutive requests forbidden (spec 2e)
+   - If the original winner lost in a rematch: they weren't the requester, so they can request (spec 2f)
+3. Coin holdings ≥ 1 after settlement
 
-### 구현 위치
-| 계층 | 파일 | 내용 |
+### Implementation locations
+| Layer | File | Content |
 |---|---|---|
-| 프로토콜 | `shared/src/net/events.ts` | `MatchStartMsg.slotGames/bets/allIn`, `MatchEndMsg.revenge`, `revenge:*` 5종 |
-| 서버 | `server/src/match.ts` | 9라운드·슬롯 추첨·INTRO_MS·match:end 자격 계산·postMatch 기록 |
-| 서버 | `server/src/rooms.ts` | `Member.allIn`, `Room.postMatch`(리벤지 창구)·`revengeRequesterUserId` |
-| 서버 | `server/src/index.ts` | `revenge:request/respond/cancel` 핸들러, `takeRevengePending`(이중 처리 방지), leaveRoom 연동 |
-| 클라 | `client/src/net/online.ts` | phase `'slot'`, revengePhase/offer/closed 상태, 액션 3종 |
-| 클라 | `client/src/net/MatchIntro.tsx` | 슬롯 연출 + VS 화면 (reduce-motion 대응) |
-| 클라 | `client/src/net/OnlineController.tsx` | REVENGE 버튼/대기/수락 다이얼로그, 무산 시 메인 복귀 |
-| 클라 | `client/src/components/HudFrame.tsx` | 온라인 매치 중 라운드 표기(n/9) 보정 |
+| Protocol | `shared/src/net/events.ts` | `MatchStartMsg.slotGames/bets/allIn`, `MatchEndMsg.revenge`, 5 `revenge:*` |
+| Server | `server/src/match.ts` | 9 rounds·slot draw·INTRO_MS·match:end eligibility calc·postMatch record |
+| Server | `server/src/rooms.ts` | `Member.allIn`, `Room.postMatch` (rematch window)·`revengeRequesterUserId` |
+| Server | `server/src/index.ts` | `revenge:request/respond/cancel` handlers, `takeRevengePending` (double-processing guard), leaveRoom integration |
+| Client | `client/src/net/online.ts` | phase `'slot'`, revengePhase/offer/closed state, 3 actions |
+| Client | `client/src/net/MatchIntro.tsx` | slot presentation + VS screen (reduce-motion support) |
+| Client | `client/src/net/OnlineController.tsx` | REVENGE button/wait/accept dialog, return to main on cancellation |
+| Client | `client/src/components/HudFrame.tsx` | round notation (n/9) correction during an online match |
 
-### 테스트 노브 (E2E 전용 — 운영 기본값 불변)
-`MATCH_COUNTDOWN_MS` `MATCH_ROUND_GAP_MS` `MATCH_INTRO_MS` `REVENGE_TIMEOUT_MS` 환경변수로
-서버 타이밍을 단축할 수 있다 (`server/src/match.ts`, `index.ts`).
+### Test knobs (E2E-only — production defaults unchanged)
+Server timing can be shortened via the `MATCH_COUNTDOWN_MS` `MATCH_ROUND_GAP_MS` `MATCH_INTRO_MS` `REVENGE_TIMEOUT_MS`
+environment variables (`server/src/match.ts`, `index.ts`).
 
-## 3. 결정 사항 기록 (사용자 확정)
-- 9라운드 고정 → 설정 모달의 라운드 수 UI 제거 (2026-07-06)
-- 슬롯 3칸 서로 다른 게임, 코드방은 체크박스 풀 (풀 < 3이면 중복 허용)
-- 리벤지 스테이크: 2배 미만 보유 시 ALL-IN 허용 + 모든 매치에서 전액 베팅 ALL-IN 표시
-- 승자 응답 타임아웃 10초
-- (합의된 기본값) 무승부는 리벤지 없음 / 거절·취소·타임아웃 시 양측 메인 복귀 /
-  리벤지 매치도 새 슬롯으로 9라운드
+## 3. Decision record (user-finalized)
+- 9 rounds fixed → round-count UI removed from the settings modal (2026-07-06)
+- 3 distinct games in the slots, code room = checkbox pool (duplicates allowed if pool < 3)
+- Rematch stake: allow ALL-IN when holdings < 2×, and show full-bet ALL-IN in every match
+- Winner response timeout 10s
+- (agreed defaults) no rematch on a draw / both return to main on decline·cancel·timeout /
+  the rematch is also 9 rounds with new slots
 
-## 4. E2E 회귀 테스트
+## 4. E2E regression test
 
-`server/e2e/online-match.e2e.ts` — 소켓 클라이언트 2개로 명세 전 항목을 실서버 검증(약 7분).
+`server/e2e/online-match.e2e.ts` — verifies every spec item against the real server with 2 socket clients (~7 min).
 
 ```bash
-# 터미널 1: 단축 타이밍 서버
+# Terminal 1: shortened-timing server
 cd server && MATCH_COUNTDOWN_MS=300 MATCH_ROUND_GAP_MS=300 MATCH_INTRO_MS=500 REVENGE_TIMEOUT_MS=3000 npx tsx src/index.ts
-# 터미널 2
+# Terminal 2
 cd server && npx tsx e2e/online-match.e2e.ts
 ```
-⚠️ 유저 1~6의 코인을 덮어쓰므로 로컬 DB 전용. (최신 통과: 121개 검증 전부 ✅)
+⚠️ Overwrites the coins of users 1~6, so local DB only. (Latest pass: all 121 checks ✅)
 
-## 5. Opus 심층 리뷰 반영 (2026-07-06)
+## 5. Opus deep-review reflected (2026-07-06)
 
-5개 렌즈(동시성·상태머신·명세·통합·코인엣지) 병렬 리뷰 → 이중 적대검증으로 확정한 8건 수정 완료.
+Parallel review through 5 lenses (concurrency·state-machine·spec·integration·coin-edge) → 8 fixes finalized via double adversarial verification.
 
-| 결함 | 수정 |
+| Defect | Fix |
 |---|---|
-| 리벤지 '취소'/'메인'의 낙관적 teardown이 승자 '수락'과 경합 시 코인 상실 | 취소를 서버 확정(revenge:result) 기반으로 — 수락이 이기면 그대로 매치 진입, 코인 손실 없음 |
-| requestError가 매치 간 초기화 안 됨 → 다음 화면 오배너 | match-end/slot 진입 시 초기화 (`OnlineController.tsx`) |
-| REVENGE 더블클릭 → 2번째 PENDING ack이 '승자 이탈'로 오인 | in-flight 가드(`requesting`)+버튼 disabled |
-| settleCoins 비대칭 클램프 → 코드방 제로섬 깨져 코인 무단 생성 | transfer 클램프(승자=패자 실제 차감분, `db.ts`) + `/api/unlock` 매치중 차단 |
-| aborted가 종료상태로 보호 안 됨 → 이어지는 game:state가 이탈 통지를 덮음 | `isTerminal()` 가드로 종료 후 라운드 이벤트 무시 (`online.ts`) |
-| 취소 에코가 teardown 재발화(이중 leaveRoom) | `goMain`의 `leavingRef` 단일 실행 가드 |
-| 리벤지 카운트다운 첫 250ms 과대 표시 | `nowTick=performance.now()` 초기화 + 상한 클램프 |
-| 모바일 슬롯 3릴이 ≤360px에서 넘침 | overlay overflow 차단 + ≤360px 릴 축소 (`match-intro.css`) |
+| Optimistic teardown of rematch 'cancel'/'main' races the winner's 'accept', losing coins | Base cancel on server finalization (revenge:result) — if accept wins, proceed to the match as-is, no coin loss |
+| requestError not reset between matches → wrong banner on the next screen | Reset on match-end/slot entry (`OnlineController.tsx`) |
+| REVENGE double-click → 2nd PENDING ack misread as 'winner left' | in-flight guard (`requesting`) + button disabled |
+| settleCoins asymmetric clamp → code-room zero-sum broken, coins created out of thin air | transfer clamp (winner = loser's actual deduction, `db.ts`) + block `/api/unlock` during a match |
+| aborted not protected as a terminal state → a following game:state overwrites the leave notice | ignore round events after termination via an `isTerminal()` guard (`online.ts`) |
+| cancel echo re-fires teardown (double leaveRoom) | single-execution guard `leavingRef` in `goMain` |
+| rematch countdown over-displays the first 250ms | `nowTick=performance.now()` initialization + upper clamp |
+| mobile 3 slot reels overflow at ≤360px | block overlay overflow + shrink reels at ≤360px (`match-intro.css`) |

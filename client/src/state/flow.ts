@@ -1,19 +1,19 @@
 /**
- * 게임 진입 플로우 + 매치 진행 상태 (서버 없음, 메모리 전용).
- * (아키텍트 소유 — 구현 에이전트는 import만, 수정 금지)
+ * Game entry flow + match progression state (no server, memory-only).
+ * (Owned by the architect — implementation agents may only import, must not modify)
  *
- * ── 핵심 사용 시나리오 ────────────────────────────────────────────
- * [lobby] 온라인 버튼:  loggedIn ? openModal('online') : openModal('login-required')
- * [auth]  로그인:        openModal('login') → 분반 선택 → 멤버 선택 → loginAs(userId)
- *                        (login-required에서 진입한 경우 성공 시 openModal('online') — QA-S3-03)
- * [lobby] S6 빠른시작:   openModal('matching')  → MatchingModal이 connecting→waiting 연출
- * [lobby] S7 매칭 성사:  const gameId = matchFound(); navigate(`/game/${gameId}`)
- * [lobby] S7 취소:       cancelMatching()  (모달 'online'으로 복귀 — 타이머는 모달이 clear)
- * [lobby] S6 코드 생성:  const code = createRoomCode()  → n초 후 mock 입장 → matchFound()
- * [lobby] S8 게임 카드:  startOfflineGame(1); navigate('/game/1')
- * [game]  라운드 종료:   reportRoundEnd(state.result)  → flow.phase 확인해 오버레이 표시
- * [game]  다음 라운드:   nextRound()  → 새 createGameNState(...)로 라운드 재시작
- * [game]  나가기/메인:   exitMatch(); navigate('/')
+ * ── Core usage scenarios ────────────────────────────────────────────
+ * [lobby] Online button: loggedIn ? openModal('online') : openModal('login-required')
+ * [auth]  Login:          openModal('login') → select class → select member → loginAs(userId)
+ *                        (if entered from login-required, on success openModal('online') — QA-S3-03)
+ * [lobby] S6 quick start: openModal('matching')  → MatchingModal plays connecting→waiting
+ * [lobby] S7 match found: const gameId = matchFound(); navigate(`/game/${gameId}`)
+ * [lobby] S7 cancel:      cancelMatching()  (return to 'online' modal — timer cleared by the modal)
+ * [lobby] S6 create code: const code = createRoomCode()  → mock joins after n sec → matchFound()
+ * [lobby] S8 game card:   startOfflineGame(1); navigate('/game/1')
+ * [game]  round end:      reportRoundEnd(state.result)  → check flow.phase to show overlay
+ * [game]  next round:     nextRound()  → restart round with a new createGameNState(...)
+ * [game]  exit/main:      exitMatch(); navigate('/')
  * ──────────────────────────────────────────────────────────────────
  */
 import type { GameId, MatchResult, PlayerRole, RoundConfig, RoundResult } from '@/shell';
@@ -34,11 +34,11 @@ export type ModalId =
   | 'ranking';
 
 /**
- * 매치 진행 단계.
- * idle          — 매치 없음 (로비)
- * playing       — 라운드 진행 중
- * round-result  — 라운드 종료, 다음 라운드 대기 (ResultOverlay + btn-next-round)
- * match-result  — 전 라운드 종료, 매치 결과 표시 (ResultOverlay + btn-back-main)
+ * Match progression phase.
+ * idle          — no match (lobby)
+ * playing       — round in progress
+ * round-result  — round ended, waiting for next round (ResultOverlay + btn-next-round)
+ * match-result  — all rounds ended, showing match result (ResultOverlay + btn-back-main)
  */
 export type MatchPhase = 'idle' | 'playing' | 'round-result' | 'match-result';
 
@@ -49,33 +49,33 @@ export interface OpponentInfo {
 }
 
 export interface FlowState {
-  /** 현재 진입 모드. 매치 밖에서는 null */
+  /** Current entry mode. null outside a match */
   mode: Mode | null;
-  /** 선택된 게임. 매치 밖에서는 null */
+  /** Selected game. null outside a match */
   gameId: GameId | null;
-  /** 설정 모달(S4) 값 — 게임의 총 라운드 수/라운드 시간의 정본 */
+  /** Settings modal (S4) values — source of truth for the game's total round count / round time */
   roundConfig: RoundConfig;
-  /** 현재 열린 모달 (null = 없음) */
+  /** Currently open modal (null = none) */
   modal: ModalId | null;
-  /** S6에서 생성한 방 코드 (생성 전 null) */
+  /** Room code created in S6 (null before creation) */
   roomCode: string | null;
-  /** 온라인 모드의 봇 상대. 오프라인이면 null */
+  /** Bot opponent in online mode. null when offline */
   opponent: OpponentInfo | null;
-  /** 매치 진행 단계 */
+  /** Match progression phase */
   phase: MatchPhase;
-  /** 현재 라운드 (1-based). 매치 밖에서는 0 */
+  /** Current round (1-based). 0 outside a match */
   currentRound: number;
-  /** 지금까지의 라운드 결과 */
+  /** Round results so far */
   roundResults: RoundResult[];
-  /** 매치 최종 결과 (phase === 'match-result'일 때만 non-null) */
+  /** Final match result (non-null only when phase === 'match-result') */
   matchResult: MatchResult | null;
-  /** 설정 체크박스: 플레이 가능 게임. 온라인 매치는 이 중에서만 뽑는다. */
+  /** Settings checkboxes: playable games. Online matches are drawn only from these. */
   enabledGames: GameId[];
 }
 
-/** SPEC S4: 기본 3라운드 / 라운드당 60초 (Q1 판정) */
+/** SPEC S4: default 3 rounds / 60 sec per round (Q1 ruling) */
 export const DEFAULT_ROUND_CONFIG: RoundConfig = { roundCount: 3, timePerRoundSec: 60 };
-/** 기본 = 전체 10게임 */
+/** Default = all 10 games */
 export const ALL_GAME_IDS: GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 const INITIAL: FlowState = {
@@ -94,21 +94,21 @@ const INITIAL: FlowState = {
 
 export const flowStore = createStore<FlowState>(INITIAL);
 
-/** React 훅 */
+/** React hook */
 export function useFlow(): FlowState {
   return useStore(flowStore);
 }
 
-/** 비-React 코드용 스냅샷 */
+/** Snapshot for non-React code */
 export function getFlow(): FlowState {
   return flowStore.get();
 }
 
 // ---------------------------------------------------------------------------
-// 설정 (S4)
+// Settings (S4)
 // ---------------------------------------------------------------------------
 
-/** S4 확인 — 저장 후 closeModal()은 호출자가 */
+/** S4 confirm — after saving, the caller calls closeModal() */
 export function setRoundConfig(config: RoundConfig): void {
   flowStore.set({
     roundConfig: {
@@ -118,35 +118,35 @@ export function setRoundConfig(config: RoundConfig): void {
   });
 }
 
-/** S4 "기본값" 버튼용 기본값 (모달 로컬 state를 이 값으로 리셋 — 저장은 확인 눌러야) */
+/** Defaults for the S4 "default" button (reset the modal's local state to these — saving still needs confirm) */
 export function getDefaultRoundConfig(): RoundConfig {
   return { ...DEFAULT_ROUND_CONFIG };
 }
 
-/** 설정 게임 체크박스 저장(최소 1개 보장). */
+/** Save the settings game checkboxes (guarantees at least 1). */
 export function setEnabledGames(games: GameId[]): void {
   const uniq = [...new Set(games)].filter((g) => ALL_GAME_IDS.includes(g));
   flowStore.set({ enabledGames: uniq.length ? uniq : [...ALL_GAME_IDS] });
 }
 
 // ---------------------------------------------------------------------------
-// 모달
+// Modals
 // ---------------------------------------------------------------------------
 
 export function openModal(id: ModalId): void {
   flowStore.set({ modal: id });
 }
 
-/** 현재 모달 닫기 */
+/** Close the current modal */
 export function closeModal(): void {
   flowStore.set({ modal: null });
 }
 
 // ---------------------------------------------------------------------------
-// 온라인 플로우 (S6·S7)
+// Online flow (S6·S7)
 // ---------------------------------------------------------------------------
 
-/** S6 코드 생성하기 — 11자리 숫자 코드 (SPEC Q9: 와이어프레임 그대로 11자리) */
+/** S6 create code — 11-digit numeric code (SPEC Q9: 11 digits, matching the wireframe) */
 export function createRoomCode(): string {
   let code = String(1 + Math.floor(Math.random() * 9));
   for (let i = 1; i < 11; i++) code += Math.floor(Math.random() * 10);
@@ -154,20 +154,20 @@ export function createRoomCode(): string {
   return code;
 }
 
-/** S6 코드 입력 형식 검증 — 숫자만, 1자리 이상 (분반 제한 없음, SPEC S6-7) */
+/** S6 code input format validation — digits only, at least 1 digit (no class restriction, SPEC S6-7) */
 export function isValidRoomCode(code: string): boolean {
   return /^\d+$/.test(code.trim());
 }
 
-/** S7 취소하기 — matching 모달 → online 패널 복귀. (setTimeout 정리는 모달 컴포넌트 책임) */
+/** S7 cancel — matching modal → return to online panel. (clearing setTimeout is the modal component's job) */
 export function cancelMatching(): void {
   flowStore.set({ modal: 'online' });
 }
 
 /**
- * 매칭 성사 (mock) — 봇 상대 배정 + 게임 결정 + 매치 시작 + 모달 닫기.
- * @param gameId 생략 시 랜덤 (SPEC Q8: 빠른 시작=랜덤 허용)
- * @returns 결정된 gameId — 호출자가 navigate(`/game/${gameId}`) 할 것
+ * Match found (mock) — assign bot opponent + decide game + start match + close modal.
+ * @param gameId random if omitted (SPEC Q8: quick start = random allowed)
+ * @returns the decided gameId — the caller should navigate(`/game/${gameId}`)
  */
 export function matchFound(gameId?: GameId): GameId {
   const id: GameId = gameId ?? ((1 + Math.floor(Math.random() * 3)) as GameId);
@@ -185,10 +185,10 @@ export function matchFound(gameId?: GameId): GameId {
 }
 
 // ---------------------------------------------------------------------------
-// 오프라인 플로우 (S8)
+// Offline flow (S8)
 // ---------------------------------------------------------------------------
 
-/** S8 게임 카드 선택 — 매치 시작. 호출자가 navigate(`/game/${gameId}`) 할 것 */
+/** S8 game card selected — start match. The caller should navigate(`/game/${gameId}`) */
 export function startOfflineGame(gameId: GameId): void {
   flowStore.set({
     mode: 'offline',
@@ -207,13 +207,13 @@ function freshMatchFields(): Pick<
 }
 
 // ---------------------------------------------------------------------------
-// 라운드 진행 (S9~S12 게임 화면이 호출)
+// Round progression (called by the S9~S12 game screens)
 // ---------------------------------------------------------------------------
 
 /**
- * 라운드 종료 보고. shared 게임 state의 result(MatchResult)를 그대로 넘기면 된다.
- * 설정된 roundCount를 채우면 매치 종료 판정(라운드 다승제, 동률=DRAW — SPEC §3 공통)
- * 후 phase='match-result', 아니면 phase='round-result'.
+ * Report round end. Just pass the shared game state's result (MatchResult) through.
+ * Once the configured roundCount is reached, judge the match (best-of rounds, tie = DRAW — SPEC §3 common)
+ * then phase='match-result', otherwise phase='round-result'.
  */
 export function reportRoundEnd(roundResult: MatchResult): void {
   const f = flowStore.get();
@@ -234,14 +234,14 @@ export function reportRoundEnd(roundResult: MatchResult): void {
   }
 }
 
-/** ResultOverlay의 "다음 라운드" — 게임 화면은 이 호출 후 새 게임 state를 생성해야 한다 */
+/** ResultOverlay's "next round" — the game screen must create a new game state after this call */
 export function nextRound(): void {
   const f = flowStore.get();
   if (f.phase !== 'round-result') return;
   flowStore.set({ currentRound: f.currentRound + 1, phase: 'playing' });
 }
 
-/** 플레이어별 현재 라운드 승수 (HUD 램프용) */
+/** Current round wins per player (for the HUD lamps) */
 export function getRoundWins(state: FlowState): Record<PlayerRole, number> {
   return {
     P1: state.roundResults.filter((r) => r.winner === 'P1').length,
@@ -249,7 +249,7 @@ export function getRoundWins(state: FlowState): Record<PlayerRole, number> {
   };
 }
 
-/** 매치 종료/이탈 — 매치 관련 필드 전부 초기화. 호출자가 navigate('/') 할 것 */
+/** Match end/leave — reset all match-related fields. The caller should navigate('/') */
 export function exitMatch(): void {
   flowStore.set({
     mode: null,
@@ -265,27 +265,27 @@ export function exitMatch(): void {
 }
 
 // ---------------------------------------------------------------------------
-// 표시용 헬퍼
+// Display helpers
 // ---------------------------------------------------------------------------
 
 export interface PlayerDisplay {
   name: string;
   avatarColorIndex: number;
-  /** "YOU" 점멸 태그 대상 여부 (PLAN §1.5 HUD) */
+  /** Whether this is the "YOU" blinking-tag target (PLAN §1.5 HUD) */
   isYou: boolean;
 }
 
 /**
- * HUD/캔버스에 표시할 P1/P2 이름·아바타 + "내 쪽(isYou)" 구분.
- * - 실서버 온라인: 서버가 이 라운드에 배정한 실제 역할(online.role)로 isYou 결정.
- *     라운드마다 역할이 랜덤이라, 이게 없으면 "내가 파랑(P1)인지 빨강(P2)인지" 알 수 없다.
- * - (레거시) offline mock 봇 모드: 항상 P1이 나.
- * - offline 로컬 2인: "PLAYER 1" / "PLAYER 2" (isYou 없음).
+ * P1/P2 names·avatars to show on the HUD/canvas + "my side (isYou)" distinction.
+ * - Real-server online: isYou is decided by the actual role the server assigned this round (online.role).
+ *     Roles are random each round, so without this you can't tell "am I blue (P1) or red (P2)".
+ * - (legacy) offline mock bot mode: P1 is always me.
+ * - offline local 2-player: "PLAYER 1" / "PLAYER 2" (no isYou).
  */
 export function getPlayerDisplays(flow: FlowState): Record<PlayerRole, PlayerDisplay> {
   const session = getSession();
 
-  // 실서버 온라인 매치 진행 중이면 서버 배정 역할을 최우선으로 반영.
+  // If a real-server online match is in progress, prioritize the server-assigned role.
   const online = getOnline();
   const onlineActive =
     online.role != null &&
@@ -293,7 +293,7 @@ export function getPlayerDisplays(flow: FlowState): Record<PlayerRole, PlayerDis
     (online.phase === 'countdown' || online.phase === 'playing' || online.phase === 'round-result');
   if (onlineActive) {
     const myName = session.nickname ?? 'YOU';
-    const oppName = online.opponent?.nickname ?? '상대';
+    const oppName = online.opponent?.nickname ?? 'Opponent';
     const iAmP1 = online.role === 'P1';
     return {
       P1: { name: iAmP1 ? myName : oppName, avatarColorIndex: 0, isYou: iAmP1 },

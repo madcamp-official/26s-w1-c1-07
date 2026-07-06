@@ -1,13 +1,13 @@
 /**
- * S3 로그인 요구 모달. 담당: auth 에이전트.
- * 본체 testid: modal-login-required / 부품: btn-login
+ * S3 login-required modal. Owner: auth agent.
+ * root testid: modal-login-required / parts: btn-login
  *
- * PLAN §2-S3: 소형 모달(~440px), 마퀴 "CREDIT REQUIRED"(옐로), 코인 슬롯 픽토그램 +
- *   "온라인 게임은 로그인이 필요합니다!" + [로그인] / [취소하기(error 보더)].
- * 로그인 버튼 → 로스터 로그인 모달(분반 → 멤버 선택)로 교체 진입.
- *   로그인 성공 시 원래 의도였던 온라인 패널(S6)로 연속 진입 (QA-S3-03).
- * 취소하기 / 배경 클릭 / ESC → 모달 닫기 (메인 유지).
- * 열림 조건: flow.modal === 'login-required' (전역 호스트 상시 마운트 — App.tsx).
+ * PLAN §2-S3: small modal (~440px), marquee "CREDIT REQUIRED" (yellow), coin-slot pictogram +
+ *   "Online play requires login!" + [Login] / [Cancel (error border)].
+ * Login button → replaces into the roster login modal (class → member select).
+ *   On successful login, continues into the originally intended online panel (S6) (QA-S3-03).
+ * Cancel / background click / ESC → close the modal (stays on main).
+ * Open condition: flow.modal === 'login-required' (global host, always mounted — App.tsx).
  */
 import { Button, Modal } from '../components';
 import { closeModal, useFlow } from '../state/flow';
@@ -31,12 +31,12 @@ export default function LoginRequiredModal() {
         <div className="s3-coinslot" aria-hidden>
           <i />
         </div>
-        <p className="s3-msg font-display">온라인 게임은 로그인이 필요합니다!</p>
+        <p className="s3-msg font-display">Online play requires login!</p>
         <Button variant="primary" block data-testid="btn-login" onClick={() => openLoginModal('online')}>
-          로그인
+          Login
         </Button>
         <Button variant="danger" block onClick={closeModal}>
-          취소하기
+          Cancel
         </Button>
       </div>
     </Modal>

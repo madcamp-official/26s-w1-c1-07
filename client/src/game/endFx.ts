@@ -1,36 +1,36 @@
 /**
- * 게임 종료 연출 공용 뼈대 — 온라인/오프라인 공통.
+ * Shared skeleton for game end effects — common to online/offline.
  *
- * 문제: 라운드가 끝나면(state.result 확정) 화면이 종료 프레임에 '얼어붙어' 어중간하게 끊긴다.
- *       (특히 온라인은 서버가 틱을 멈춰 마지막 스냅샷에서 정지)
- * 해결: 각 게임 렌더 루프가 'result가 null→승패로 바뀌는 프레임'을 감지해 종료 연출 단계로 진입,
- *       그 동안 게임별 FX(폭발 등)나 기본 FX(플래시)를 캔버스에 그린다. 서버 라운드 간격(2.5s)
- *       안에 충분히 들어간다.
+ * Problem: when a round ends (state.result decided), the screen 'freezes' on the end frame and cuts off awkwardly.
+ *          (online in particular, the server stops ticking and halts on the last snapshot)
+ * Solution: each game's render loop detects the frame where 'result goes from null→win/loss' and enters the
+ *           end-effect phase, during which it draws a per-game FX (explosion, etc.) or the default FX (flash) on
+ *           the canvas. It fits comfortably within the server round interval (2.5s).
  *
- * 사용:
+ * Usage:
  *   const endRef = useRef(createEndTracker());
- *   // 렌더 루프에서 drawScene 뒤:
- *   const started = endRef.current.update(state.result, now); // 방금 끝났으면 true(폭발 스폰 등 트리거)
- *   drawEndFlash(ctx, CW, CH, endRef.current.age(now));       // 기본 default 연출(플래시)
+ *   // in the render loop, after drawScene:
+ *   const started = endRef.current.update(state.result, now); // true if it just ended (trigger explosion spawn, etc.)
+ *   drawEndFlash(ctx, CW, CH, endRef.current.age(now));       // the default effect (flash)
  */
 import type { GameResult } from '@madpump/shared';
 
-/** 기본 플래시 지속(ms) — 결정 순간 흰 섬광이 빠르게 페이드 */
+/** Default flash duration (ms) — at the decisive moment a white flash fades out quickly */
 export const FLASH_MS = 320;
-/** 종료 연출 전체 창(ms) — 폭발 파편 등 리치 연출의 수명 */
+/** Full end-effect window (ms) — the lifetime of rich effects like explosion debris */
 export const END_ANIM_MS = 900;
 
 export interface EndTracker {
-  /** 매 프레임 호출. result가 방금 null→승패로 바뀐 프레임이면 true(연출 시작 트리거용). */
+  /** Called every frame. True on the frame where result just went null→win/loss (to trigger the effect start). */
   update(result: GameResult, now: number): boolean;
-  /** 종료 연출 경과(ms). 아직 진행 중(result=null)이면 null. */
+  /** Elapsed time of the end effect (ms). Null if still in progress (result=null). */
   age(now: number): number | null;
-  /** 현재 확정된 결과(연출 중이면 승패, 아니면 null). */
+  /** The currently decided result (win/loss while the effect is playing, otherwise null). */
   readonly result: GameResult;
   reset(): void;
 }
 
-/** 게임 인스턴스당 하나. result 전환 시점을 기억해 경과 시간을 준다. 새 라운드(result=null)면 자동 리셋. */
+/** One per game instance. Remembers when result transitioned and gives elapsed time. Auto-resets on a new round (result=null). */
 export function createEndTracker(): EndTracker {
   let prev: GameResult = null;
   let at = 0;
@@ -39,7 +39,7 @@ export function createEndTracker(): EndTracker {
       if (result && !prev) {
         prev = result;
         at = now;
-        return true; // 전환 프레임
+        return true; // transition frame
       }
       if (!result && prev) {
         prev = null;
@@ -61,9 +61,9 @@ export function createEndTracker(): EndTracker {
 }
 
 /**
- * 기본 종료 플래시(전 게임 default) — 결정 순간 흰 섬광이 빠르게 페이드.
- * 뷰어 관점(승/패) 불필요 — 어느 화면에서든 "결정적 순간"을 알린다. drawScene 마지막에 호출.
- * @param ageMs createEndTracker.age(now) 반환값(진행 전이면 null → 아무것도 안 그림)
+ * Default end flash (default for all games) — at the decisive moment a white flash fades out quickly.
+ * No viewer perspective (win/loss) needed — signals the "decisive moment" on any screen. Call at the end of drawScene.
+ * @param ageMs return value of createEndTracker.age(now) (null before it starts → draws nothing)
  */
 export function drawEndFlash(
   ctx: CanvasRenderingContext2D,
@@ -81,7 +81,7 @@ export function drawEndFlash(
   ctx.restore();
 }
 
-// ── 폭발 연출 (게임5 등 충돌 게임용 재사용 헬퍼) ────────────────────────────
+// ── Explosion effect (reusable helper for collision games like Game 5) ────────────────────────────
 export interface Particle {
   x: number;
   y: number;
@@ -89,7 +89,7 @@ export interface Particle {
   vy: number;
 }
 
-/** (cx,cy) 중심에서 방사하는 폭발 파편 생성. count개, 각도·속도 분산(약간의 랜덤). */
+/** Creates explosion debris radiating from center (cx,cy). `count` particles, spread in angle and speed (slightly randomized). */
 export function makeExplosion(cx: number, cy: number, count = 20): Particle[] {
   const out: Particle[] = [];
   for (let i = 0; i < count; i++) {
@@ -101,8 +101,8 @@ export function makeExplosion(cx: number, cy: number, count = 20): Particle[] {
 }
 
 /**
- * 폭발 그리기 — 코어 흰 섬광 + 방사 파편(중력 낙하) + 페이드. END_ANIM_MS 후 사라짐.
- * @param ageMs 폭발 시작 후 경과(ms)
+ * Draws the explosion — core white flash + radiating debris (falls under gravity) + fade. Disappears after END_ANIM_MS.
+ * @param ageMs elapsed time since the explosion started (ms)
  */
 export function drawExplosion(
   ctx: CanvasRenderingContext2D,
@@ -116,7 +116,7 @@ export function drawExplosion(
   const t = ageMs / 1000;
   const fade = Math.max(0, 1 - ageMs / END_ANIM_MS);
   ctx.save();
-  // 코어 섬광 링(초반 220ms)
+  // core flash ring (first 220ms)
   const flash = Math.max(0, 1 - ageMs / 220);
   if (flash > 0) {
     ctx.globalAlpha = flash;
@@ -125,7 +125,7 @@ export function drawExplosion(
     ctx.arc(cx, cy, 10 + ageMs * 0.18, 0, Math.PI * 2);
     ctx.fill();
   }
-  // 파편(방사 + 약한 중력)
+  // debris (radiating + weak gravity)
   ctx.globalAlpha = fade;
   ctx.fillStyle = color;
   ctx.shadowColor = color;
@@ -139,7 +139,7 @@ export function drawExplosion(
   ctx.restore();
 }
 
-/** 종료 연출용 화면 흔들림 오프셋(감쇠). drawScene 전 ctx.translate에 사용. */
+/** Screen-shake offset for the end effect (decaying). Use with ctx.translate before drawScene. */
 export function shakeOffset(ageMs: number | null, mag = 8): { x: number; y: number } {
   if (ageMs === null || ageMs > 260) return { x: 0, y: 0 };
   const decay = 1 - ageMs / 260;

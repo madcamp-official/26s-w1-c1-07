@@ -1,16 +1,16 @@
 /**
- * KeyCap — 온스크린 키캡 (radius 6px, 플레이어색 보더, 아이콘 + 키 문자) (PLAN §1.5).
- * (아키텍트 소유 — 구현 에이전트 수정 금지)
+ * KeyCap — on-screen keycap (radius 6px, player-color border, icon + key char) (PLAN §1.5).
+ * (Owned by the architect — implementation agents must not modify)
  *
- * SPEC Q2: 패드에 실제 배정 키(q/w/u/i)를 표기해야 한다.
- * lit=true로 입력 순간 램프 점등(즉발 점등 → 80ms 후 소등은 호출측 state로).
+ * SPEC Q2: the pad must show the actually assigned keys (q/w/u/i).
+ * lit=true lights the lamp at the input moment (instant on → off after 80ms is handled by caller state).
  *
- * 사용법 (게임 에이전트):
- *   <KeyCap role="P1" keyChar="Q" icon="▼" lit={qPressed} label="내리기" />
+ * Usage (game agent):
+ *   <KeyCap role="P1" keyChar="Q" icon="▼" lit={qPressed} label="Drop" />
  *   <KeyCap role="P2" keyChar="I" icon="▶" lit={iPressed} />
  *
- * 입력 순간 점등 훅(useKeyLamp)도 함께 제공:
- *   const [lit, flash] = useKeyLamp();  // flash() 호출 시 80ms 점등
+ * An input-moment lighting hook (useKeyLamp) is also provided:
+ *   const [lit, flash] = useKeyLamp();  // lights for 80ms when flash() is called
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayerRole } from '@/shell';
@@ -18,13 +18,13 @@ import './keycap.css';
 
 export interface KeyCapProps {
   role: PlayerRole;
-  /** 키 문자 (Q/W/U/I) — Press Start 2P로 표기 */
+  /** Key char (Q/W/U/I) — rendered in Press Start 2P */
   keyChar: string;
-  /** 키 위 화살표/아이콘 (▲▼◀▶ ⚔ 등) */
+  /** Arrow/icon above the key (▲▼◀▶ ⚔ etc.) */
   icon?: string;
-  /** 입력 순간 점등 */
+  /** Light up at the input moment */
   lit?: boolean;
-  /** 아이콘 아래 작은 한글 라벨 (선택) */
+  /** Small label under the icon (optional) */
   label?: string;
   className?: string;
 }
@@ -52,7 +52,7 @@ export function KeyCap({ role, keyChar, icon, lit = false, label, className = ''
 }
 
 /**
- * 입력 순간 램프 점등 훅 — flash() 호출 시 80ms 동안 lit=true (§1.4 키 입력 피드백).
+ * Input-moment lamp lighting hook — lit=true for 80ms when flash() is called (§1.4 key input feedback).
  */
 export function useKeyLamp(durationMs = 80): [boolean, () => void] {
   const [lit, setLit] = useState(false);

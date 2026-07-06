@@ -1,14 +1,14 @@
-/* MatchIntro — 온라인 매치 슬롯머신 + VS 인트로 (MatchIntro.tsx) */
+/* MatchIntro — online match slot machine + VS intro (MatchIntro.tsx) */
 
 .mi-overlay {
   position: fixed;
   inset: 0;
-  z-index: 120; /* 모달(100)보다 위 */
+  z-index: 120; /* above the modal (100) */
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
-  overflow: hidden; /* 좁은 뷰포트에서 릴이 넘쳐도 가로 스크롤 방지(#8) */
+  overflow: hidden; /* prevent horizontal scroll even if reels overflow on a narrow viewport (#8) */
   background: rgba(13, 2, 33, 0.92);
 }
 
@@ -79,7 +79,7 @@
     transform: translateY(0);
   }
   to {
-    transform: translateY(-1500px); /* 스트립 절반(10칸 × 150px) — 무한 순환 */
+    transform: translateY(-1500px); /* half the strip (10 slots × 150px) — infinite loop */
   }
 }
 
@@ -107,7 +107,7 @@
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
-/* ── VS 화면 (베팅 공개 2초) ── */
+/* ── VS screen (bet reveal, 2s) ── */
 .mi-vs {
   display: flex;
   align-items: center;
@@ -203,7 +203,7 @@
   }
 }
 
-/* 초협소(≤360px: iPhone SE1/Galaxy Fold 외부화면 등) — 3릴(3×76+2×8=244px)이 넘치지 않게 */
+/* ultra-narrow (≤360px: iPhone SE1/Galaxy Fold outer screen, etc.) — keep 3 reels (3×76+2×8=244px) from overflowing */
 @media (max-width: 360px) {
   .mi-reels {
     gap: 8px;

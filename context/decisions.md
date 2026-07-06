@@ -1,30 +1,30 @@
-# 결정 기록 (decisions) — append-only
+# Decision log (decisions) — append-only
 
-> 새 결정은 **아래에 추가만**(과거 수정 X). "무엇을 / 왜". 형식: `## YYYY-MM-DD 제목`
+> New decisions are **appended below only** (no editing the past). "What / why". Format: `## YYYY-MM-DD Title`
 
-## 2026-07-04 게임 로직은 game-test, 디자인은 design-02 기준
-game-test 브랜치의 검증된 게임 로직/상수만 이식하고, design-lab의 UI/시스템은 유지. main은 lab 폴더를 참조하지 않는 **자립 구조**(삭제해도 빌드). 왜: lab은 실험용이라 언제든 사라질 수 있음. 가드: `scripts/check-standalone.sh`.
+## 2026-07-04 Game logic follows game-test, design follows design-02
+Port only the verified game logic/constants from the game-test branch, and keep the UI/system from design-lab. main is a **standalone structure** that does not reference the lab folders (builds even if deleted). Why: labs are experimental and can disappear at any time. Guard: `scripts/check-standalone.sh`.
 
-## 2026-07-04 넷코드 = 서버권위 "덤 클라"(예측 없음)
-클라→서버는 입력키만, 서버→클라는 상태만. 모든 게임 같은 소켓 봉투. 왜: 안티치트 + 게임별 특수 동기화 로직 제거.
+## 2026-07-04 Netcode = server-authoritative "dumb client" (no prediction)
+Client→server is input keys only, server→client is state only. All games use the same socket envelope. Why: anti-cheat + removes per-game special sync logic.
 
-## 2026-07-04 DB는 A/B 슬롯(역할 기록 안 함)
-game_match(playerA/playerB), game_round(result=A_WIN/B_WIN/DRAW). 승패는 매치 단위, 승률은 라운드 단위. 왜: 역할(P1/P2)은 표시용일 뿐 영속 데이터 아님.
+## 2026-07-04 DB uses A/B slots (does not record roles)
+game_match (playerA/playerB), game_round (result=A_WIN/B_WIN/DRAW). Win/loss is per match, win rate is per round. Why: roles (P1/P2) are display-only, not persistent data.
 
-## 2026-07-05 온라인 입력은 U/I 두 키만
-접속자는 U(slotA)·I(slotB)만 사용, 서버가 역할 물리키로 재기입. 하단 컨트롤 바도 내 역할(색)의 U/I만 표시. 왜: 한 손 두 버튼 + "내가 어느 캐릭터냐" 혼란 제거.
+## 2026-07-05 Online input uses only the two keys U/I
+A connected player uses only U (slotA) and I (slotB); the server rewrites them into role physical keys. The bottom control bar also shows only the U/I of my role (color). Why: one hand, two buttons + removes the "which character am I" confusion.
 
-## 2026-07-05 색(역할)은 매치당 고정
-라운드마다 랜덤이던 역할을 매치 시작 때 1회만 배정(server/src/match.ts 생성자). 왜: 한 매치 안에서 색이 안 바뀌게(종혁 요청).
+## 2026-07-05 Color (role) is fixed per match
+The role, which used to be random each round, is assigned only once at match start (server/src/match.ts constructor). Why: so the color does not change within a match (Jonghyeok's request).
 
-## 2026-07-05 서버 틱 60Hz
-TICK_MS 33→16. 왜: 클라 rAF와 맞춰 빠른 게임(공룡 등) 온라인 렌더 끊김 완화.
+## 2026-07-05 Server tick 60Hz
+TICK_MS 33→16. Why: matches the client rAF to reduce online render stutter for fast games (Dino etc.).
 
-## 2026-07-05 오목 커서는 클라 로컬 파생
-스캔 커서를 서버가 브로드캐스트하지 않고 클라가 turnClock로 로컬 계산, 놓은 순간의 칸만 전송. 왜: 30Hz 지터 제거 + "서버는 고른 칸만 알면 됨".
+## 2026-07-05 Gomoku cursor is derived locally on the client
+Instead of the server broadcasting the scan cursor, the client computes it locally from turnClock and only sends the cell at the moment it is placed. Why: removes 30Hz jitter + "the server only needs to know the chosen cell".
 
-## 2026-07-05 배포 = rsync + tmux 스크립트, 비밀은 분리
-`scripts/deploy.sh`(코드 rsync + 원격 tmux 재기동, `server/.env`는 제외). 비밀은 git 밖: DB비번=VM의 server/.env, SSH키=각자 ~/.ssh, 배포설정=로컬 deploy.env. 왜: 공동작업자/AI가 배포 재현 + 비밀 유출 방지.
+## 2026-07-05 Deploy = rsync + tmux script, secrets kept separate
+`scripts/deploy.sh` (code rsync + remote tmux restart, `server/.env` excluded). Secrets stay out of git: DB password = VM's server/.env, SSH key = each person's ~/.ssh, deploy config = local deploy.env. Why: collaborators/AI can reproduce the deploy + prevent secret leaks.
 
-## 2026-07-05 에이전트 컨텍스트 공유 = 루트 AGENTS.md + context/ 폴더
-단일 코드베이스라 별도 레포 대신 코드와 한 히스토리로 원자적 관리. 왜: 여러 사람/AI가 같은 main을 만져 진행상황·결정·현재작업 공유 필요.
+## 2026-07-05 Agent context sharing = root AGENTS.md + context/ folder
+Since it is a single codebase, manage it atomically in one history with the code instead of a separate repo. Why: multiple people/AI touch the same main and need to share progress, decisions, and current work.

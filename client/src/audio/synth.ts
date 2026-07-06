@@ -1,7 +1,7 @@
 /**
- * 8-bit 합성 코어 (순수 — AudioContext/DOM 의존 없음). sfxr식 원샷 SFX + 칩튠 루프 BGM.
- * 담당: audio 에이전트. 외부 오디오 파일 없이 브라우저에서 실시간 합성한다.
- * (설계·톤은 sound-lab 프리셋과 동일 계보 — 게임 SFX 정본)
+ * 8-bit synthesis core (pure — no AudioContext/DOM dependency). sfxr-style one-shot SFX + chiptune loop BGM.
+ * Owner: audio agent. Synthesizes in real time in the browser with no external audio files.
+ * (design and tone share the same lineage as the sound-lab presets — game SFX source of truth)
  */
 export type Wave = 'square' | 'saw' | 'triangle' | 'sine' | 'noise';
 
@@ -14,14 +14,14 @@ export interface SfxParams {
   sustain?: number;
   decay?: number;
   punch?: number;
-  /** 주파수 슬라이드 (옥타브/초) */
+  /** frequency slide (octaves/sec) */
   slide?: number;
-  /** 아르페지오: 이 시각(초)에 freq를 arpMul배 */
+  /** arpeggio: at this time (sec), multiply freq by arpMul */
   arpTime?: number;
   arpMul?: number;
   vibDepth?: number;
   vibSpeed?: number;
-  /** 1 = 로우패스 off, <1 = 필터 강도 */
+  /** 1 = low-pass off, <1 = filter strength */
   lpf?: number;
   hpf?: number;
   gain?: number;
@@ -72,7 +72,7 @@ export function mtof(m: number): number {
 
 const clampf = (v: number): number => (v > 1 ? 1 : v < -1 ? -1 : v);
 
-/** 한 방 SFX 렌더 (sfxr식) */
+/** render a one-shot SFX (sfxr-style) */
 export function renderSFX(p: SfxParams, sr: number = SR, rng: () => number = Math.random): Float32Array {
   const atk = Math.max(0.0005, p.attack ?? 0.001);
   const sus = Math.max(0, p.sustain ?? 0.03);
@@ -207,7 +207,7 @@ function addNoise(
   }
 }
 
-/** 짧은 멀티노트 징글 (WIN/LOSE/DRAW/GO 등) */
+/** short multi-note jingle (WIN/LOSE/DRAW/GO, etc.) */
 export function renderSeq(notes: SeqNote[], sr: number = SR): Float32Array {
   let end = 0;
   for (const n of notes) {
@@ -221,7 +221,7 @@ export function renderSeq(notes: SeqNote[], sr: number = SR): Float32Array {
   return out;
 }
 
-/** 코드 뱀프 → 이음매 없는 칩튠 루프 (버퍼 길이 = 정확히 마디 배수) */
+/** chord vamp → seamless chiptune loop (buffer length = exact multiple of bars) */
 export function renderVamp(track: VampTrack, sr: number = SR): Float32Array {
   const bpm = track.bpm;
   const density = track.density ?? 16;

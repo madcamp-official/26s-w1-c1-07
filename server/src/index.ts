@@ -1,7 +1,7 @@
 /**
- * MADPUMP 서버 — Fastify(REST) + Socket.IO(실시간) 단일 프로세스.
- * 로스터 로그인(분반→멤버 선택, docs/AUTH.md) + 소켓 핸드셰이크 + 로비(코드방·빠른시작)
- * + 서버권위 매치러너 + 분반 리더보드.
+ * MADPUMP server — Fastify(REST) + Socket.IO(real-time) single process.
+ * Roster login (Class → member select, docs/AUTH.md) + socket handshake + lobby (code room · quick start)
+ * + server-authoritative match runner + class leaderboard.
  */
 import { createServer } from 'node:http'
 import { existsSync } from 'node:fs'
@@ -49,16 +49,16 @@ import { MatchRunner, type Participant } from './match'
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT ?? 3000)
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173'
-// 쿠키 Secure는 HTTPS일 때만 켠다. HTTP 배포에서 Secure를 켜면 브라우저가 쿠키를 안 보내
-// 세션/소켓 인증이 실패한다. HTTPS(cloudflared/도메인) 붙일 때 COOKIE_SECURE=1 로 켤 것.
+// Enable the Secure cookie flag only on HTTPS. On an HTTP deployment, turning on Secure makes the browser
+// stop sending the cookie, so session/socket auth fails. Turn it on with COOKIE_SECURE=1 when using HTTPS (cloudflared/domain).
 const secureCookies = process.env.COOKIE_SECURE === '1'
 
 const app = Fastify({ logger: false })
 await app.register(cookie)
-// 개발(5173→3000 크로스오리진) REST에 자격증명 CORS. 프로덕션은 같은 오리진이라 무영향.
+// Credentialed CORS for dev (5173→3000 cross-origin) REST. No effect in production since it's the same origin.
 await app.register(cors, { origin: CLIENT_ORIGIN, credentials: true })
 
-// prod: 빌드된 클라 정적 서빙 (client/dist)
+// prod: serve the built client statically (client/dist)
 const clientDist = path.resolve(dirname, '../../client/dist')
 if (existsSync(clientDist)) {
   await app.register(fstatic, { root: clientDist })
@@ -69,18 +69,18 @@ function cookieOpts() {
   return { httpOnly: true, secure: secureCookies, sameSite: 'lax' as const, path: '/' }
 }
 
-// ── REST: 로스터 로그인 (docs/AUTH.md) ──────────────────────────
-// 분반(user_group)과 분반별 고정 멤버(app_user)는 prisma/seed.ts 로 미리 시드된다.
-// 내부망 한정 인원용이라 비밀번호 등 인증 절차 없이 멤버 선택만으로 로그인한다.
+// ── REST: roster login (docs/AUTH.md) ──────────────────────────
+// Classes (user_group) and each class's fixed members (app_user) are pre-seeded via prisma/seed.ts.
+// Since this is for an internal-network-only audience, login is just member selection with no password or other auth step.
 
-/** 로그인 다이얼로그용 분반·멤버 명단 (인증 불필요) */
+/** Class/member list for the login dialog (no auth required) */
 app.get('/api/roster', async () => {
   const groups = await prisma.userGroup.findMany({
     orderBy: { name: 'asc' },
     include: {
       users: {
         where: { deletedAt: null },
-        orderBy: { id: 'asc' }, // 시드 순서(=명단 순서) 유지
+        orderBy: { id: 'asc' }, // keep seed order (= roster order)
         select: { id: true, nickname: true },
       },
     },
@@ -94,17 +94,17 @@ app.get('/api/roster', async () => {
   }
 })
 
-/** 멤버 선택 로그인 — 로스터에 있는 userId 면 즉시 세션 발급 */
+/** Member-select login — issues a session immediately for a userId that's in the roster */
 app.post('/api/login', async (req, reply) => {
   const body = (req.body ?? {}) as { userId?: string }
   if (!body.userId || !/^\d+$/.test(body.userId)) {
-    return reply.code(400).send({ error: { code: 'VALIDATION', message: 'userId 필요' } })
+    return reply.code(400).send({ error: { code: 'VALIDATION', message: 'userId required' } })
   }
   const user = await prisma.appUser.findFirst({
     where: { id: BigInt(body.userId), deletedAt: null },
     include: { group: true },
   })
-  if (!user) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '없는 유저' } })
+  if (!user) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'No such user' } })
 
   const groupName = user.group?.name ?? null
   const sid = createSession({ userId: user.id, nickname: user.nickname, imageUrl: null, groupName })
@@ -125,7 +125,7 @@ app.post('/api/login', async (req, reply) => {
 app.get('/api/me', async (req) => {
   const s = getSession(req.cookies[SESSION_COOKIE])
   if (!s) return { status: 'ANON', user: null }
-  // 코인/해금은 수시로 변하므로 세션이 아니라 DB에서 최신값을 읽는다
+  // Coins/unlocks change frequently, so read the latest values from the DB rather than the session
   const u = await prisma.appUser.findFirst({ where: { id: s.userId, deletedAt: null } })
   if (!u) return { status: 'ANON', user: null }
   return {
@@ -141,41 +141,41 @@ app.get('/api/me', async (req) => {
   }
 })
 
-// ── REST: 오프라인 게임 해금 ────────────────────────────────────
-// 잠긴 두 게임(LOCKABLE_GAME_IDS)을 순서 무관하게 개별 해금 — 클라가 gameId 를 지정.
-// unlocked_count 는 LOCKABLE_GAME_IDS 순서의 비트마스크로 저장(shared/coins.ts).
+// ── REST: offline game unlock ────────────────────────────────────
+// Unlock the two locked games (LOCKABLE_GAME_IDS) individually in any order — the client specifies gameId.
+// unlocked_count is stored as a bitmask in LOCKABLE_GAME_IDS order (shared/coins.ts).
 app.post('/api/unlock', async (req, reply) => {
   const s = getSession(req.cookies[SESSION_COOKIE])
-  if (!s) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: '로그인 필요' } })
-  // 온라인 매치/큐에 베팅 코인이 락돼 있으면 해금(코인 소비)을 막는다.
-  // 안 그러면 락된 베팅이 정산 시점에 보유를 초과해 settleCoins 클램프가 코인을 무에서 만든다(리뷰 #4).
+  if (!s) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: 'Login required' } })
+  // If bet coins are locked in an online match/queue, block unlocking (which spends coins).
+  // Otherwise a locked bet could exceed the balance at settlement time and the settleCoins clamp would create coins from nothing (review #4).
   const uid = s.userId.toString()
   if (findRoomByUser(uid) || quickQueue.some((q) => q.userId === uid)) {
-    return reply.code(409).send({ error: { code: 'IN_MATCH', message: '매치 중에는 해금할 수 없어요' } })
+    return reply.code(409).send({ error: { code: 'IN_MATCH', message: "You can't unlock during a match" } })
   }
   const u = await prisma.appUser.findFirst({ where: { id: s.userId, deletedAt: null } })
-  if (!u) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: '로그인 필요' } })
+  if (!u) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: 'Login required' } })
 
   const gameId = Number((req.body as { gameId?: unknown } | null)?.gameId)
   if (!isLockable(gameId)) {
-    return reply.code(400).send({ error: { code: 'INVALID_GAME', message: '해금할 수 없는 게임이에요' } })
+    return reply.code(400).send({ error: { code: 'INVALID_GAME', message: "This game can't be unlocked" } })
   }
   const bit = unlockBit(gameId)
   if ((u.unlockedCount & bit) !== 0) {
-    return reply.code(400).send({ error: { code: 'ALREADY_UNLOCKED', message: '이미 해금된 게임이에요' } })
+    return reply.code(400).send({ error: { code: 'ALREADY_UNLOCKED', message: 'This game is already unlocked' } })
   }
   const cost = unlockCost(gameId)
   if (u.coins < cost) {
-    return reply.code(400).send({ error: { code: 'NOT_ENOUGH_COINS', message: `코인 부족 (필요: ${cost})` } })
+    return reply.code(400).send({ error: { code: 'NOT_ENOUGH_COINS', message: `Not enough coins (need: ${cost})` } })
   }
 
-  // 조건부 갱신(코인·현재 마스크 동시 검증)으로 중복 클릭/동시 요청에도 이중 차감 방지
+  // Conditional update (validating coins and the current mask together) prevents double deduction on duplicate clicks/concurrent requests
   const updated = await prisma.appUser.updateMany({
     where: { id: u.id, unlockedCount: u.unlockedCount, coins: { gte: cost } },
     data: { coins: { decrement: cost }, unlockedCount: u.unlockedCount | bit },
   })
   if (updated.count === 0) {
-    return reply.code(409).send({ error: { code: 'CONFLICT', message: '다시 시도해주세요' } })
+    return reply.code(409).send({ error: { code: 'CONFLICT', message: 'Please try again' } })
   }
   const fresh = await prisma.appUser.findUniqueOrThrow({ where: { id: u.id } })
   return {
@@ -186,25 +186,25 @@ app.post('/api/unlock', async (req, reply) => {
   }
 })
 
-// ── REST: 코인 노가다 보상 수령 ─────────────────────────────────
-// 클라가 솔로 펌프 미션(FARM_TARGET점 / FARM_DURATION초, docs/COINS.md)을 클리어하면 호출.
-// 보상 액수는 서버가 확률표(FARM_REWARD_TABLE, 기댓값 ~4.7코인)로 추첨 — 클라가 지정 불가.
-// 게임 자체는 클라 계산(로스터 로그인과 같은 신뢰 모델) — 쿨다운으로 스팸만 차단.
-const farmLastClaim = new Map<string, number>() // userId → 마지막 수령 시각(ms)
+// ── REST: claim coin-grind reward ─────────────────────────────────
+// Called when the client clears the solo Pump mission (FARM_TARGET points / FARM_DURATION seconds, docs/COINS.md).
+// The reward amount is drawn by the server from a probability table (FARM_REWARD_TABLE, expected value ~4.7 coins) — the client can't specify it.
+// The game itself is client-computed (same trust model as roster login) — the cooldown only blocks spam.
+const farmLastClaim = new Map<string, number>() // userId → last claim time (ms)
 
 app.post('/api/farm/claim', async (req, reply) => {
   const s = getSession(req.cookies[SESSION_COOKIE])
-  if (!s) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: '로그인 필요' } })
+  if (!s) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: 'Login required' } })
 
   const key = s.userId.toString()
   const now = Date.now()
   const last = farmLastClaim.get(key) ?? 0
   if (now - last < FARM_CLAIM_COOLDOWN_MS) {
-    // 남은 시간을 알려줘 클라가 자동으로 기다렸다 재시도할 수 있게 (정당한 연속 클리어 보호)
+    // Report the remaining time so the client can automatically wait and retry (protects legitimate consecutive clears)
     const retryAfterMs = FARM_CLAIM_COOLDOWN_MS - (now - last)
     return reply
       .code(429)
-      .send({ error: { code: 'COOLDOWN', message: '잠시 후 다시 시도해주세요', retryAfterMs } })
+      .send({ error: { code: 'COOLDOWN', message: 'Please try again in a moment', retryAfterMs } })
   }
   farmLastClaim.set(key, now)
 
@@ -217,12 +217,12 @@ app.post('/api/farm/claim', async (req, reply) => {
   return { status: 'OK', reward, coins: u.coins }
 })
 
-// ── REST: 분반 리더보드 ─────────────────────────────────────────
-// 내 분반 유저들을 보유 코인 기준으로 랭킹 (승/무/패는 game_match 집계 — 참고 표시).
-// 정렬: 코인↓ → 승수↓ → userId↑ / 코인 동점은 같은 등수(competition ranking).
+// ── REST: class leaderboard ─────────────────────────────────────────
+// Rank my class's users by held coins (win/draw/loss aggregated from game_match — shown for reference).
+// Sort: coins↓ → wins↓ → userId↑ / coin ties get the same rank (competition ranking).
 app.get('/api/leaderboard', async (req, reply) => {
   const s = getSession(req.cookies[SESSION_COOKIE])
-  if (!s) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: '로그인 필요' } })
+  if (!s) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: 'Login required' } })
   const myUserId = s.userId.toString()
   if (!s.groupName) return { status: 'OK', groupName: null, myUserId, entries: [] }
 
@@ -265,16 +265,16 @@ app.get('/api/leaderboard', async (req, reply) => {
       wins: x.wins,
       draws: x.draws,
       losses: x.losses,
-      rank: 0, // 아래에서 채움
+      rank: 0, // filled in below
     }
   })
-  // 정렬: 보유 코인↓ → (표시 안정용) 승수↓ → userId↑
+  // Sort: held coins↓ → (for display stability) wins↓ → userId↑
   entries.sort((x, y) => {
     if (y.coins !== x.coins) return y.coins - x.coins
     if (y.wins !== x.wins) return y.wins - x.wins
     return BigInt(x.userId) < BigInt(y.userId) ? -1 : 1
   })
-  // 랭크: 코인 동일 = 공동 등수 (competition ranking — 다음 등수는 인원수만큼 건너뜀)
+  // Rank: equal coins = shared rank (competition ranking — the next rank skips by the number of tied people)
   let prevCoins: number | null = null
   let prevRank = 0
   entries.forEach((e, i) => {
@@ -304,7 +304,7 @@ const io = new IOServer(httpServer, {
   cors: { origin: CLIENT_ORIGIN, credentials: true },
 })
 
-// 핸드셰이크 인증 — REST와 같은 세션 쿠키
+// Handshake auth — same session cookie as REST
 io.use((socket, next) => {
   const sid = sidFromCookieHeader(socket.handshake.headers.cookie)
   const s = getSession(sid)
@@ -321,8 +321,8 @@ function ackErr(code: string, message: string) {
 }
 
 /**
- * 베팅액 검증 — 1 이상 정수 & 보유 코인 이하.
- * @returns 유효하면 { bet, allIn: 보유 전액 베팅 여부(VS 화면 ALL-IN 표시용) }, 아니면 null
+ * Bet amount validation — integer ≥ 1 and ≤ held coins.
+ * @returns { bet, allIn: whether the entire balance is bet (for the ALL-IN display on the VS screen) } if valid, else null
  */
 async function validateBet(userId: bigint, raw: unknown): Promise<{ bet: number; allIn: boolean } | null> {
   const bet = Number(raw ?? 0)
@@ -333,13 +333,13 @@ async function validateBet(userId: bigint, raw: unknown): Promise<{ bet: number;
 }
 
 /**
- * @param revengeRequesterId 이 매치가 리벤지 매치라면 신청자 userId — 연속 신청 금지(e항) 판정용
+ * @param revengeRequesterId if this match is a rematch, the requester's userId — used to enforce the no-consecutive-request rule (item e)
  */
 function startMatchForRoom(room: Room, revengeRequesterId: string | null = null) {
   if (room.members.length < 2) return
-  // 멱등: 이미 매치 중이면 재시작 금지(호스트 auto-start가 room:state마다 중복 emit되는 것 방지).
+  // Idempotent: don't restart if already in a match (prevents the host auto-start from double-emitting on every room:state).
   if (room.status === 'in_match' || room.match) return
-  // 이전 매치의 리벤지 창구 폐쇄 (대기 중 타이머 포함)
+  // Close the previous match's rematch window (including any pending timer)
   if (room.postMatch?.pending) clearTimeout(room.postMatch.pending.timer)
   room.postMatch = undefined
   room.revengeRequesterUserId = revengeRequesterId
@@ -368,7 +368,7 @@ function startMatchForRoom(room: Room, revengeRequesterId: string | null = null)
   runner.start()
 }
 
-// 설정값 검증: games는 유효 게임만(없으면 전체). 라운드 수는 항상 9로 고정이라 설정받지 않는다.
+// Config validation: games keeps only valid games (all games if none). The round count is always fixed at 9, so it isn't configurable.
 function sanitizeGames(games?: number[]): GameId[] {
   const valid = Array.isArray(games)
     ? (games.filter((g) => (ALL_GAME_IDS as number[]).includes(g)) as GameId[])
@@ -376,10 +376,10 @@ function sanitizeGames(games?: number[]): GameId[] {
   return valid.length ? valid : [...ALL_GAME_IDS]
 }
 
-// ── 리벤지 매치 (docs/ONLINE_MATCH.md) ─────────────────────────
+// ── rematch (docs/ONLINE_MATCH.md) ─────────────────────────
 const REVENGE_TIMEOUT_MS = Number(process.env.REVENGE_TIMEOUT_MS ?? 10_000)
 
-/** 진행 중 오퍼를 원자적으로 회수(타이머 정지 포함). 없으면 null — 이중 처리 방지의 단일 관문 */
+/** Atomically reclaim the in-flight offer (including stopping the timer). null if none — the single gate that prevents double processing */
 function takeRevengePending(room: Room): { requesterId: string } | null {
   const pending = room.postMatch?.pending
   if (!pending) return null
@@ -388,7 +388,7 @@ function takeRevengePending(room: Room): { requesterId: string } | null {
   return { requesterId: pending.requesterId }
 }
 
-/** 리벤지 무산 통지 — 방의 두 멤버 모두에게. 클라는 수신 시 메인으로 복귀한다 */
+/** Notify that the rematch fell through — to both room members. The client returns to main on receipt */
 function notifyRevengeClosed(room: Room, reason: 'DECLINED' | 'TIMEOUT' | 'CANCELLED' | 'UNAVAILABLE') {
   for (const m of room.members) {
     io.to(m.socketId).emit(EV.revengeResult, { accepted: false, reason })
@@ -406,19 +406,19 @@ io.on('connection', (socket) => {
     reconnect: false,
   })
 
-  // ── 코드방 ──
+  // ── code room ──
   socket.on(EV.roomCreate, async (payload: { games?: number[] } & Partial<BetPayload>, ack: (r: unknown) => void) => {
     if (typeof ack !== 'function') return
-    if (findRoomByUser(userId)) return ack(ackErr('ALREADY_IN_ROOM', '이미 방에 있음'))
+    if (findRoomByUser(userId)) return ack(ackErr('ALREADY_IN_ROOM', 'Already in a room'))
     const v = await validateBet(s.userId, payload?.bet)
-    if (v === null) return ack(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (1 이상, 보유 코인 한도 내 정수)'))
-    if (findRoomByUser(userId)) return ack(ackErr('ALREADY_IN_ROOM', '이미 방에 있음')) // await 사이 재검사
+    if (v === null) return ack(ackErr('INVALID_BET', 'Invalid bet amount (integer ≥ 1, within your coin balance)'))
+    if (findRoomByUser(userId)) return ack(ackErr('ALREADY_IN_ROOM', 'Already in a room')) // recheck across the await
     const code = genRoomCode()
     const room: Room = {
       code,
       hostUserId: userId,
       status: 'waiting',
-      rounds: 9, // 온라인 매치는 항상 9라운드 (슬롯 3릴 × 3회전)
+      rounds: 9, // online matches are always 9 rounds (3 slot reels × 3 spins)
       games: sanitizeGames(payload?.games),
       kind: 'code',
       members: [
@@ -433,11 +433,11 @@ io.on('connection', (socket) => {
   socket.on(EV.roomJoin, async (payload: { code: string } & Partial<BetPayload>, ack: (r: unknown) => void) => {
     if (typeof ack !== 'function') return
     const v = await validateBet(s.userId, payload?.bet)
-    if (v === null) return ack(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (1 이상, 보유 코인 한도 내 정수)'))
+    if (v === null) return ack(ackErr('INVALID_BET', 'Invalid bet amount (integer ≥ 1, within your coin balance)'))
     const room = rooms.get(payload?.code)
-    if (!room) return ack(ackErr('NOT_FOUND', '방 없음'))
-    if (room.members.length >= 2) return ack(ackErr('ROOM_FULL', '정원 초과'))
-    if (findRoomByUser(userId)) return ack(ackErr('ALREADY_IN_ROOM', '이미 방에 있음'))
+    if (!room) return ack(ackErr('NOT_FOUND', 'Room not found'))
+    if (room.members.length >= 2) return ack(ackErr('ROOM_FULL', 'Room full'))
+    if (findRoomByUser(userId)) return ack(ackErr('ALREADY_IN_ROOM', 'Already in a room'))
     room.members.push({
       userId, nickname: s.nickname, imageUrl: s.imageUrl, socketId: socket.id, role: 'P2', ready: false, bet: v.bet, allIn: v.allIn,
     })
@@ -470,15 +470,15 @@ io.on('connection', (socket) => {
 
   socket.on(EV.roomLeave, () => leaveRoom())
 
-  // ── 빠른시작 (글로벌 FIFO) ──
+  // ── quick start (global FIFO) ──
   socket.on(EV.queueJoin, async (payload: Partial<BetPayload>, ack?: (r: unknown) => void) => {
     if (findRoomByUser(userId) || quickQueue.some((q) => q.userId === userId)) {
-      return ack?.(ackErr('ALREADY_IN_ROOM', '이미 방/큐에 있음'))
+      return ack?.(ackErr('ALREADY_IN_ROOM', 'Already in a room/queue'))
     }
     const v = await validateBet(s.userId, payload?.bet)
-    if (v === null) return ack?.(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (1 이상, 보유 코인 한도 내 정수)'))
+    if (v === null) return ack?.(ackErr('INVALID_BET', 'Invalid bet amount (integer ≥ 1, within your coin balance)'))
     if (findRoomByUser(userId) || quickQueue.some((q) => q.userId === userId)) {
-      return ack?.(ackErr('ALREADY_IN_ROOM', '이미 방/큐에 있음')) // await 사이 재검사
+      return ack?.(ackErr('ALREADY_IN_ROOM', 'Already in a room/queue')) // recheck across the await
     }
     quickQueue.push({ userId, nickname: s.nickname, imageUrl: s.imageUrl, socketId: socket.id, bet: v.bet, allIn: v.allIn })
     ack?.(ackOk({ queued: true }))
@@ -504,37 +504,37 @@ io.on('connection', (socket) => {
 
   socket.on(EV.queueLeave, () => removeFromQueue(userId))
 
-  // ── 리벤지 매치 (docs/ONLINE_MATCH.md) ──
-  // 패자 → revenge:request → (검증) → 승자에게 revenge:offer → revenge:respond →
-  //   수락: 스테이크(min(직전 베팅×2, 보유)) 재계산 → 같은 방에서 새 매치(슬롯 재추첨)
-  //   거절/취소/10초 무응답/이탈: 양측에 revenge:result{accepted:false} → 클라는 메인 복귀
+  // ── rematch (docs/ONLINE_MATCH.md) ──
+  // loser → revenge:request → (validate) → revenge:offer to winner → revenge:respond →
+  //   accept: recompute stake (min(previous bet×2, balance)) → new match in the same room (slots re-drawn)
+  //   decline/cancel/10s no-response/leave: revenge:result{accepted:false} to both sides → client returns to main
   socket.on(EV.revengeRequest, async (_payload: unknown, ack?: (r: unknown) => void) => {
     const room = findRoomByUser(userId)
     const pm = room?.postMatch
     if (!room || !pm || room.status !== 'waiting' || room.match) {
-      return ack?.(ackErr('UNAVAILABLE', '리벤지를 신청할 수 없어요'))
+      return ack?.(ackErr('UNAVAILABLE', "You can't request a rematch"))
     }
-    if (pm.loserUserId !== userId) return ack?.(ackErr('NOT_LOSER', '패자만 신청할 수 있어요'))
+    if (pm.loserUserId !== userId) return ack?.(ackErr('NOT_LOSER', 'Only the loser can request'))
     if (pm.requesterUserId === userId) {
-      return ack?.(ackErr('CONSECUTIVE', '연속으로 리벤지를 신청할 수 없어요'))
+      return ack?.(ackErr('CONSECUTIVE', "You can't request a rematch two times in a row"))
     }
-    if (pm.pending) return ack?.(ackErr('PENDING', '이미 신청 대기 중이에요'))
+    if (pm.pending) return ack?.(ackErr('PENDING', 'A request is already pending'))
     const winner = room.members.find((m) => m.userId === pm.winnerUserId)
     const loser = room.members.find((m) => m.userId === userId)
-    // 승자가 방을 떠났거나(=다른 매치를 잡으러 감) 접속이 끊겼으면 전달 불가 (2c)
+    // Can't deliver if the winner left the room (= went to find another match) or disconnected (2c)
     if (!winner || !loser || !io.sockets.sockets.get(winner.socketId)) {
-      return ack?.(ackErr('UNAVAILABLE', '상대가 이미 자리를 떠났어요'))
+      return ack?.(ackErr('UNAVAILABLE', 'The opponent has already left'))
     }
-    // 스테이크 = min(직전 베팅 × 2, 현재 보유) — 2배가 안 되면 ALL-IN. 양쪽 모두 보유 ≥ 1 필요
+    // Stake = min(previous bet × 2, current balance) — ALL-IN if it can't reach 2×. Both sides need balance ≥ 1
     const [loserU, winnerU] = await Promise.all([
       prisma.appUser.findFirst({ where: { id: BigInt(userId) }, select: { coins: true } }),
       prisma.appUser.findFirst({ where: { id: BigInt(pm.winnerUserId) }, select: { coins: true } }),
     ])
-    if (!loserU || loserU.coins < 1) return ack?.(ackErr('NO_COINS', '베팅할 코인이 없어요'))
-    if (!winnerU || winnerU.coins < 1) return ack?.(ackErr('UNAVAILABLE', '상대가 베팅할 코인이 없어요'))
-    // await 사이 상태 변동 재검사 (다른 신청/매치 시작/이탈)
+    if (!loserU || loserU.coins < 1) return ack?.(ackErr('NO_COINS', 'You have no coins to bet'))
+    if (!winnerU || winnerU.coins < 1) return ack?.(ackErr('UNAVAILABLE', 'The opponent has no coins to bet'))
+    // Recheck for state changes across the await (another request/match start/leave)
     if (pm.pending || room.status !== 'waiting' || room.match || !room.members.includes(winner)) {
-      return ack?.(ackErr('UNAVAILABLE', '리벤지를 신청할 수 없어요'))
+      return ack?.(ackErr('UNAVAILABLE', "You can't request a rematch"))
     }
     const loserStake = Math.min(pm.bets[userId] * 2, loserU.coins)
     const winnerStake = Math.min(pm.bets[pm.winnerUserId] * 2, winnerU.coins)
@@ -559,14 +559,14 @@ io.on('connection', (socket) => {
     const room = findRoomByUser(userId)
     const pm = room?.postMatch
     if (!room || !pm?.pending || pm.winnerUserId !== userId) {
-      return ack?.(ackErr('UNAVAILABLE', '응답할 리벤지 신청이 없어요'))
+      return ack?.(ackErr('UNAVAILABLE', 'There is no rematch request to respond to'))
     }
-    const pending = takeRevengePending(room)! // 타이머 정지 + 오퍼 회수 (이중 처리 방지)
+    const pending = takeRevengePending(room)! // stop the timer + reclaim the offer (prevents double processing)
     if (!payload?.accept) {
       notifyRevengeClosed(room, 'DECLINED')
       return ack?.(ackOk({ accepted: false }))
     }
-    // 수락 — 응답 시점 보유로 스테이크 최종 확정
+    // Accept — finalize the stake using the balance at response time
     const loser = room.members.find((m) => m.userId === pending.requesterId)
     const winner = room.members.find((m) => m.userId === userId)
     const [loserU, winnerU] = await Promise.all([
@@ -580,7 +580,7 @@ io.on('connection', (socket) => {
       io.sockets.sockets.has(loser.socketId)
     if (!valid) {
       notifyRevengeClosed(room, 'UNAVAILABLE')
-      return ack?.(ackErr('UNAVAILABLE', '리벤지를 시작할 수 없어요'))
+      return ack?.(ackErr('UNAVAILABLE', "The rematch can't be started"))
     }
     loser.bet = Math.min(pm.bets[loser.userId] * 2, loserU.coins)
     loser.allIn = loser.bet === loserU.coins
@@ -598,7 +598,7 @@ io.on('connection', (socket) => {
     if (takeRevengePending(room)) notifyRevengeClosed(room, 'CANCELLED')
   })
 
-  // ── 인게임 입력 ──
+  // ── in-game input ──
   socket.on(EV.gameInput, (msg: GameInputMsg) => {
     const room = findRoomByUser(userId)
     if (!room?.match) return
@@ -613,18 +613,18 @@ io.on('connection', (socket) => {
   function leaveRoom(isDisconnect = false) {
     const room = findRoomByUser(userId)
     if (!room) return
-    // 매치 진행 중이면: 서버는 끝까지 연산(D8). 상대에게 안내만.
+    // If a match is in progress: the server computes to the end (D8). Only notify the opponent.
     if (room.status === 'in_match') {
       const other = room.members.find((m) => m.userId !== userId)
       if (other) io.to(other.socketId).emit(EV.matchAborted, { matchId: room.match?.matchId ?? '', reason: 'OPPONENT_LEFT' })
       if (!isDisconnect) socket.leave(room.code)
       return
     }
-    // 리벤지 오퍼 대기 중에 당사자가 떠나면 무산 처리 후 남은 쪽에 통지
+    // If a party leaves while a rematch offer is pending, cancel it and notify the remaining side
     if (room.postMatch?.pending && takeRevengePending(room)) {
       notifyRevengeClosed(room, userId === room.postMatch.loserUserId ? 'CANCELLED' : 'UNAVAILABLE')
     }
-    // 대기 중이면 방에서 제거
+    // If waiting, remove from the room
     room.members = room.members.filter((m) => m.userId !== userId)
     socket.leave(room.code)
     if (room.members.length === 0) rooms.delete(room.code)
@@ -636,4 +636,4 @@ io.on('connection', (socket) => {
 })
 
 await app.listen({ port: PORT, host: '0.0.0.0' })
-console.log(`✅ MADPUMP 서버 http://localhost:${PORT} (client origin: ${CLIENT_ORIGIN})`)
+console.log(`✅ MADPUMP server http://localhost:${PORT} (client origin: ${CLIENT_ORIGIN})`)

@@ -1,5 +1,5 @@
-/* GamePictogram — 게임별 픽토그램 (GameSelect S8에서 추출, 슬롯머신과 공유).
-   클래스명은 s8-* 유지 — game-select.css의 캐비닛 hover/잠금 조합 규칙이 이 이름을 참조한다. */
+/* GamePictogram — per-game pictograms (extracted from GameSelect S8, shared with the slot machine).
+   Class names stay s8-* — game-select.css's cabinet hover/lock combination rules reference these names. */
 
 .s8-picto {
   display: flex;
@@ -9,7 +9,7 @@
   height: 100%;
 }
 
-/* 게임1: 세븐세그먼트풍 '87' + ↑↓ */
+/* Game 1: seven-segment-style '87' + ↑↓ */
 .s8-picto--g1 {
   flex-direction: column;
   gap: 6px;
@@ -28,7 +28,7 @@
 .s8-g1-arrow--up { color: var(--p1); }
 .s8-g1-arrow--down { color: var(--p2); }
 
-/* 게임2: 낙하 총알 트레일 3줄 */
+/* Game 2: 3 falling-bullet trails */
 .s8-picto--g2 {
   gap: 22px;
   align-items: flex-start;
@@ -45,7 +45,7 @@
 .s8-g2-trail:nth-child(2) { height: 92px; margin-top: -10px; }
 .s8-g2-trail:nth-child(3) { height: 48px; margin-top: 14px; }
 
-/* 게임3: 교차 검 2자루 + 지그재그 파도 */
+/* Game 3: 2 crossed swords + zigzag waves */
 .s8-picto--g3 {
   flex-direction: column;
   gap: 14px;
@@ -82,7 +82,7 @@
   height: 14px;
 }
 
-/* 게임4~10: 게임 번호 */
+/* Games 4~10: game number */
 .s8-picto--gN {
   display: flex;
   align-items: center;
@@ -95,11 +95,11 @@
   color: var(--cab-color, var(--accent));
 }
 
-/* ── SVG 씬 네온 유틸 (pictograms.ts 의 FINAL_PICTOS 가 참조) ── */
+/* ── SVG scene neon utils (referenced by FINAL_PICTOS in pictograms.ts) ── */
 .gpic svg {
   width: 88%;
   height: 88%;
-  overflow: visible; /* 글로우가 씬 경계에서 잘리지 않도록 (스크린이 최종 클립) */
+  overflow: visible; /* so the glow isn't clipped at the scene boundary (the screen is the final clip) */
 }
 .gp-cyan { color: var(--p1); }
 .gp-pink { color: var(--p2); }

@@ -1,34 +1,34 @@
 /**
- * 온라인 게임 화면용 렌더 훅 (성능 구조 표준) — Game2에서 검증된 패턴을 게임 무관하게 추출.
+ * Render hook for online game screens (standard performance structure) — extracts the pattern proven in Game2, game-agnostic.
  *
- * 문제: 기존 useOnlineGame은 스토어 '전체'를 구독해서, 서버 스냅샷이 올 때마다(60Hz)
- *       게임 컴포넌트가 통째로 리렌더되고, rAF 루프 effect도 매 프레임 재생성(churn)됐다.
+ * Problem: the original useOnlineGame subscribed to the 'whole' store, so on every server snapshot (60Hz)
+ *          the game component re-rendered entirely, and the rAF loop effect was re-created every frame (churn).
  *
- * 해결(이 훅):
- *  1) 활성/역할만 '원시 문자열 sig'로 선택 구독 → 값이 바뀌는 라운드 경계에서만 리렌더.
- *  2) 서버 스냅샷 → ref 미러링을 '직접 스토어 구독'으로 처리(리렌더 유발 안 함).
- *     게임별 per-snapshot 작업(HP/시간 등 setState)은 onSnapshot 콜백으로 위임 —
- *     이 setState들은 '값이 실제로 바뀔 때만' 리렌더(초 양자화 등)라 60Hz 리렌더가 사라진다.
+ * Solution (this hook):
+ *  1) Selectively subscribe to active/role only via a 'primitive string sig' → re-render only at round boundaries where the value changes.
+ *  2) Handle server snapshot → ref mirroring via a 'direct store subscription' (doesn't trigger a re-render).
+ *     Per-game per-snapshot work (setState for HP/time, etc.) is delegated to the onSnapshot callback —
+ *     these setStates re-render 'only when the value actually changes' (second-quantization, etc.), so the 60Hz re-render is gone.
  *
- * 사용(각 게임 화면):
+ * Usage (each game screen):
  *   const { isOnline, myRole, stateRef, snapAtRef } = useOnlineRender<Game2State>(2, (s) => {
- *     setHp(s.hp); setHudMs(...);   // 게임별 HUD 반영
+ *     setHp(s.hp); setHudMs(...);   // reflect the per-game HUD
  *   });
- *   // rAF 루프는 stateRef.current(최신 스냅샷) / snapAtRef.current(수신시각)를 읽어 그린다.
- *   // 루프 effect deps는 [isOnline, myRole, ...] 처럼 '안정 원시값'만 → 루프 재생성 없음.
+ *   // The rAF loop reads stateRef.current (latest snapshot) / snapAtRef.current (receive time) to draw.
+ *   // The loop effect deps are only 'stable primitives' like [isOnline, myRole, ...] → no loop re-creation.
  */
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import type { GameId, Role } from '@madpump/shared';
 import { onlineStore } from './online';
 
 export interface OnlineRender<S> {
-  /** 이 게임이 지금 온라인 매치의 현재 라운드로 활성인가 */
+  /** Whether this game is active as the current round of the ongoing online match */
   isOnline: boolean;
-  /** 이 매치에서 내 역할(P1/P2). 비활성이면 null */
+  /** My role in this match (P1/P2). null if inactive */
   myRole: Role | null;
-  /** 최신 서버 스냅샷(투영 상태). 스냅샷마다 갱신되지만 리렌더는 유발 안 함 */
+  /** Latest server snapshot (projected state). Updated on every snapshot but doesn't trigger a re-render */
   stateRef: React.MutableRefObject<S | null>;
-  /** 마지막 스냅샷 수신 시각(performance.now) — 렌더 외삽 dt 계산용 */
+  /** Time the last snapshot was received (performance.now) — for computing render extrapolation dt */
   snapAtRef: React.MutableRefObject<number>;
 }
 
@@ -43,11 +43,11 @@ function isActive(o: ReturnType<typeof onlineStore.get>, gameId: GameId): boolea
 export function useOnlineRender<S>(gameId: GameId, onSnapshot?: (s: S) => void): OnlineRender<S> {
   const stateRef = useRef<S | null>(null);
   const snapAtRef = useRef(0);
-  // onSnapshot이 매 렌더 새 클로저여도 최신을 쓰도록 ref로 보관(effect는 gameId만 의존).
+  // Keep onSnapshot in a ref so the latest is used even though it's a new closure each render (the effect depends only on gameId).
   const onSnapRef = useRef(onSnapshot);
   onSnapRef.current = onSnapshot;
 
-  // (1) 활성/역할만 선택 구독 — 원시 문자열 sig. 값 안 바뀌면 리렌더 안 함.
+  // (1) Selectively subscribe to active/role only — primitive string sig. No re-render if the value doesn't change.
   const readSig = () => {
     const o = onlineStore.get();
     return isActive(o, gameId) ? `1:${o.role}` : '0';
@@ -56,7 +56,7 @@ export function useOnlineRender<S>(gameId: GameId, onSnapshot?: (s: S) => void):
   const isOnline = sig !== '0';
   const myRole: Role | null = isOnline ? (sig.slice(2) as Role) : null;
 
-  // (2) 스냅샷 → ref 미러링을 직접 구독으로(리렌더 없이). 게임별 작업은 onSnapshot에 위임.
+  // (2) Snapshot → ref mirroring via direct subscription (no re-render). Per-game work is delegated to onSnapshot.
   useEffect(() => {
     const sync = () => {
       const o = onlineStore.get();
@@ -66,8 +66,8 @@ export function useOnlineRender<S>(gameId: GameId, onSnapshot?: (s: S) => void):
       snapAtRef.current = performance.now();
       onSnapRef.current?.(s);
     };
-    sync(); // 초기 1회
-    return onlineStore.subscribe(sync); // 스냅샷마다 호출되지만 리렌더는 유발 안 함
+    sync(); // once on init
+    return onlineStore.subscribe(sync); // called on every snapshot but doesn't trigger a re-render
   }, [gameId]);
 
   return { isOnline, myRole, stateRef, snapAtRef };

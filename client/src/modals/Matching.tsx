@@ -1,7 +1,7 @@
 /**
- * S7 온라인 매칭 상태 모달 — 실서버 매칭.
- * 온라인 스토어의 phase를 반영: connecting → (queue/room 대기) → 상대 발견 → 매치 시작 시 닫힘.
- * 매치가 시작(countdown/playing)되면 OnlineController가 게임 화면으로 이동하므로 모달을 닫는다.
+ * S7 online matchmaking status modal — real-server matchmaking.
+ * Reflects the online store phase: connecting → (queue/room waiting) → opponent found → closes when the match starts.
+ * When the match starts (countdown/playing), OnlineController moves to the game screen, so the modal closes.
  */
 import { useEffect } from 'react';
 import { Button, Modal, PlayerBadge } from '../components';
@@ -16,7 +16,7 @@ export default function MatchingModal() {
   const o = useOnline();
   const open = flow.modal === 'matching';
 
-  // 매치 시작되면 모달 닫기 (게임 화면 전환은 OnlineController 담당)
+  // Close the modal when the match starts (OnlineController handles the game-screen transition)
   useEffect(() => {
     if (open && (o.phase === 'countdown' || o.phase === 'playing' || o.phase === 'match-end')) {
       closeModal();
@@ -38,7 +38,7 @@ export default function MatchingModal() {
   return (
     <Modal
       open={open}
-      marquee="온라인 게임하기"
+      marquee="Play Online"
       accentColor="var(--accent2)"
       testId="modal-matching"
       width={560}
@@ -59,21 +59,21 @@ export default function MatchingModal() {
         {connecting && (
           <>
             <p className="font-arcade s7-status-en c-accent2 anim-blink">NOW CONNECTING…</p>
-            <p className="font-display s7-status-ko">서버에 접속 중입니다</p>
+            <p className="font-display s7-status-ko">Connecting to server</p>
           </>
         )}
         {waiting && (
           <>
             <p className="font-arcade s7-status-en c-p1 anim-blink">WAITING FOR CHALLENGER</p>
             <p className="font-display s7-status-ko">
-              {o.phase === 'room' && o.room ? `방 코드 ${o.room.code} — 상대 대기 중` : '플레이어 대기 중'}
+              {o.phase === 'room' && o.room ? `Room code ${o.room.code} — waiting for opponent` : 'Waiting for player'}
             </p>
           </>
         )}
         {found && (
           <>
             <p className="font-arcade s7-status-en c-win glow-text anim-sign-on">CHALLENGER FOUND!</p>
-            <p className="font-display s7-status-ko">상대를 찾았습니다 — 곧 시작</p>
+            <p className="font-display s7-status-ko">Opponent found — starting soon</p>
           </>
         )}
       </div>
@@ -81,7 +81,7 @@ export default function MatchingModal() {
       {waiting && (
         <div className="s7-actions">
           <Button variant="danger" data-testid="btn-matching-cancel" onClick={onCancel}>
-            취소하기
+            Cancel
           </Button>
         </div>
       )}

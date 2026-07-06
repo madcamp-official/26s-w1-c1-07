@@ -1,16 +1,16 @@
-// MADPUMP DB 스키마
-// 정본(source of truth): docs/ERD.md (v1, 2026-07-03)
-// 이 파일은 ERD.md의 "MySQL DDL" 블록을 Prisma로 충실히 옮긴 것이다.
-// 스키마 변경 시 → docs/ERD.md 를 먼저 갱신하고, 그 다음 이 파일에 반영한다.
+// MADPUMP DB schema
+// source of truth (canonical): docs/ERD.md (v1, 2026-07-03)
+// This file faithfully ports the "MySQL DDL" block of ERD.md into Prisma.
+// When changing the schema → update docs/ERD.md first, then reflect it here.
 //
-// 원본 DDL 대비 의도적 차이(문서화됨, docs/DATABASE.md "구현 노트" 참조):
-//  - created_at / played_at / edited_at 에 @default(now()) 추가 (DDL엔 DEFAULT 없음, 편의용 fallback)
-//  - score_config.updated_at 은 @updatedAt (자동 갱신)
-//  - result / before_result / after_result 는 VARCHAR 대신 enum MatchResult (ERD.md note #16 "값 제한" 이행)
+// Intentional differences from the original DDL (documented, see docs/DATABASE.md "Implementation notes"):
+//  - added @default(now()) on created_at / played_at / edited_at (the DDL has no DEFAULT, a convenience fallback)
+//  - score_config.updated_at uses @updatedAt (auto-updated)
+//  - result / before_result / after_result use enum MatchResult instead of VARCHAR (implements ERD.md note #16 "value restriction")
 
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-3.0.x"] // native=개발기(mac), debian-openssl-3.0.x=배포 VM(Ubuntu 22.04)
+  binaryTargets = ["native", "debian-openssl-3.0.x"] // native=dev machine (mac), debian-openssl-3.0.x=deployment VM (Ubuntu 22.04)
 }
 
 datasource db {
@@ -18,15 +18,15 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// 매치/라운드 결과 도메인 — 값은 매치의 고정 참가자 슬롯(playerA/playerB) 기준.
-/// (게임 역할 P1/P2는 라이브 계층 전용, DB엔 저장 안 함 — BUILD_PLAN D5)
+/// Match/round result domain — values are relative to the match's fixed participant slots (playerA/playerB).
+/// (Game roles P1/P2 are live-layer only, not stored in the DB — BUILD_PLAN D5)
 enum MatchResult {
   A_WIN
   B_WIN
   DRAW
 }
 
-/// 분반/그룹
+/// Class/group
 model UserGroup {
   id        BigInt   @id @default(autoincrement())
   name      String   @unique(map: "uq_group_name") @db.VarChar(100)
@@ -38,17 +38,17 @@ model UserGroup {
   @@map("user_group")
 }
 
-/// 로스터 로그인 유저 — 분반별 고정 멤버 명단(prisma/seed.ts)에서 선택해 로그인.
-/// (구글 OAuth는 내부망에서 접근 불가라 폐기 — docs/AUTH.md 참조.
-///  같은 이름이 다른 분반에 있을 수 있어 nickname 유니크는 분반 단위.)
+/// Roster login user — logs in by picking from each class's fixed member list (prisma/seed.ts).
+/// (Google OAuth was dropped because it is unreachable on the internal network — see docs/AUTH.md.
+///  The same name can appear in different classes, so nickname uniqueness is per class.)
 model AppUser {
   id               BigInt    @id @default(autoincrement())
   nickname         String    @db.VarChar(50)
   uploadedImageKey String?   @map("uploaded_image_key") @db.VarChar(300)
   groupId          BigInt?   @map("group_id")
-  /// 보유 코인 (시작 30) — 온라인 베팅·오프라인 게임 해금에 사용 (shared/src/coins.ts)
+  /// Coins held (starts at 30) — used for online betting and unlocking offline games (shared/src/coins.ts)
   coins            Int       @default(30)
-  /// 오프라인 게임 해금 수 (0~7) — UNLOCK_ORDER 순서로 앞에서부터 n개 해금됨
+  /// Number of offline games unlocked (0~7) — the first n are unlocked in UNLOCK_ORDER order
   unlockedCount    Int       @default(0) @map("unlocked_count") @db.TinyInt
   createdAt        DateTime  @default(now()) @map("created_at")
   deletedAt        DateTime? @map("deleted_at")
@@ -62,7 +62,7 @@ model AppUser {
   @@map("app_user")
 }
 
-/// 관리자 계정 (유저와 별도 인증)
+/// Admin account (authenticated separately from users)
 model AdminAccount {
   id        BigInt   @id @default(autoincrement())
   loginId   String   @unique(map: "uq_admin_login") @map("login_id") @db.VarChar(50)
@@ -75,9 +75,9 @@ model AdminAccount {
   @@map("admin_account")
 }
 
-/// 게임 종류 사전 (코드 미러, 시드로 관리) — ERD.md note #15. 시드 10행(game1~10)
+/// Game type dictionary (code mirror, managed via seed) — ERD.md note #15. 10 seed rows (game1~10)
 model Game {
-  id       Int     @id @db.TinyInt // 코드와 고정 매핑(1~10). AUTO_INCREMENT 아님 — 시드로 주입
+  id       Int     @id @db.TinyInt // fixed mapping to code (1~10). Not AUTO_INCREMENT — injected via seed
   name     String  @unique(map: "uq_game_name") @db.VarChar(50)
   isActive Boolean @default(true) @map("is_active")
 
@@ -86,9 +86,9 @@ model Game {
   @@map("game")
 }
 
-/// 매치 결과 (온라인 매치만 기록) — ERD.md note #2.
-/// 매치 = 여러 라운드(BUILD_PLAN D3). game_id는 라운드로 이동(라운드마다 게임 랜덤).
-/// result = 매치 최종 승자(playerA/playerB 슬롯 기준, 라운드 다승 집계 결과).
+/// Match result (only online matches are recorded) — ERD.md note #2.
+/// A match = multiple rounds (BUILD_PLAN D3). game_id moved to the round (game is random per round).
+/// result = the match's final winner (relative to the playerA/playerB slots, from tallying round wins).
 model GameMatch {
   id        BigInt      @id @default(autoincrement())
   playerAId BigInt      @map("player_a_id")
@@ -109,8 +109,8 @@ model GameMatch {
   @@map("game_match")
 }
 
-/// 라운드 결과 (매치당 여러 행) — BUILD_PLAN D5.
-/// 라운드마다 게임 랜덤(gameType) + 역할 랜덤. result = 그 라운드 승자(playerA/B 슬롯 기준).
+/// Round result (multiple rows per match) — BUILD_PLAN D5.
+/// Each round has a random game (gameType) + random roles. result = that round's winner (relative to the playerA/B slots).
 model GameRound {
   id         BigInt      @id @default(autoincrement())
   matchId    BigInt      @map("match_id")
@@ -126,7 +126,7 @@ model GameRound {
   @@map("game_round")
 }
 
-/// 매치 결과 수정이력 (감사 로그) — ERD.md note #5
+/// Match result edit history (audit log) — ERD.md note #5
 model MatchEditHistory {
   id           BigInt      @id @default(autoincrement())
   matchId      BigInt      @map("match_id")
@@ -142,9 +142,9 @@ model MatchEditHistory {
   @@map("match_edit_history")
 }
 
-/// 점수 시스템 설정 (admin 수정 가능, 단일 행 id=1) — ERD.md note #17
+/// Scoring system settings (admin-editable, single row id=1) — ERD.md note #17
 model ScoreConfig {
-  id         Int      @id @db.TinyInt // 항상 1 (단일 행)
+  id         Int      @id @db.TinyInt // always 1 (single row)
   winPoints  Int      @default(3) @map("win_points")
   drawPoints Int      @default(1) @map("draw_points")
   lossPoints Int      @default(0) @map("loss_points")

@@ -1,25 +1,25 @@
 /**
- * MatchIntro — 온라인 매치 시작 인트로 오버레이 (phase === 'slot' 동안 표시).
+ * MatchIntro — online match start intro overlay (shown while phase === 'slot').
  *
- * 타임라인 (마운트 기준, 서버 INTRO_MS=4.7s와 동기):
- *   0s      슬롯머신 3릴 스핀 시작 (게임 픽토그램 스트립이 세로로 회전)
- *   1.2s    릴1 정지 → 1.5s 릴2 → 1.8s 릴3 (0.3초 간격, 명세 1-b)
- *   2.5s    VS 화면 — 양측 정보 + 베팅 코인 (+ALL-IN 뱃지) 2초 공개 (명세 1-d)
- *   4.7s    서버 round:start 도착 → phase가 'countdown'으로 바뀌며 이 오버레이는 언마운트
+ * Timeline (relative to mount, synced with server INTRO_MS=4.7s):
+ *   0s      slot machine 3-reel spin starts (game pictogram strip spins vertically)
+ *   1.2s    reel 1 stops → 1.5s reel 2 → 1.8s reel 3 (0.3s interval, spec 1-b)
+ *   2.5s    VS screen — both sides' info + bet Coins (+ALL-IN badge) revealed for 2s (spec 1-d)
+ *   4.7s    server round:start arrives → phase changes to 'countdown' and this overlay unmounts
  *
- * 릴 k(0-based)의 게임은 라운드 k+1, k+4, k+7에 쓰인다 (명세 1-b).
+ * Reel k (0-based)'s game is used in rounds k+1, k+4, k+7 (spec 1-b).
  */
 import { useEffect, useRef, useState } from 'react'
 import type { GameId, PlayerColor } from '@madpump/shared'
 import { GamePictogram } from '../components'
 import './match-intro.css'
 
-/** 릴 정지 시각(ms) — 0.3초 간격 */
+/** Reel stop times (ms) — 0.3s interval */
 const REEL_STOP_MS = [1200, 1500, 1800] as const
-/** VS 화면 전환 시각(ms) */
+/** VS screen transition time (ms) */
 const VS_AT_MS = 2500
 
-/** 스핀 중 릴에 흘러가는 장식용 게임 목록 (전 게임 순환) */
+/** Decorative game list scrolling through the reel while spinning (cycles through all games) */
 const SPIN_STRIP: GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 export interface MatchIntroProps {
@@ -55,7 +55,7 @@ function Reel({ game, stopped, index }: { game: GameId; stopped: boolean; index:
 }
 
 export default function MatchIntro({ slotGames, gameNames, me, opp }: MatchIntroProps) {
-  /** 정지된 릴 수 (0~3) → 3 이후 VS 화면 */
+  /** Number of stopped reels (0~3) → VS screen after 3 */
   const [stoppedCount, setStoppedCount] = useState(0)
   const [showVs, setShowVs] = useState(false)
   const timersRef = useRef<number[]>([])
@@ -65,7 +65,7 @@ export default function MatchIntro({ slotGames, gameNames, me, opp }: MatchIntro
       typeof window !== 'undefined' &&
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     if (reduce) {
-      // 모션 최소화: 스핀 생략, 곧바로 결과 → VS
+      // Reduced motion: skip the spin, go straight to result → VS
       setStoppedCount(3)
       timersRef.current.push(window.setTimeout(() => setShowVs(true), 800))
     } else {
@@ -88,13 +88,13 @@ export default function MatchIntro({ slotGames, gameNames, me, opp }: MatchIntro
             ))}
           </div>
           <p className="font-display c-muted mi-hint">
-            {stoppedCount < 3 ? '이번 매치의 게임을 뽑는 중…' : '9라운드 = 3게임 × 3회전!'}
+            {stoppedCount < 3 ? 'Drawing this match’s games…' : '9 rounds = 3 games × 3 rotations!'}
           </p>
           {stoppedCount >= 3 && (
             <p className="font-display mi-names anim-sign-on">
               {slotGames.slice(0, 3).map((g, i) => (
                 <span key={i} className="mi-name-chip">
-                  {gameNames[g] ?? `게임 ${g}`}
+                  {gameNames[g] ?? `Game ${g}`}
                 </span>
               ))}
             </p>

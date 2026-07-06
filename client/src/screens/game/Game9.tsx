@@ -1,32 +1,32 @@
 /**
- * 게임7 — 스피드 오목 (NEON COIN-OP). 담당: game9 에이전트.
- * 컨테이너 testid: scr-game9 / 부품: game-stage(CRT 베젤), hud-*(HudFrame 내장), btn-exit
+ * Game 7 — Speed Gomoku (NEON COIN-OP). Owner: game9 agent.
+ * Container testid: scr-game9 / parts: game-stage(CRT bezel), hud-*(HudFrame embedded), btn-exit
  *
- * ── 이 화면의 원칙 ──────────────────────────────────────────────
- *  · 로직/판정은 100% @madpump/shared game9 코어(create/step) + G9 상수 + maxRun 헬퍼만 재사용.
- *  · 렌더링(캔버스 네온 아트)은 처음부터 새로 작성 — game-lab 렌더러 비참조. design-lab import 0줄.
- *  · 색·폰트는 theme.css 토큰 값을 복사(캔버스는 CSS 변수를 못 읽으므로 hex 하드코딩).
+ * ── Principles of this screen ──────────────────────────────────────────────
+ *  · Logic/decision is 100% @madpump/shared game9 core(create/step) + G9 constants + maxRun helper reuse only.
+ *  · Rendering (canvas neon art) is written fresh from scratch — does not reference the game-lab renderer. design-lab import 0 lines.
+ *  · Colors/fonts copy the theme.css token values (canvas can't read CSS variables, so hex is hardcoded).
  *
- * ── 게임(코어 로직 요약, shared/games/game9/logic.ts 주석 기준) ──
- *  · 7×7 교점 판(index=r*7+c). 스캐너 커서가 행 우선으로 판을 ~1s(=49×0.02s)에 한 바퀴 훑는다.
- *  · 턴제: 현재 턴 플레이어가 자기 배치키(P1=Q / P2=U)를 누르면 커서가 있는 교점에 돌을 놓고 즉시 턴 전환.
- *    제한시간(TURN_TIME) 안에 못 놓으면 시스템이 빈 교점에 랜덤 자동배치.
- *  · W(P1)/I(P2) = 턴 무관 FLASH_TIME(0.1s) 화면 플래시로 상대 시야 방해.
- *  · 먼저 가로/세로/대각 3목(WIN_RUN) → 즉시 승리. 시간 종료 시 2목 보유/밀집도로 판정(코어가 처리).
+ * ── Game (core logic summary, per shared/games/game9/logic.ts comments) ──
+ *  · 7×7 intersection board (index=r*7+c). The scanner cursor sweeps the board row-first once every ~1s (=49×0.02s).
+ *  · Turn-based: when the current-turn player presses their placement key (P1=Q / P2=U), a stone is placed at the intersection under the cursor and the turn switches immediately.
+ *    If they fail to place within the time limit (TURN_TIME), the system randomly auto-places on an empty intersection.
+ *  · W(P1)/I(P2) = turn-independent FLASH_TIME(0.1s) screen flash to disrupt the opponent's view.
+ *  · First to get 3 in a row horizontally/vertically/diagonally (WIN_RUN) → instant win. On time-up, decided by 2-in-a-row holdings/density (handled by the core).
  *
- * ── 아트 디렉션: "스피드 오목 — 네온 그리드, 흐르는 스캐너"(PLAN §1 신스웨이브 시스템 파생) ──
- *  · 딥퍼블 판 위 퍼플 네온 그리드 + 플레이어색 스캐너 레티클(코너 브래킷)이 교점을 훑는다.
- *  · 돌 = dim 바탕 + 2px 플레이어색 링 + 절제된 글로우(순색 대면적 금지). 방금 놓인 돌만 강한 펄스.
- *  · 3목 완성 순간 승자색 발광 라인 + 짧은 글리치. 플래시는 판 위 CRT 간섭 노이즈로 표현.
- *  · 강한 발광요소는 스캐너 레티클 / 턴타임 바 / (일시적) 배치 펄스·승리 라인으로 3개 이하 유지.
+ * ── Art direction: "Speed Gomoku — neon grid, flowing scanner" (derived from the PLAN §1 synthwave system) ──
+ *  · Purple neon grid over a deep-purple board + a player-colored scanner reticle (corner brackets) sweeps the intersections.
+ *  · Stone = dim base + 2px player-colored ring + restrained glow (no large-area pure color). Only the just-placed stone pulses strongly.
+ *  · At the moment 3-in-a-row completes, a winner-colored glowing line + a short glitch. Flash is expressed as CRT interference noise over the board.
+ *  · Keep strong glowing elements to 3 or fewer: scanner reticle / turn-time bar / (transient) placement pulse·win line.
  *
- * ── 배선(게임1·2 화면과 동일 패턴) ──
- *  mount → idle이거나 다른 게임이면 startOfflineGame(9) (direct-URL 복구)
- *  라운드마다 game9.create(Math.random) → rAF 루프에서 game9.step(state, events, dtSec) → 매 틱 setDebugGame
- *  입력: attachLocalKeyboard(GameInputEvent 큐) → step에 그대로 전달. KeyQ/KeyW=P1, KeyU/KeyI=P2.
- *  코어는 원본 mutate 후 동일 참조 반환 → 이전값 비교는 step 호출 전 스냅샷, HUD는 스칼라를 React state로.
- *  result 확정 → (RESULT_FX_MS 연출 후) reportRoundEnd 1회(reportedRef 가드) → <ResultOverlay />
- *  online 모드 → P2는 봇(maxRun 기반 휴리스틱으로 목표 교점 선택 후 커서가 지날 때 KeyU 합성, 가끔 KeyI 방해)
+ * ── Wiring (same pattern as the Game 1·2 screens) ──
+ *  mount → if idle or a different game, startOfflineGame(9) (direct-URL recovery)
+ *  each round game9.create(Math.random) → in the rAF loop game9.step(state, events, dtSec) → setDebugGame every tick
+ *  input: attachLocalKeyboard(GameInputEvent queue) → passed straight to step. KeyQ/KeyW=P1, KeyU/KeyI=P2.
+ *  the core mutates the original then returns the same reference → prev-value comparison snapshots before the step call, HUD holds scalars as React state.
+ *  result finalized → (after the RESULT_FX_MS effect) reportRoundEnd once (reportedRef guard) → <ResultOverlay />
+ *  online mode → P2 is a bot (picks a target intersection via a maxRun-based heuristic, then synthesizes KeyU when the cursor passes it, occasionally KeyI to disrupt)
  */
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -54,38 +54,38 @@ import { sfx } from '@/audio';
 import './game9.css';
 
 // ---------------------------------------------------------------------------
-// 캔버스 논리 해상도 (CSS로 반응형 스케일). 16:9 유지 — 정사각 판을 중앙에 두고 양옆 정보 컬럼.
+// Canvas logical resolution (responsive scaling via CSS). Keeps 16:9 — a square board centered with info columns on either side.
 // ---------------------------------------------------------------------------
 const CW = 960;
 const CH = 540;
 
 const N = G9.N; // 7
-const CELL = 56; // 교점 간격(px)
+const CELL = 56; // intersection spacing(px)
 const BOARD = CELL * (N - 1); // 336
-const BX = (CW - BOARD) / 2; // 312 (판 좌상단 x)
-const BY = 118; // 판 좌상단 y
+const BX = (CW - BOARD) / 2; // 312 (board top-left x)
+const BY = 118; // board top-left y
 const BR = BX + BOARD; // 648
 const BB = BY + BOARD; // 454
 const STONE_R = 20;
 
-// theme.css 토큰 값 복사 (§1.1) — 모듈 기본 팔레트(역할 기준 P1=시안 / P2=핑크).
-// 색은 플레이어 종속: drawScene 맨 위에서 functionColors()로 로컬 COL을 스왑해
-// P1/P2 기능 엔티티가 실제 플레이어 색을 따르게 한다(개별 치환 최소화).
+// theme.css token values copied (§1.1) — module default palette (by role P1=cyan / P2=pink).
+// Colors are player-dependent: at the top of drawScene, functionColors() swaps the local COL so
+// the P1/P2 functional entities follow the actual player colors (minimizing per-item substitution).
 const COL0 = {
   field: '#160a33', // --surface-deep
   raised: '#1a0b2e', // --bg-raised
-  grid: '#d300c5', // --accent2 (네온 퍼플 그리드/보더)
-  p1: '#05d9e8', // --p1 (좌 시안 고정)
+  grid: '#d300c5', // --accent2 (neon purple grid/border)
+  p1: '#05d9e8', // --p1 (left, fixed cyan)
   p1dim: '#0a3a4a', // --p1-dim
-  p2: '#ff2a6d', // --p2 (우 핑크 고정)
+  p2: '#ff2a6d', // --p2 (right, fixed pink)
   p2dim: '#4a0a26', // --p2-dim
-  accent: '#fdf500', // --accent (코인 옐로 — HUD 카운트다운이 이미 소유, 스테이지에선 미사용)
+  accent: '#fdf500', // --accent (Coin yellow — already owned by the HUD countdown, unused on the stage)
   muted: '#9d8fbf', // --text-muted
   text: '#f4f0ff', // --text
-  error: '#ff3864', // --error (턴타임 임박 경고)
+  error: '#ff3864', // --error (turn-time imminent warning)
 } as const;
 
-/** COL0(리터럴)과 스왑된 로컬 팔레트 모두 담는 타입 — drawScene가 만든 로컬 COL을 헬퍼로 넘길 때 사용. */
+/** Type holding both COL0 (literal) and the swapped local palette — used when passing the local COL that drawScene builds to helpers. */
 interface Palette {
   field: string;
   raised: string;
@@ -108,14 +108,14 @@ const DIRS: ReadonlyArray<readonly [number, number]> = [
   [1, -1],
 ];
 
-/** 판정 순간 → 결과 오버레이 전환 사이 인게임 연출 시간(승리 라인 + 글리치) */
+/** In-game effect duration between the decision moment → the result overlay transition (win line + glitch) */
 const RESULT_FX_MS = 620;
 
 // ---------------------------------------------------------------------------
-// 순수 유틸 (렌더/봇 보조 — 코어 판정 비침범)
+// Pure utils (render/bot helpers — do not intrude on core decisions)
 // ---------------------------------------------------------------------------
 
-/** 교점 인덱스 → 캔버스 좌표/행열 */
+/** intersection index → canvas coords/row-col */
 function pt(idx: number): { x: number; y: number; r: number; c: number } {
   const r = Math.floor(idx / N);
   const c = idx % N;
@@ -128,7 +128,7 @@ function countStones(board: number[], player: number): number {
   return n;
 }
 
-/** idx를 지나는 player 돌의 최장 연속 교점 목록(승리 라인 렌더용 기하) */
+/** Longest run of player stones passing through idx, as an intersection list (geometry for rendering the win line) */
 function runSegment(board: number[], idx: number, player: number): number[] {
   const r0 = Math.floor(idx / N);
   const c0 = idx % N;
@@ -149,7 +149,7 @@ function runSegment(board: number[], idx: number, player: number): number[] {
   return best;
 }
 
-/** 온라인 봇 착수 선택 — maxRun(공유 헬퍼) 기반. 내 3목>차단>연장>중앙 밀집 순 */
+/** Online bot move selection — based on maxRun (shared helper). Priority: my 3-in-a-row > block > extend > center density */
 function pickBotMove(board: number[]): number {
   const empties: number[] = [];
   for (let i = 0; i < board.length; i++) if (board[i] === 0) empties.push(i);
@@ -169,8 +169,8 @@ function pickBotMove(board: number[]): number {
     opp[idx] = 1;
     const oppRun = maxRun(opp, 1);
     score += oppRun >= G9.WIN_RUN ? 500 : oppRun * 4;
-    score -= Math.abs(r - center) + Math.abs(c - center); // 밀집도 tiebreak 유리
-    score += Math.random() * 0.5; // 미세 tiebreak
+    score -= Math.abs(r - center) + Math.abs(c - center); // density tiebreak favor
+    score += Math.random() * 0.5; // fine tiebreak
     if (score > bestScore) {
       bestScore = score;
       bestIdx = idx;
@@ -180,7 +180,7 @@ function pickBotMove(board: number[]): number {
 }
 
 // ---------------------------------------------------------------------------
-// 렌더 전용 이펙트
+// Render-only effects
 // ---------------------------------------------------------------------------
 type Fx =
   | { kind: 'place'; idx: number; player: number; auto: boolean; t: number }
@@ -193,7 +193,7 @@ interface WinLine {
 }
 
 // ---------------------------------------------------------------------------
-// 캔버스 렌더러 (순수 그리기 — state는 읽기만)
+// Canvas renderer (pure drawing — state is read-only)
 // ---------------------------------------------------------------------------
 function txt(
   ctx: CanvasRenderingContext2D,
@@ -230,24 +230,24 @@ function drawStone(
   const dim = player === 1 ? col.p1dim : col.p2dim;
   ctx.save();
   ctx.shadowColor = color;
-  ctx.shadowBlur = strong ? 16 : 6; // 방금 놓인 돌만 강한 글로우 (§ 발광 절제)
-  ctx.fillStyle = dim; // dim 바탕 (순색 대면적 금지)
+  ctx.shadowBlur = strong ? 16 : 6; // only the just-placed stone gets a strong glow (§ restrained glow)
+  ctx.fillStyle = dim; // dim base (no large-area pure color)
   ctx.beginPath();
   ctx.arc(x, y, STONE_R, 0, Math.PI * 2);
   ctx.fill();
   ctx.lineWidth = 2.5;
-  ctx.strokeStyle = color; // 2px 플레이어색 링
+  ctx.strokeStyle = color; // 2px player-colored ring
   ctx.stroke();
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 0.85;
-  ctx.fillStyle = color; // 코어 도트
+  ctx.fillStyle = color; // core dot
   ctx.beginPath();
   ctx.arc(x, y, STONE_R * 0.3, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
 
-/** 스캐너 레티클 — 코너 브래킷 모티프(§1.3)로 현재 커서 교점을 조준 */
+/** Scanner reticle — a corner-bracket motif (§1.3) aiming at the current cursor intersection */
 function drawReticle(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -279,7 +279,7 @@ function drawReticle(
     ctx.lineTo(cxp, cyp - sy * tick);
     ctx.stroke();
   }
-  // 중앙 미세 십자
+  // small center crosshair
   ctx.globalAlpha = 0.4 + 0.4 * pulse;
   ctx.beginPath();
   ctx.moveTo(x - 5, y);
@@ -304,14 +304,14 @@ function drawSidePanel(
   const label = player === 1 ? 'P1' : 'P2';
   const stones = countStones(board, player);
   const run = maxRun(board, player);
-  const runHot = run >= 2; // 2목 보유 = 시간종료 시 유리
-  // 라벨 (현재 턴이면 밝게)
+  const runHot = run >= 2; // holding 2-in-a-row = advantage on time-up
+  // label (bright if it's the current turn)
   txt(ctx, label, cx, 172, 16, color, isTurn ? 10 : 3);
   if (isTurn) txt(ctx, 'TO PLAY', cx, 196, 8, color, 4);
-  // 통계
+  // stats
   txt(ctx, `STONES ${stones}`, cx, 226, 10, col.muted, 0);
   txt(ctx, `RUN ${run}`, cx, 252, 12, runHot ? color : col.muted, runHot ? 6 : 0);
-  // 진행 램프 3개(연속 목 수) — 3 = 승리 임박
+  // 3 progress lamps (run count) — 3 = win imminent
   const lampY = 280;
   for (let i = 0; i < 3; i++) {
     const lx = cx - 26 + i * 26;
@@ -332,7 +332,7 @@ function drawSidePanel(
     }
     ctx.restore();
   }
-  // YOU 태그(온라인 내 쪽) — 하드 점멸
+  // YOU tag (online, my side) — hard blink
   if (isYou && Math.floor(now / 500) % 2 === 0) {
     txt(ctx, 'YOU', cx, 140, 10, color, 6);
   }
@@ -346,9 +346,9 @@ function drawScene(
   winLine: WinLine | null,
   meta: { p1IsYou: boolean; p2IsYou: boolean; reduced: boolean },
 ): void {
-  // 색은 플레이어 종속(역할 아님) — P1/P2 기능 엔티티를 실제 플레이어 색으로 칠한다.
-  //  fc.p1==='red'면 P1엔티티=핑크·P2엔티티=시안이 되도록 로컬 COL을 스왑 → 아래 COL.p1/p2 사용부가 자동 반영.
-  //  (온라인/오프라인 draw 경로가 모두 이 함수를 통과하므로 여기 한 곳만 스왑하면 된다.)
+  // Colors are player-dependent (not role) — paint the P1/P2 functional entities with the actual player colors.
+  //  If fc.p1==='red', swap the local COL so P1 entity=pink·P2 entity=cyan → COL.p1/p2 uses below reflect it automatically.
+  //  (Both the online and offline draw paths go through this function, so swapping in this one place is enough.)
   const fc = functionColors();
   const COL: Palette =
     fc.p1 === 'red'
@@ -357,12 +357,12 @@ function drawScene(
   const playing = s.result === null;
   const turnColor = s.turn === 1 ? COL.p1 : COL.p2;
 
-  // --- 배경 ---
+  // --- background ---
   ctx.clearRect(0, 0, CW, CH);
   ctx.fillStyle = COL.field;
   ctx.fillRect(0, 0, CW, CH);
 
-  // 판 뒤 옅은 방사광
+  // faint radial glow behind the board
   ctx.save();
   const glow = ctx.createRadialGradient(CW / 2, (BY + BB) / 2, 20, CW / 2, (BY + BB) / 2, BOARD * 0.9);
   glow.addColorStop(0, 'rgba(211,0,197,0.10)');
@@ -371,7 +371,7 @@ function drawScene(
   ctx.fillRect(BX - 60, BY - 60, BOARD + 120, BOARD + 120);
   ctx.restore();
 
-  // --- 네온 그리드 (교점 판) ---
+  // --- neon grid (intersection board) ---
   ctx.save();
   ctx.strokeStyle = 'rgba(211,0,197,0.45)';
   ctx.shadowColor = COL.grid;
@@ -390,7 +390,7 @@ function drawScene(
     ctx.stroke();
   }
   ctx.restore();
-  // 중앙 화점
+  // center star point
   ctx.save();
   ctx.fillStyle = 'rgba(211,0,197,0.7)';
   const cpt = pt(3 * N + 3);
@@ -399,7 +399,7 @@ function drawScene(
   ctx.fill();
   ctx.restore();
 
-  // --- 스캔 행 밴드 (커서가 도는 현재 행 강조) ---
+  // --- scan row band (highlights the current row the cursor is sweeping) ---
   if (playing) {
     const row = Math.floor(s.cursor / N);
     ctx.save();
@@ -409,7 +409,7 @@ function drawScene(
     ctx.restore();
   }
 
-  // --- 돌 ---
+  // --- stones ---
   for (let idx = 0; idx < s.board.length; idx++) {
     const p = s.board[idx];
     if (p === 0) continue;
@@ -417,7 +417,7 @@ function drawScene(
     drawStone(ctx, x, y, p, idx === s.lastPlaced, COL);
   }
 
-  // --- 배치 펄스 / AUTO 태그 ---
+  // --- placement pulse / AUTO tag ---
   for (const f of fx) {
     if (f.kind !== 'place') continue;
     const age = now - f.t;
@@ -437,18 +437,18 @@ function drawScene(
       ctx.restore();
     }
     if (f.auto && age < 820) {
-      // 시간초과 자동배치 표시
+      // timeout auto-placement indicator
       txt(ctx, 'AUTO', x, y - STONE_R - 12, 10, COL.muted, 4);
     }
   }
 
-  // --- 스캐너 레티클 (주 발광) ---
+  // --- scanner reticle (primary glow) ---
   if (playing) {
     const { x, y } = pt(s.cursor);
     drawReticle(ctx, x, y, turnColor, now);
   }
 
-  // --- 승리 라인 (3목) ---
+  // --- win line (3 in a row) ---
   if (winLine && winLine.seg.length >= 2) {
     const color = winLine.player === 1 ? COL.p1 : COL.p2;
     let a = pt(winLine.seg[0]);
@@ -477,14 +477,14 @@ function drawScene(
     ctx.restore();
   }
 
-  // --- 플래시 (시야 방해) — 판 위 CRT 간섭 ---
+  // --- flash (view disruption) — CRT interference over the board ---
   if (s.flash > 0) {
     const a = Math.min(1, s.flash / G9.FLASH_TIME);
     ctx.save();
     ctx.fillStyle = `rgba(244,240,255,${0.5 * a})`;
     ctx.fillRect(BX - 18, BY - 18, BOARD + 36, BOARD + 36);
     if (!meta.reduced) {
-      // 랜덤 스캔 노이즈 바 (감쇠운동 미사용 시 정적 워시)
+      // random scan-noise bars (static wash when reduced motion is on)
       for (let y = BY; y < BB; y += 6) {
         if (Math.random() < 0.5) {
           ctx.fillStyle = Math.random() < 0.5 ? 'rgba(5,217,232,0.5)' : 'rgba(255,42,109,0.5)';
@@ -496,7 +496,7 @@ function drawScene(
     ctx.restore();
   }
 
-  // --- 상단 배너 ---
+  // --- top banner ---
   if (playing) {
     const arrow = s.turn === 1 ? '▶' : '◀';
     const label = s.turn === 1 ? `${arrow} P1 TURN` : `P2 TURN ${arrow}`;
@@ -507,7 +507,7 @@ function drawScene(
     txt(ctx, win, CW / 2, 70, 16, wc, winLine ? 12 : 4);
   }
 
-  // --- 턴타임 바 (남은 배치 시간) ---
+  // --- turn-time bar (remaining placement time) ---
   const remain = Math.max(0, 1 - s.turnClock / G9.TURN_TIME);
   const barY = 480;
   ctx.save();
@@ -517,7 +517,7 @@ function drawScene(
   ctx.lineWidth = 1;
   ctx.strokeRect(BX, barY, BOARD, 12);
   if (playing) {
-    const warn = remain < 0.16; // 자동배치 임박 → error 색 하드 점멸
+    const warn = remain < 0.16; // auto-placement imminent → hard blink in error color
     const barColor = warn && Math.floor(now / 90) % 2 === 0 ? COL.error : turnColor;
     ctx.fillStyle = barColor;
     ctx.shadowColor = barColor;
@@ -527,11 +527,11 @@ function drawScene(
   ctx.restore();
   txt(ctx, 'PLACE TIME', CW / 2, barY + 26, 10, COL.muted, 0);
 
-  // --- 좌/우 정보 컬럼 ---
+  // --- left/right info columns ---
   drawSidePanel(ctx, 156, 1, s.board, playing && s.turn === 1, meta.p1IsYou, now, COL);
   drawSidePanel(ctx, 804, 2, s.board, playing && s.turn === 2, meta.p2IsYou, now, COL);
 
-  // --- 판정 순간 글리치 (승패 순간에만, 1회) ---
+  // --- decision-moment glitch (only at the win/loss moment, once) ---
   const glitch = fx.find((f) => f.kind === 'glitch');
   if (glitch && !meta.reduced && now - glitch.t < 110) {
     ctx.save();
@@ -545,24 +545,24 @@ function drawScene(
 }
 
 // ---------------------------------------------------------------------------
-// 컴포넌트
+// Component
 // ---------------------------------------------------------------------------
 export default function Game9() {
   useDebugScreen('scr-game9');
   const flow = useFlow();
   const navigate = useNavigate();
 
-  // 온라인 렌더 훅(성능 표준) — 활성/역할만 선택 구독(라운드 경계에서만 리렌더),
-  // 서버 스냅샷 → stateRef 미러링은 직접 스토어 구독(리렌더 없이). per-snapshot HUD 반영은 onSnapshot으로.
-  //  · stateRef.current = 최신 서버 스냅샷, snapAtRef.current = 수신시각(로컬 커서 파생 기준).
-  //  · isOnline/myRole은 안정 원시값 → 루프 effect deps에 넣어도 churn 없음(rAF 굶음 방지).
+  // Online render hook (performance standard) — selectively subscribes to active/role only (re-renders only at round boundaries),
+  // server snapshot → stateRef mirroring subscribes to the store directly (without re-render). Per-snapshot HUD reflection via onSnapshot.
+  //  · stateRef.current = latest server snapshot, snapAtRef.current = receive time (basis for local cursor derivation).
+  //  · isOnline/myRole are stable primitives → putting them in the loop effect deps causes no churn (prevents starving the rAF).
   const { isOnline, myRole, stateRef, snapAtRef } = useOnlineRender<Game9State>(9, (s) => {
-    // 서버 스냅샷마다: 디버그 브리지 + HUD 남은시간(초 양자화). stateRef/snapAtRef는 훅이 갱신.
+    // per server snapshot: debug bridge + HUD remaining time (second-quantized). stateRef/snapAtRef are updated by the hook.
     setDebugGame(s);
     const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
     setHudMs(Math.ceil(remainingMs / 1000) * 1000);
   });
-  // 키보드 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref.
+  // ref that lets the keyboard handler (stable closure) see the latest 'is online active'.
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
 
@@ -570,7 +570,7 @@ export default function Game9() {
   const eventsRef = useRef<GameInputEvent[]>([]);
   const fxRef = useRef<Fx[]>([]);
   const winLineRef = useRef<WinLine | null>(null);
-  // 종료 연출: result 전환 추적(기본 플래시만 — 폭발 없음)
+  // end effect: tracks the result transition (basic flash only — no explosion)
   const endRef = useRef<EndTracker>(createEndTracker());
   const reportedRef = useRef(false);
   const resultAtRef = useRef(0);
@@ -581,12 +581,12 @@ export default function Game9() {
     flashAt: 0,
   });
   const reducedRef = useRef(false);
-  // 온라인 커서 로컬 파생용: 커서는 시간-결정적(스캔)이라 서버가 브로드캐스트할 필요 없음(요구사항).
-  //   기준점은 마지막 스냅샷의 turnClock(=stateRef.current.turnClock)과 수신시각(snapAtRef.current) —
-  //   클라가 로컬 클럭으로 부드럽게 굴리고, 놓는 순간의 '고른 칸'만 서버로 보낸다(sendInput cell).
+  // for local online cursor derivation: the cursor is time-deterministic (scan), so the server need not broadcast it (requirement).
+  //   the reference points are the last snapshot's turnClock (=stateRef.current.turnClock) and receive time (snapAtRef.current) —
+  //   the client rolls it smoothly with a local clock, and sends only the 'picked cell' at the moment of placement to the server (sendInput cell).
   const localCursorRef = useRef(0);
 
-  /** HUD 남은 시간(초 단위 양자화 — 리렌더 절약) */
+  /** HUD remaining time (second-quantized — saves re-renders) */
   const [hudMs, setHudMs] = useState(GAME_DURATION * 1000);
 
   const [qLit, flashQ] = useKeyLamp();
@@ -596,7 +596,7 @@ export default function Game9() {
   const lampRef = useRef({ flashQ, flashW, flashU, flashI });
   lampRef.current = { flashQ, flashW, flashU, flashI };
 
-  // direct-URL 복구 + prefers-reduced-motion 캐시 + 디버그 브리지 정리
+  // direct-URL recovery + prefers-reduced-motion cache + debug bridge cleanup
   useEffect(() => {
     const f = getFlow();
     if (f.phase === 'idle' || f.gameId !== 9) startOfflineGame(9);
@@ -606,7 +606,7 @@ export default function Game9() {
     return () => setDebugGame(null);
   }, []);
 
-  // 캔버스 해상도 (dpr 스케일)
+  // canvas resolution (dpr scale)
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
@@ -616,23 +616,23 @@ export default function Game9() {
     c.getContext('2d')?.scale(dpr, dpr);
   }, []);
 
-  // (서버 상태 미러링은 useOnlineRender의 onSnapshot 콜백으로 이동 — 리렌더 없이 stateRef/HUD 갱신)
+  // (server state mirroring moved to useOnlineRender's onSnapshot callback — updates stateRef/HUD without re-render)
 
-  // 키보드 — GameInputEvent 큐 수집 + 램프 점등. 온라인 P2(U/I)는 봇이 대행하므로 흡수.
+  // keyboard — collects the GameInputEvent queue + lights lamps. Online P2 (U/I) is absorbed since the bot handles it.
   useEffect(() => {
     const detach = attachLocalKeyboard(
       () => performance.now() / 1000,
       (e) => {
-        // ── 서버 온라인 활성: 로컬 큐/봇 안 씀 — 내 입력만 서버로 전송 ──
-        // 온라인은 U/I 두 키만 사용(요구사항). U=놓기(slotA), I=방해(slotB). Q/W는 무시.
-        // 서버가 슬롯을 내 role의 물리키로 재기입하므로 접속자는 자기 캐릭터를 조종한다.
-        // 놓기(U)는 로컬 커서로 고른 칸(localCursorRef)을 함께 보낸다 — 서버가 커서를 관리하지 않는다.
+        // ── server online active: no local queue/bot — send only my input to the server ──
+        // online uses only the two keys U/I (requirement). U=place(slotA), I=disrupt(slotB). Q/W are ignored.
+        // the server rewrites the slot to my role's physical key, so the connected player controls their own character.
+        // placement (U) also sends the cell picked by the local cursor (localCursorRef) — the server does not manage the cursor.
         if (isOnlineRef.current) {
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           if (e.type === 'down') {
             if (e.code === 'KeyU') {
               lampRef.current.flashU();
-              sfx('g9-place-stone'); // 착수 입력
+              sfx('g9-place-stone'); // placement input
             } else lampRef.current.flashI();
           }
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
@@ -640,19 +640,19 @@ export default function Game9() {
           onlineSendInput(slot, e.type, e.t, cell);
           return;
         }
-        // ── 오프라인(로컬 2인 / flow.mode==='online'이면 P2 봇) — 회귀 금지 ──
+        // ── offline (local 2-player / if flow.mode==='online', P2 is a bot) — no regression ──
         const f = getFlow();
         const offlineBotMode = f.mode === 'online';
         const isP2 = e.code === 'KeyU' || e.code === 'KeyI';
-        if (offlineBotMode && isP2) return; // 오프라인 봇 모드: P2 = 봇
+        if (offlineBotMode && isP2) return; // offline bot mode: P2 = bot
         if (e.type === 'down') {
           if (e.code === 'KeyQ') {
             lampRef.current.flashQ();
-            sfx('g9-place-stone'); // P1 착수 입력
+            sfx('g9-place-stone'); // P1 placement input
           } else if (e.code === 'KeyW') lampRef.current.flashW();
           else if (e.code === 'KeyU') {
             lampRef.current.flashU();
-            sfx('g9-place-stone'); // P2 착수 입력
+            sfx('g9-place-stone'); // P2 placement input
           } else if (e.code === 'KeyI') lampRef.current.flashI();
         }
         if (f.phase === 'playing') eventsRef.current.push(e);
@@ -661,23 +661,23 @@ export default function Game9() {
     return detach;
   }, []);
 
-  // 라운드 수명주기: state 생성 → rAF 루프(step + draw) → 결과 보고
-  //   서버 온라인이 활성이면: 로컬 시뮬/봇/결과보고 없이 서버 상태만 그리는 draw-only 루프로 우회.
+  // round lifecycle: create state → rAF loop (step + draw) → report result
+  //   if server online is active: bypass into a draw-only loop that only draws server state, with no local sim/bot/result reporting.
   useEffect(() => {
-    // ── 서버 온라인: draw-only (로컬 step·봇·reportRoundEnd 없음) ──
+    // ── server online: draw-only (no local step·bot·reportRoundEnd) ──
     if (isOnline) {
-      // 첫 스냅샷 전에는 초기 create 상태(빈 판)를 그린다. 훅의 onSnapshot이 서버 state로 덮어쓴다.
+      // before the first snapshot, draw the initial create state (empty board). the hook's onSnapshot overwrites it with server state.
       if (!stateRef.current) stateRef.current = game9.create(Math.random);
       let oraf = 0;
       const oloop = (now: number) => {
         oraf = requestAnimationFrame(oloop);
         const s = stateRef.current;
         if (!s) return;
-        // 커서는 서버 브로드캐스트를 쓰지 않고 로컬로 파생(부드럽게, 지터 없음).
-        // 캔버스 준비(octx)와 무관하게 매 프레임 갱신 — 놓기 입력이 이 값을 '고른 칸'으로 서버에 보낸다.
+        // the cursor is derived locally instead of using a server broadcast (smoothly, no jitter).
+        // updated every frame regardless of canvas readiness (octx) — placement input sends this value to the server as the 'picked cell'.
         let drawn = s;
         if (s.result === null) {
-          // 마지막 스냅샷의 turnClock(=s.turnClock, stateRef가 곧 최신 스냅샷) + 수신 후 경과(snapAtRef).
+          // the last snapshot's turnClock (=s.turnClock, stateRef is now the latest snapshot) + elapsed since receipt (snapAtRef).
           const at = snapAtRef.current;
           const elapsedSinceSnap = at > 0 ? (now - at) / 1000 : 0;
           const localTurnClock = Math.min(G9.TURN_TIME, s.turnClock + elapsedSinceSnap);
@@ -688,7 +688,7 @@ export default function Game9() {
           localCursorRef.current = localCursor;
           drawn = { ...s, cursor: localCursor };
         }
-        // octx는 매 프레임 새로 획득(캔버스가 늦게 붙어도 복구). null이면 그리기만 건너뛴다.
+        // octx is re-acquired every frame (recovers even if the canvas attaches late). if null, only drawing is skipped.
         const octx = canvasRef.current?.getContext('2d');
         if (!octx) return;
         fxRef.current = fxRef.current.filter((f) => now - f.t < 1400);
@@ -735,7 +735,7 @@ export default function Game9() {
         const events = eventsRef.current;
         eventsRef.current = [];
 
-        // 온라인 봇(P2) — 목표 교점을 커서가 지날 때 KeyU 합성, 상대 턴엔 가끔 KeyI로 방해
+        // online bot (P2) — synthesize KeyU when the cursor passes the target intersection, occasionally disrupt with KeyI on the opponent's turn
         if (getFlow().mode === 'online') {
           const bot = botRef.current;
           const tSec = now / 1000;
@@ -765,14 +765,14 @@ export default function Game9() {
           }
         }
 
-        // 코어는 원본 mutate 후 동일 참조 반환 → 이전값 비교는 호출 전 스냅샷
+        // the core mutates the original then returns the same reference → prev-value comparison snapshots before the call
         s = game9.step(s, events, dt);
         stateRef.current = s;
         setDebugGame(s);
         const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
         setHudMs(Math.ceil(remainingMs / 1000) * 1000);
 
-        // 배치 이펙트 파생 (lastPlaced 변화 감지)
+        // derive placement effect (detect lastPlaced change)
         if (s.lastPlaced !== prevPlacedRef.current && s.lastPlaced >= 0) {
           prevPlacedRef.current = s.lastPlaced;
           fxRef.current.push({
@@ -784,7 +784,7 @@ export default function Game9() {
           });
         }
 
-        // 판정 순간 (1회) — 3목 즉시승이면 승리 라인 계산 + 글리치
+        // decision moment (once) — if a 3-in-a-row instant win, compute the win line + glitch
         if (s.result !== null && resultAtRef.current === 0) {
           resultAtRef.current = now;
           if (s.elapsed < GAME_DURATION && (s.result === 'P1' || s.result === 'P2') && s.lastPlaced >= 0) {
@@ -794,8 +794,8 @@ export default function Game9() {
           fxRef.current.push({ kind: 'glitch', t: now });
         }
       } else if (!reportedRef.current && now - resultAtRef.current >= RESULT_FX_MS) {
-        if (isOnline) return; // 온라인은 서버가 round:end 구동 — 화면은 보고하지 않음(방어적 가드)
-        // 승리 라인/글리치를 짧게 보여준 뒤 라운드 종료 1회 보고 → ResultOverlay
+        if (isOnline) return; // online: the server drives round:end — the screen does not report (defensive guard)
+        // after briefly showing the win line/glitch, report round end once → ResultOverlay
         reportedRef.current = true;
         reportRoundEnd(s.result === 'P1' ? 'P1_WIN' : s.result === 'P2' ? 'P2_WIN' : 'DRAW');
       }
@@ -815,13 +815,13 @@ export default function Game9() {
 
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-    // isOnline/myRole(안정 원시값)로 게이팅 — online 객체를 넣으면 매 렌더 재실행되어 rAF가 굶는다.
+    // gated by isOnline/myRole (stable primitives) — passing the online object would re-run every render and starve the rAF.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline, myRole, flow.gameId, flow.phase, flow.currentRound]);
 
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
-  // 내 색(매치 고정, 플레이어 종속) — 온라인 키캡을 역할이 아니라 이 색으로 칠한다. 오프라인/미설정=blue.
+  // my color (fixed per match, player-dependent) — paint the online keycaps with this color rather than by role. offline/unset=blue.
   const myColor: PlayerColor = onlineStore.get().myColor ?? 'blue';
   const urgent = flow.phase === 'playing' && hudMs <= 5000;
 
@@ -838,9 +838,9 @@ export default function Game9() {
             navigate('/');
           }}
         >
-          ◀ 나가기
+          ◀ Exit
         </Button>
-        <span className="g9-title font-display c-muted">게임9 · 스피드 오목</span>
+        <span className="g9-title font-display c-muted">Game 9 · Speed Gomoku</span>
       </div>
 
       <div className="g9-hudwrap">
@@ -855,36 +855,36 @@ export default function Game9() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g9-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g9-canvas" aria-label="게임9 스테이지 — 스피드 오목" />
+        <canvas ref={canvasRef} className="g9-canvas" aria-label="Game 9 stage — Speed Gomoku" />
 
       </div>
 
-      {/* 온스크린 키캡 — 실제 배정 키 표기(SPEC Q2), 입력 순간 램프 점등 */}
+      {/* on-screen keycaps — show the actual assigned keys (SPEC Q2), lamps light at the moment of input */}
       {isOnline ? (
-        // 온라인: U/I 두 키만 사용 → 내 컨트롤을 '내 색'(myColor)으로 표기.
-        // 색은 플레이어 종속(역할 무관), 동작 라벨(놓기/방해)은 양 역할 공통이라 그대로.
+        // online: uses only the two keys U/I → label my controls with 'my color' (myColor).
+        // colors are player-dependent (role-agnostic); the action labels (place/disrupt) are common to both roles, so keep them.
         <div className="g9-keys g9-keys--online">
           <div className="g9-keys__group">
             <span className={`g9-keys__tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {myColor === 'blue' ? '파랑' : '빨강'} · PLACE
+              YOU · {myColor === 'blue' ? 'BLUE' : 'RED'} · PLACE
             </span>
-            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="●" lit={uLit} label="놓기" />
-            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="✦" lit={iLit} label="방해" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="●" lit={uLit} label="Place" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="✦" lit={iLit} label="Disrupt" />
           </div>
           <span className="g9-keys__hint font-arcade c-muted">AIM SCANNER · FIRST 3-ROW WINS</span>
         </div>
       ) : (
         <div className="g9-keys">
           <div className="g9-keys__group">
-            <KeyCap role="P1" keyChar="Q" icon="●" lit={qLit} label="놓기" />
-            <KeyCap role="P1" keyChar="W" icon="✦" lit={wLit} label="방해" />
+            <KeyCap role="P1" keyChar="Q" icon="●" lit={qLit} label="Place" />
+            <KeyCap role="P1" keyChar="W" icon="✦" lit={wLit} label="Disrupt" />
             <span className="g9-keys__tag font-arcade c-p1">P1 · PLACE</span>
           </div>
           <span className="g9-keys__hint font-arcade c-muted">AIM SCANNER · FIRST 3-ROW WINS</span>
           <div className="g9-keys__group">
             <span className="g9-keys__tag font-arcade c-p2">P2 · PLACE</span>
-            <KeyCap role="P2" keyChar="U" icon="●" lit={uLit} label="놓기" />
-            <KeyCap role="P2" keyChar="I" icon="✦" lit={iLit} label="방해" />
+            <KeyCap role="P2" keyChar="U" icon="●" lit={uLit} label="Place" />
+            <KeyCap role="P2" keyChar="I" icon="✦" lit={iLit} label="Disrupt" />
           </div>
         </div>
       )}

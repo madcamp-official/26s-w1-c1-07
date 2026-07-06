@@ -1,8 +1,8 @@
 /**
- * 게임5 — 몬스터 포격전 전용 스타일 (game8 에이전트 소유).
- * 공용 theme.css 유틸(.crt-bezel/.vanish-grid/.font-arcade/.glow-text/.lamp) 위에
- * 레이아웃·연출만 얹는다 — 토큰·글로우 공식은 PLAN §1 준수. radius 0 기본, 그림자=글로우.
- * 전역 스캔라인은 App이 1장(.crt-overlay) 렌더 → 여기서 중복 금지.
+ * Game 5 — Monster Bombardment-specific styles (owned by the game8 agent).
+ * On top of the shared theme.css utilities (.crt-bezel/.vanish-grid/.font-arcade/.glow-text/.lamp)
+ * only layout/presentation is layered — tokens and glow formulas follow PLAN §1. radius 0 by default, shadow = glow.
+ * The global scanline is rendered once by App (.crt-overlay) → do not duplicate it here.
  */
 
 .g8-screen {
@@ -34,9 +34,9 @@
   z-index: 1;
 }
 
-/* CRT 스테이지 — 베젤은 theme.css .crt-bezel, 여기서는 크기만.
-   상하 고정 크롬(topbar+HUD+키캡+gap+padding)+베젤 테두리를 뷰포트 높이로 캡해
-   16:9 캔버스가 하단 키캡을 밀어내지 않도록 폭 상한을 계산 (게임2 V-2 대응). */
+/* CRT stage — the bezel comes from theme.css .crt-bezel, here only the size.
+   Cap the fixed top/bottom chrome (topbar+HUD+keycaps+gap+padding)+bezel border by viewport height
+   to compute a width limit so the 16:9 canvas does not push out the bottom keycaps (handling Game 2 V-2). */
 .g8-stage {
   position: relative;
   width: min(1020px, 100%, calc((100vh - 310px) * 16 / 9 + 28px));
@@ -49,8 +49,8 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   새 메커니즘: 격추 점수(P1/P2) — neon 스코어 셀.
-   스테이지(.crt-bezel, position:relative, overflow:hidden) 상단 양 모서리.
+   New mechanic: kill score (P1/P2) — neon score cell.
+   Both top corners of the stage (.crt-bezel, position:relative, overflow:hidden).
    ───────────────────────────────────────────────────────────── */
 .g8-score {
   position: absolute;
@@ -91,7 +91,7 @@
   color: var(--p2);
 }
 
-/* 점수 숫자 — 값 변경 시 하드 스텝 + 80ms 글로우 버스트(§3.1 펌핑 감각). key 리마운트로 재생 */
+/* Score numbers — on value change, a hard step + 80ms glow burst (§3.1 pumping feel). Replayed via key remount */
 @keyframes g8-score-burst {
   0% {
     filter: brightness(1.9);
@@ -116,7 +116,7 @@
   color: var(--p2);
 }
 
-/* 라운드 인트로 — sign-on 플리커 후 소등 (steps, 부드러운 fade 금지 §1.4) */
+/* Round intro — sign-on flicker then blackout (steps, no smooth fade §1.4) */
 .g8-round-intro {
   position: absolute;
   inset: 0;
@@ -151,7 +151,7 @@
   100% { opacity: 0; }
 }
 
-/* 하단 키캡 열 — 좌 P1(시안) / 우 P2(핑크), 실제 배정 키 표기 (SPEC Q2) */
+/* Bottom keycap row — left P1 (cyan) / right P2 (pink), showing the actual assigned keys (SPEC Q2) */
 .g8-keys {
   width: min(1020px, 100%);
   display: flex;
@@ -185,7 +185,7 @@
 @media (prefers-reduced-motion: reduce) {
   .g8-round-intro {
     animation: none;
-    opacity: 0; /* HUD의 ROUND n/m 캡션이 정보 정본 — 인트로는 장식이라 생략 */
+    opacity: 0; /* the HUD's ROUND n/m caption is the source of truth — the intro is decorative, so it is omitted */
   }
   .g8-score__num {
     animation: none;

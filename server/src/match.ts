@@ -1,8 +1,8 @@
 /**
- * 서버 권위 매치 러너 (BUILD_PLAN D3·D4·D7·D8).
- *  · 매치 = 3라운드, 라운드마다 게임 랜덤(서로 다른 것 우선) + 역할 랜덤.
- *  · 라운드 자동 카운트다운 → 서버 고정틱 루프(create/step) → game:state 브로드캐스트.
- *  · 끊겨도 서버가 끝까지 연산(입력만 멈춤). 매치 종료 시 game_match+game_round INSERT → match:end.
+ * Server-authoritative match runner (BUILD_PLAN D3·D4·D7·D8).
+ *  · Match = 3 rounds; each round has a random game (prefer distinct ones) + random roles.
+ *  · Automatic round countdown → server fixed-tick loop (create/step) → game:state broadcast.
+ *  · Even if disconnected, the server computes to the end (only input stops). On match end, INSERT game_match+game_round → match:end.
  */
 import { randomInt } from 'node:crypto'
 import type { Server } from 'socket.io'
@@ -23,25 +23,25 @@ import { persistMatch, settleCoins, type RoundRecord } from './db'
 import type { Room } from './rooms'
 import type { MatchRuntime } from './match-types'
 
-// 시뮬(계산)과 브로드캐스트(전송)를 분리한다.
-//  · SIM_HZ       = 게임 스텝 계산 주기(물리/판정 정밀도). 높을수록 정확.
-//  · BROADCAST_HZ = 상태 전송 주기(네트워크/클라 렌더 부하). 낮을수록 가벼움(렉↓).
-// 전송은 매 틱이 아니라 BROADCAST_EVERY 틱마다 1번만. (남은 gap·지터는 클라 보간(외삽)으로 보완)
-// 2명 매치라 대역폭 부담이 없어 60Hz 전송으로 상향 — 스냅샷 간격 33ms→16ms로 좁혀 끊김↓.
+// Separate simulation (compute) from broadcast (transmit).
+//  · SIM_HZ       = game-step compute rate (physics/judgement precision). Higher = more accurate.
+//  · BROADCAST_HZ = state transmit rate (network/client render load). Lower = lighter (less lag).
+// Transmit happens once every BROADCAST_EVERY ticks, not every tick. (Remaining gap/jitter is covered by client interpolation/extrapolation.)
+// With only 2 players there's no bandwidth pressure, so we bumped transmit to 60Hz — snapshot interval 33ms→16ms tightens stutter.
 const SIM_HZ = 60
 const BROADCAST_HZ = 60
-const TICK_MS = Math.round(1000 / SIM_HZ) // ≈16ms — 계산 틱 간격
+const TICK_MS = Math.round(1000 / SIM_HZ) // ≈16ms — compute tick interval
 const DT = TICK_MS / 1000
-const BROADCAST_EVERY = Math.max(1, Math.round(SIM_HZ / BROADCAST_HZ)) // 1 → 매 틱 전송 = 60Hz
+const BROADCAST_EVERY = Math.max(1, Math.round(SIM_HZ / BROADCAST_HZ)) // 1 → transmit every tick = 60Hz
 const GAME_DURATION = 10
-// 아래 타이밍 상수는 E2E 테스트에서만 env로 단축한다(운영 기본값 불변).
+// The timing constants below are shortened via env only in E2E tests (production defaults unchanged).
 const COUNTDOWN_MS = Number(process.env.MATCH_COUNTDOWN_MS ?? 3000)
-const ROUND_GAP_MS = Number(process.env.MATCH_ROUND_GAP_MS ?? 2500) // round:end 후 다음 라운드까지
-/** 온라인 매치는 항상 9라운드 — 슬롯 3릴 × 3회전 (릴 k = 라운드 k, k+3, k+6) */
+const ROUND_GAP_MS = Number(process.env.MATCH_ROUND_GAP_MS ?? 2500) // from round:end until the next round
+/** Online matches are always 9 rounds — 3 slot reels × 3 spins (reel k = rounds k, k+3, k+6) */
 const TOTAL_ROUNDS = 9
 /**
- * match:start(슬롯 결과·베팅 공개) 후 1라운드 round:start까지의 대기.
- * 클라 연출: 릴 스핀 → 1.2s/1.5s/1.8s 순차 정지(0.3s 간격) → 2.5s부터 VS(베팅 공개) 2초.
+ * Wait from match:start (reveal of slot results & bets) until round 1's round:start.
+ * Client sequence: reels spin → stop in order at 1.2s/1.5s/1.8s (0.3s apart) → from 2.5s, VS (bet reveal) for 2s.
  */
 const INTRO_MS = Number(process.env.MATCH_INTRO_MS ?? 4700)
 
@@ -51,9 +51,9 @@ interface Participant {
   socketId: string
   nickname: string
   imageUrl: string | null
-  /** 이 매치에 건 코인 (참가 시 검증 완료) */
+  /** Coins staked on this match (verified at join time) */
   bet: number
-  /** 베팅 = 참가 시점 보유 전액이면 true (VS 화면 ALL-IN 표시) */
+  /** true if the bet = entire balance at join time (ALL-IN badge on the VS screen) */
   allIn: boolean
 }
 
@@ -65,19 +65,19 @@ export class MatchRunner implements MatchRuntime {
   private b: Participant
   private roundResults: RoundRecord[] = []
   private currentRound = 0
-  private totalRounds = TOTAL_ROUNDS // 항상 9 (설정과 무관)
-  /** 슬롯머신 3릴 결과 — 라운드 r 게임 = slotGames[(r-1) % 3] */
+  private totalRounds = TOTAL_ROUNDS // always 9 (independent of settings)
+  /** Slot machine 3-reel result — round r game = slotGames[(r-1) % 3] */
   private slotGames: [GameId, GameId, GameId]
-  // 색(플레이어 종속, 매치당 고정) — 역할(roleOfA)과 독립. 렌더는 이 색으로 칠한다.
+  // Color (bound to the player, fixed per match) — independent of role (roleOfA). Rendering paints with this color.
   private colorOfA: PlayerColor = 'blue'
   private colorOfB: PlayerColor = 'red'
-  // 현재 라운드 런타임
+  // Current round runtime
   private gameId: GameId = 1
   private roleOfA: Role = 'P1'
   private state: ReturnType<typeof createState> | null = null
   private inputQueue: GameInputEvent[] = []
   private seq = 0
-  private tickCount = 0 // 이 라운드의 시뮬 틱 수(BROADCAST_EVERY로 전송 주기 결정)
+  private tickCount = 0 // number of sim ticks this round (BROADCAST_EVERY decides the transmit rate)
   private timer: NodeJS.Timeout | null = null
   private introTimer: NodeJS.Timeout | null = null
   private elapsed = 0
@@ -89,10 +89,10 @@ export class MatchRunner implements MatchRuntime {
     this.a = a
     this.b = b
     this.matchId = `m_${randomInt(0x100000, 0xffffff).toString(16)}`
-    // 역할(공격/수비 등 게임기능)은 라운드마다 랜덤 재배정된다(beginRound). 여기선 초기값만.
+    // Roles (attack/defense and other game functions) are randomly reassigned each round (beginRound). Here it's only the initial value.
     this.roleOfA = randomInt(0, 2) === 0 ? 'P1' : 'P2'
-    // 색은 '플레이어'에 종속(역할과 독립). 어느 슬롯이 파랑일지 매치당 랜덤 → roleOfA와 무관하게
-    // 공격자가 파랑일 때도 빨강일 때도 생긴다(색≠역할).
+    // Color is bound to the 'player' (independent of role). Which slot is blue is random per match → regardless of roleOfA,
+    // the attacker can end up blue or red (color ≠ role).
     if (randomInt(0, 2) === 0) {
       this.colorOfA = 'blue'
       this.colorOfB = 'red'
@@ -100,8 +100,8 @@ export class MatchRunner implements MatchRuntime {
       this.colorOfA = 'red'
       this.colorOfB = 'blue'
     }
-    // 슬롯머신 3릴 추첨 — 방 설정 체크박스가 후보 풀. 풀이 3개 이상이면 서로 다른 3개,
-    // 3개 미만이면(호스트가 1~2개만 체크) 그 안에서 중복 허용.
+    // Slot machine 3-reel draw — the room settings checkboxes are the candidate pool. If the pool has 3 or more, pick 3 distinct ones;
+    // if fewer than 3 (host checked only 1~2), allow duplicates within it.
     const pool = (room.games ?? []).filter((g) => ALL_GAME_IDS.includes(g))
     const from = pool.length ? pool : [...ALL_GAME_IDS]
     if (from.length >= 3) {
@@ -121,7 +121,7 @@ export class MatchRunner implements MatchRuntime {
   }
 
   start(): void {
-    // 각 플레이어에게 개별 match:start (상대 정보 + 슬롯 결과 + 베팅 공개)
+    // Individual match:start to each player (opponent info + slot results + bet reveal)
     this.io.to(this.a.socketId).emit(EV.matchStart, {
       matchId: this.matchId,
       you: 'A',
@@ -148,15 +148,15 @@ export class MatchRunner implements MatchRuntime {
       yourAllIn: this.b.allIn,
       oppAllIn: this.a.allIn,
     })
-    // 클라 인트로(슬롯 연출 → VS 베팅 공개 2초)가 끝날 때쯤 1라운드 시작
+    // Start round 1 around when the client intro (slot animation → VS bet reveal for 2s) finishes
     this.introTimer = setTimeout(() => this.beginRound(), INTRO_MS)
   }
 
   private beginRound(): void {
     if (this.stopped) return
     this.gameId = this.slotGames[this.currentRound % 3]
-    // 역할(공격/수비)은 라운드마다 랜덤 재배정 — 비대칭 게임(로켓·공룡 등)에서 매 라운드
-    // 공격/수비가 바뀐다. 색(플레이어 종속)과는 독립이라 색으로 역할을 알 수 없다.
+    // Roles (attack/defense) are randomly reassigned each round — in asymmetric games (rocket, dino, etc.) attack/defense
+    // swaps every round. Independent of color (which is bound to the player), so you can't tell the role from the color.
     this.roleOfA = randomInt(0, 2) === 0 ? 'P1' : 'P2'
     const roleOfB: Role = this.roleOfA === 'P1' ? 'P2' : 'P1'
     const round = this.currentRound + 1
@@ -176,7 +176,7 @@ export class MatchRunner implements MatchRuntime {
       countdownMs: COUNTDOWN_MS,
     })
 
-    // 카운트다운 후 시뮬 시작
+    // Start the sim after the countdown
     setTimeout(() => this.runRound(), COUNTDOWN_MS)
   }
 
@@ -200,12 +200,12 @@ export class MatchRunner implements MatchRuntime {
 
     const done = this.state.result !== null || this.elapsed >= GAME_DURATION + 0.5
 
-    // 전송은 시뮬(매 틱)보다 낮은 주기(BROADCAST_EVERY 틱마다). 단, 종료 프레임은 항상 보낸다.
+    // Transmit at a lower rate than the sim (every BROADCAST_EVERY ticks). But always send the final frame.
     if (this.tickCount % BROADCAST_EVERY === 0 || done) {
       const msg = {
         matchId: this.matchId,
         round: this.currentRound + 1,
-        seq: this.seq++, // 전송 순서(단조증가) — 클라 순서역전 무시용
+        seq: this.seq++, // transmit order (monotonically increasing) — lets the client ignore out-of-order arrivals
         state: projectState(this.state),
       }
       this.io.to(this.a.socketId).emit(EV.gameState, msg)
@@ -227,7 +227,7 @@ export class MatchRunner implements MatchRuntime {
     })
 
     const wins = { P1: 0, P2: 0 }
-    // 표시용 라운드 승수(역할 기준) — 간단히 슬롯→역할 역산은 생략, 클라 표시는 slot 기반
+    // Round win counts for display (role-based) — skipping the slot→role back-calc for simplicity; client display is slot-based
     this.io.to(this.a.socketId).emit(EV.roundEnd, {
       matchId: this.matchId,
       round: this.currentRound + 1,
@@ -260,16 +260,16 @@ export class MatchRunner implements MatchRuntime {
     try {
       recordedMatchId = await persistMatch(this.a.dbId, this.b.dbId, result, this.roundResults)
     } catch (err) {
-      console.error('[match] persist 실패', err)
+      console.error('[match] persist failed', err)
     }
 
-    // 코인 정산 (shared/src/coins.ts 규칙):
-    //  빠른시작(quick): 승자 +자기 베팅 / 패자 -자기 베팅
-    //  코드방(code):    승자 +패자 베팅 / 패자 -자기 베팅
-    //  무승부: 변동 없음
+    // Coin settlement (shared/src/coins.ts rules):
+    //  quick start (quick): winner +own bet / loser -own bet
+    //  code room (code):    winner +loser's bet / loser -own bet
+    //  Draw: no change
     let deltaA = 0
     let deltaB = 0
-    // 코드방 제로섬은 transfer로 정산해 승자 지급이 패자 실제 차감분을 넘지 않게 한다(리뷰 #4).
+    // Settle the code-room zero-sum via transfer so the winner's payout never exceeds what's actually deducted from the loser (review #4).
     let transfer: { amount: number; winnerIsA: boolean } | undefined
     if (result === 'A_WIN') {
       deltaA = this.room.kind === 'quick' ? this.a.bet : this.b.bet
@@ -286,18 +286,18 @@ export class MatchRunner implements MatchRuntime {
       const settled = await settleCoins(this.a.dbId, deltaA, this.b.dbId, deltaB, transfer)
       balanceA = settled.a
       balanceB = settled.b
-      // 실제 반영된 증감으로 통지값 보정 (transfer/음수 클램프가 적용됐을 수 있음)
+      // Correct the notified values to the actually-applied deltas (transfer / negative clamp may have been applied)
       deltaA = settled.deltaA
       deltaB = settled.deltaB
     } catch (err) {
-      console.error('[match] 코인 정산 실패', err)
+      console.error('[match] coin settlement failed', err)
       deltaA = 0
       deltaB = 0
     }
 
-    // ── 리벤지 창구 기록 + 패자 신청 자격 (docs/ONLINE_MATCH.md) ──
-    //  · 자격: 무승부 아님 · 이 매치의 리벤지 신청자가 아님(연속 신청 금지) · 정산 후 보유 ≥ 1
-    //  · stake = min(직전 베팅 × 2, 정산 후 보유) — 2배가 안 되면 ALL-IN
+    // ── Record the rematch window + loser's eligibility to request (docs/ONLINE_MATCH.md) ──
+    //  · Eligibility: not a Draw · not this match's rematch requester (no consecutive requests) · balance ≥ 1 after settlement
+    //  · stake = min(previous bet × 2, balance after settlement) — if doubling isn't possible, ALL-IN
     const requesterOfThisMatch = this.room.revengeRequesterUserId ?? null
     let revengeA: { stake: number; allIn: boolean } | null = null
     let revengeB: { stake: number; allIn: boolean } | null = null
@@ -318,7 +318,7 @@ export class MatchRunner implements MatchRuntime {
         else revengeA = rev
       }
     } else {
-      this.room.postMatch = undefined // 무승부 — 리벤지 없음
+      this.room.postMatch = undefined // Draw — no rematch
     }
     this.room.revengeRequesterUserId = null
 
@@ -326,7 +326,7 @@ export class MatchRunner implements MatchRuntime {
     this.io.to(this.a.socketId).emit(EV.matchEnd, { ...end, coinDelta: deltaA, coinBalance: balanceA, revenge: revengeA })
     this.io.to(this.b.socketId).emit(EV.matchEnd, { ...end, coinDelta: deltaB, coinBalance: balanceB, revenge: revengeB })
 
-    // 방 정리 (대기 상태로 복귀)
+    // Clean up the room (return to waiting state)
     this.stopped = true
     this.room.status = 'waiting'
     this.room.match = undefined
@@ -339,7 +339,7 @@ export class MatchRunner implements MatchRuntime {
     if (!isA && userId !== this.b.userId) return
     const role: Role = isA ? this.roleOfA : this.roleOfA === 'P1' ? 'P2' : 'P1'
     const code = rewriteCodeForRole(ev.code, role)
-    // cell(오목 등에서 클라가 고른 칸)은 그대로 통과 — 코어가 유효성(내 턴·빈칸)을 검증한다.
+    // cell (the square the client picked, e.g. in Gomoku) passes through as-is — the core validates it (my turn, empty cell).
     this.inputQueue.push({ code, type: ev.type, t: ev.t, cell: ev.cell })
   }
 
@@ -353,5 +353,5 @@ export class MatchRunner implements MatchRuntime {
 }
 
 export type { Participant }
-// GAME_CORES import 유지용(트리셰이크 방지 아님 — 실제 사용은 game-adapter)
+// Keeps the GAME_CORES import (not a tree-shake guard — actual use is in game-adapter)
 void GAME_CORES

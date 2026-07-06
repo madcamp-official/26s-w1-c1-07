@@ -1,4 +1,4 @@
-/* 로그인 모달 (로스터 2단계) — Login.tsx */
+/* Login modal (roster step 2) — Login.tsx */
 
 .lg-body {
   display: flex;
@@ -34,7 +34,7 @@
   gap: 10px;
 }
 
-/* 멤버 그리드 — 최대 20명, 4열 */
+/* Member grid — up to 20 people, 4 columns */
 .lg-members {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

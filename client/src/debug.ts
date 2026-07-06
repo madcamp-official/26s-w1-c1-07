@@ -1,17 +1,17 @@
 /**
- * QA 자동화용 디버그 브리지 (dev 전용, 필수).
- * (아키텍트 소유 — 구현 에이전트는 import만, 수정 금지)
+ * Debug bridge for QA automation (dev only, required).
+ * (Owned by the architect — implementation agents may only import, must not modify)
  *
  * window.__MADPUMP__ = {
- *   screen:  현재 화면 id 문자열 (컨테이너 testid: 'scr-main-out' 등),
- *   game:    현재 게임의 최신 state 객체 (@/shell 로직 state 그대로) or null,
+ *   screen:  current screen id string (container testid: 'scr-main-out', etc.),
+ *   game:    the current game's latest state object (@/shell logic state as-is) or null,
  *   session: { loggedIn, nickname },
  * }
  *
- * 사용법:
- *  - 화면 컴포넌트:  useDebugScreen('scr-game1')  ← 마운트 시 screen 갱신 (스텁에 이미 포함)
- *  - 게임 화면:      매 틱마다 setDebugGame(state), 언마운트/종료 시 setDebugGame(null)
- *  - session은 main.tsx의 initDebugBridge()가 sessionStore를 구독해 자동 갱신
+ * Usage:
+ *  - Screen components:  useDebugScreen('scr-game1')  ← updates screen on mount (already included in the stub)
+ *  - Game screens:       setDebugGame(state) every tick, setDebugGame(null) on unmount/exit
+ *  - session is auto-updated by main.tsx's initDebugBridge() subscribing to sessionStore
  */
 import { useEffect } from 'react';
 import { sessionStore } from './state/session';
@@ -40,7 +40,7 @@ function bridge(): MadpumpBridge | null {
   return window.__MADPUMP__;
 }
 
-/** main.tsx에서 1회 호출 — session 자동 동기화 시작 */
+/** Called once from main.tsx — starts automatic session sync */
 export function initDebugBridge(): void {
   const b = bridge();
   if (!b) return;
@@ -52,19 +52,19 @@ export function initDebugBridge(): void {
   sessionStore.subscribe(sync);
 }
 
-/** 현재 화면 id 갱신 (화면 컨테이너 testid 문자열 사용) */
+/** Updates the current screen id (uses the screen container's testid string) */
 export function setDebugScreen(id: string): void {
   const b = bridge();
   if (b) b.screen = id;
 }
 
-/** 현재 게임 state 갱신 — 게임 화면이 매 틱 호출. 게임 이탈 시 null */
+/** Updates the current game state — called every tick by the game screen. null when leaving the game */
 export function setDebugGame(state: unknown | null): void {
   const b = bridge();
   if (b) b.game = state;
 }
 
-/** 화면 컴포넌트 마운트 시 screen을 갱신하는 훅 */
+/** Hook that updates screen when a screen component mounts */
 export function useDebugScreen(id: string): void {
   useEffect(() => {
     setDebugScreen(id);

@@ -1,36 +1,36 @@
-# 구조 & 핵심 계약 (architecture)
+# Structure & core contracts (architecture)
 
-## 레이어
+## Layers
 ```
-shared/  게임코어 10종(순수 tick) + 입력계약 + 소켓 이벤트/타입   ← client·server 공용
-client/  React SPA. 화면·캔버스 렌더 + 온라인 넷코드(소켓 스토어/훅)
-server/  Fastify+Socket.IO 단일 프로세스. 세션·매치러너·Prisma
+shared/  10 game cores (pure tick) + input contract + socket events/types   ← shared by client & server
+client/  React SPA. Screen/canvas render + online netcode (socket store/hooks)
+server/  Fastify+Socket.IO single process. Sessions, match runner, Prisma
 ```
 
-## 게임코어 계약 (shared/src/games)
-- `GameCore { create(rand) → state, step(state, GameInputEvent[], dt) → state }`. 순수함수, I/O 없음.
-- `GameInputEvent { code:'KeyQ'|'KeyW'|'KeyU'|'KeyI', type:'down'|'up', t, cell? }`. `cell`은 오목 등에서만.
-- `GameResult = 'P1'|'P2'|'DRAW'|null`. `GAME_DURATION=10`. 오프라인·온라인이 같은 코어 공유.
-- 레지스트리: `shared/src/games/registry.ts`의 `GAME_CORES`(1~10).
+## Game core contract (shared/src/games)
+- `GameCore { create(rand) → state, step(state, GameInputEvent[], dt) → state }`. Pure function, no I/O.
+- `GameInputEvent { code:'KeyQ'|'KeyW'|'KeyU'|'KeyI', type:'down'|'up', t, cell? }`. `cell` only for Gomoku etc.
+- `GameResult = 'P1'|'P2'|'DRAW'|null`. `GAME_DURATION=10`. Offline and online share the same core.
+- Registry: `GAME_CORES` (1–10) in `shared/src/games/registry.ts`.
 
-## 온라인 넷코드 (서버권위)
-- 클라 → 서버: `game:input`(입력키만). 서버가 슬롯(A/B)→역할 물리키로 재기입.
-- 서버 → 클라: `game:state`(투영 상태, seed 제거) 60Hz. 클라는 그걸 그리기만.
-- 매치: `server/src/match.ts` `MatchRunner`. 3라운드, 라운드마다 랜덤게임, 색(역할)=매치당 고정.
-- 소켓 봉투/이벤트명: `shared/src/net/events.ts`(`EV`).
+## Online netcode (server-authoritative)
+- Client → server: `game:input` (input keys only). The server rewrites the slot (A/B) into role physical keys.
+- Server → client: `game:state` (projected state, seed removed) at 60Hz. The client only draws it.
+- Match: `MatchRunner` in `server/src/match.ts`. 3 rounds, a random game each round, color (role) fixed per match.
+- Socket envelope / event names: `EV` in `shared/src/net/events.ts`.
 
-## 인증 / 세션
-- 세션쿠키(`mp_session`, httpOnly). 소켓 핸드셰이크도 같은 쿠키로 인증.
-- 로그인: `/api/dev/login`(닉네임 스텁) + 구글 OAuth(`/api/auth/google`·`/api/auth/signup`, `GOOGLE_CLIENT_ID` 필요).
+## Auth / session
+- Session cookie (`mp_session`, httpOnly). The socket handshake authenticates with the same cookie.
+- Login: `/api/dev/login` (nickname stub) + Google OAuth (`/api/auth/google`, `/api/auth/signup`, requires `GOOGLE_CLIENT_ID`).
 
 ## DB (Prisma + MySQL)
-- 스키마: `server/prisma/schema.prisma`. 유저(AppUser, googleSub/email/nickname/group), game_match(playerA/B, result), game_round.
-- 라이브=역할 P1/P2, DB=슬롯 A/B. 접속: `DATABASE_URL`(server/.env).
+- Schema: `server/prisma/schema.prisma`. User (AppUser, googleSub/email/nickname/group), game_match (playerA/B, result), game_round.
+- Live = roles P1/P2, DB = slots A/B. Connection: `DATABASE_URL` (server/.env).
 
-## 클라 화면
-- 라우트: `/`(메인) `/onboarding` `/select` `/game/1~10`. `App.tsx`.
-- 온라인 매치 네비/오버레이: `client/src/net/OnlineController.tsx`. 온라인 스토어: `net/online.ts`, 훅 `useOnlineGame`.
-- "내 색(YOU)" 표시: `getPlayerDisplays()`(state/flow.ts)가 온라인 역할을 읽어 판정.
+## Client screens
+- Routes: `/` (main) `/onboarding` `/select` `/game/1~10`. `App.tsx`.
+- Online match nav/overlay: `client/src/net/OnlineController.tsx`. Online store: `net/online.ts`, hook `useOnlineGame`.
+- "My color (YOU)" display: `getPlayerDisplays()` (state/flow.ts) reads the online role and decides.
 
-## 자립성 규칙
-main(client/server/shared)은 `design-lab`/`game-lab`을 **참조 금지**. 값이 필요하면 복사. 가드: `npm run check:standalone`.
+## Standalone rules
+main (client/server/shared) must **not reference** `design-lab`/`game-lab`. Copy values if needed. Guard: `npm run check:standalone`.

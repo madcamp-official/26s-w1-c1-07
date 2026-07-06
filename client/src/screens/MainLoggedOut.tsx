@@ -1,19 +1,19 @@
 /**
- * S1 메인 — 비로그인. 담당: auth 에이전트.
- * 컨테이너 testid: scr-main-out / 부품: btn-online, btn-offline, btn-login, btn-settings
+ * S1 Main — logged out. Owner: auth agent.
+ * Container testid: scr-main-out / parts: btn-online, btn-offline, btn-login, btn-settings
  *
- * PLAN §2-S1: attract mode 타이틀 스크린 — 소실점 그리드 + MAD(핑크)/PUMP(시안) 네온 로고
- *   (마지막 P 고장 램프 개그) + btn-online(옐로 primary, INSERT COIN 점멸 캡션)
- *   + btn-offline(시안 secondary) + 우상단 로그인/설정 코인 버튼 + 하단 티커 스트립.
- * 로그인: "로그인" 버튼 → 로스터 로그인 모달(분반 → 멤버 선택, docs/AUTH.md).
- *   성공 시 MainGate가 세션을 보고 S2로 스위치.
+ * PLAN §2-S1: attract-mode title screen — vanishing-point grid + MAD (pink)/PUMP (cyan) neon logo
+ *   (broken-lamp gag on the last P) + btn-online (yellow primary, blinking INSERT COIN caption)
+ *   + btn-offline (cyan secondary) + top-right login/settings coin button + bottom ticker strip.
+ * Login: "Login" button → roster login modal (class → member select, docs/AUTH.md).
+ *   On success, MainGate sees the session and switches to S2.
  */
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components';
 import { openModal } from '../state/flow';
 import { openLoginModal } from '../modals/Login';
 import { useDebugScreen } from '../debug';
-import '@/audio'; // 전역 오디오(UI/플로우/코인 SFX + BGM) 자기초기화 — 잠긴 파일 미수정
+import '@/audio'; // global audio (UI/flow/coin SFX + BGM) self-initializes — do not modify locked files
 import './main-logged-out.css';
 
 const TICKER_TEXT = 'Q·W VS U·I — TWO BUTTONS. ONE WINNER. +++ ';
@@ -26,14 +26,14 @@ export default function MainLoggedOut() {
     <main data-testid="scr-main-out" className="s1-root">
       <div className="vanish-grid" aria-hidden />
 
-      {/* 우상단: 로그인 (설정은 온라인 패널 안의 톱니로만 진입) */}
+      {/* Top-right: Login (Settings is reachable only via the gear inside the online panel) */}
       <header className="s1-header">
         <Button variant="tertiary" data-testid="btn-login" onClick={() => openLoginModal()}>
-          로그인
+          Login
         </Button>
       </header>
 
-      {/* 중앙: attract mode 네온 로고 + CTA */}
+      {/* Center: attract-mode neon logo + CTA */}
       <section className="s1-hero">
         <h1 className="s1-logo font-arcade" aria-label="MADPUMP">
           <span className="s1-logo-mad anim-sign-on">MAD</span>
@@ -55,15 +55,15 @@ export default function MainLoggedOut() {
             data-testid="btn-online"
             onClick={() => openModal('login-required')}
           >
-            온라인 게임하기
+            Play Online
           </Button>
           <Button variant="secondary" block data-testid="btn-offline" onClick={() => navigate('/select')}>
-            오프라인 게임하기
+            Play Offline
           </Button>
         </div>
       </section>
 
-      {/* 하단 티커 스트립 (장식 — 기능 아님) */}
+      {/* Bottom ticker strip (decorative — not functional) */}
       <div className="s1-ticker" aria-hidden>
         <span className="s1-ticker__rail font-arcade">
           {TICKER_TEXT.repeat(4)}

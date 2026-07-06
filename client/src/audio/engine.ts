@@ -1,7 +1,7 @@
 /**
- * 오디오 엔진 — AudioContext 수명관리 + 재생 + 뮤트/볼륨(로컬 저장) + 제스처 unlock.
- * SFX는 id별로 1회 렌더 후 버퍼 캐시(재생만 반복). BGM은 gapless 루프.
- * 담당: audio 에이전트. 실패해도 게임에 예외를 던지지 않는다(전부 try/catch·no-op).
+ * Audio engine — AudioContext lifecycle management + playback + mute/volume (local storage) + gesture unlock.
+ * SFX renders once per id, then caches the buffer (only playback repeats). BGM is a gapless loop.
+ * Owner: audio agent. Never throws an exception into the game even on failure (all try/catch · no-op).
  */
 import { renderSFX, renderSeq, renderVamp, mulberry32, hashStr, SR } from './synth';
 import { PRESETS, SEQS, SPEC, BGM, type BgmKey } from './registry';
@@ -92,13 +92,13 @@ function renderCue(id: string): Float32Array | null {
   return buf;
 }
 
-/** 한 방 SFX 재생. 뮤트/컨텍스트 미준비/미해제(unlock 전)면 조용히 no-op. */
+/** Play a one-shot SFX. Silently no-ops if muted / context not ready / not unlocked (before unlock). */
 export function sfx(id: string): void {
   try {
     if (persist.muted) return;
     const c = getCtx();
     if (!c || !master || c.state !== 'running') return;
-    // 동일 id 초단시간 중복(프레임 스팸) 억제 — 15ms
+    // Suppress ultra-short-interval duplicates of the same id (frame spam) — 15ms
     const now = c.currentTime;
     const prev = lastPlayed.get(id) ?? -1;
     if (prev >= 0 && now - prev < 0.015) return;
@@ -127,13 +127,13 @@ function bgmBuffer(c: AudioContext, key: BgmKey): AudioBuffer {
   return b;
 }
 
-/** BGM 전환 — 같은 트랙이면 no-op. unlock 전이면 예약(해제 시 시작). */
+/** BGM switch — no-op if it's the same track. Schedules if before unlock (starts on unlock). */
 export function playBgm(key: BgmKey): void {
   try {
     if (curBgmKey === key && curBgmSrc) return;
     if (!unlocked || persist.muted) {
       pendingBgm = key;
-      curBgmKey = key; // 원하는 트랙 기록(중복 예약 방지)
+      curBgmKey = key; // Record the desired track (avoid duplicate scheduling)
       return;
     }
     const c = getCtx();
@@ -148,7 +148,7 @@ export function playBgm(key: BgmKey): void {
     src.loop = true;
     src.connect(g);
     src.start();
-    // 짧은 페이드인(전환 클릭 방지)
+    // Short fade-in (prevent switch click)
     const t = c.currentTime;
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(0.9, t + 0.25);
@@ -192,7 +192,7 @@ export function stopBgm(): void {
   curBgmKey = null;
 }
 
-/** 첫 사용자 제스처에서 호출 — AudioContext resume + 예약된 BGM 시작. */
+/** Called on the first user gesture — AudioContext resume + start any scheduled BGM. */
 export function unlockAudio(): void {
   const c = getCtx();
   if (!c) return;
@@ -201,7 +201,7 @@ export function unlockAudio(): void {
     if (pendingBgm && !persist.muted) {
       const k = pendingBgm;
       pendingBgm = null;
-      curBgmKey = null; // 강제 재시작
+      curBgmKey = null; // Force restart
       playBgm(k);
     }
   };
@@ -216,7 +216,7 @@ export function isUnlocked(): boolean {
   return unlocked;
 }
 
-// ── 뮤트/볼륨 ──
+// ── Mute/Volume ──
 export function setMuted(m: boolean): void {
   persist = { ...persist, muted: m };
   savePersist(persist);

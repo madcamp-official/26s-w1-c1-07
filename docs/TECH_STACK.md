@@ -1,106 +1,106 @@
-# MADPUMP 기술 스택 결정서 (Tech Stack Decision Record)
+# MADPUMP Tech Stack Decision Record
 
-> **문서 목적**: MADPUMP 구현에 참여하는 모든 사람/AI 에이전트가 같은 기술 전제 위에서 작업하게 하는 단일 기준 문서.
-> **상태**: 확정 (2026-07-03) · **결정자**: 종혁 + PA 세션 설계 논의
-> **AI 에이전트에게**: 이 문서와 충돌하는 스택 선택(예: Next.js 도입, NoSQL 사용)을 하지 말 것. 변경이 필요하면 구현하지 말고 결정자에게 사유와 함께 제안할 것.
+> **Document purpose**: a single reference document so that every person/AI agent involved in MADPUMP's implementation works on the same technical premises.
+> **Status**: finalized (2026-07-03) · **Deciders**: Jonghyeok + PA session design discussion
+> **To AI agents**: do not make stack choices that conflict with this document (e.g. introducing Next.js, using NoSQL). If a change is needed, do not implement it — propose it to the decider with rationale.
 
 ---
 
-## 1. 프로젝트 요약
+## 1. Project summary
 
-**MADPUMP** — 1:1 대결 웹 미니게임 플랫폼. 몰입캠프 분반 단위 그룹, Google 로그인, 온라인 매칭(빠른 시작/코드 방) + 오프라인(한 컴퓨터 2인), 점수·분반 리더보드, admin 콘솔(그룹/인원/매치결과 관리).
+**MADPUMP** — a 1:1 versus web mini-game platform. Immersion-camp class-unit groups, Google login, online matchmaking (quick start / code room) + offline (2 players on one computer), score·class leaderboards, admin console (group/roster/match-result management).
 
-### 정본 문서 (충돌 시 이 우선순위)
-1. **화면 기획서**: Figma `2aG8r8fE4uEE5ALmETw2GG` — **루트 노드 16:1263 "ver4" 보드만 정본** (다른 버전 보드 무시)
-2. **기능정의서**: Google Sheets `1fsjsZiZuB1V2dmKrDIxptzl0vKksL4g1_4pz_Fjz1x8` — 탭 "madpump v1" (gid=36572904). ⚠️ 같은 문서의 "소비자 앱 기능정의서" 탭은 **다른 프로젝트**이므로 읽지 말 것.
-3. **ERD**: `docs/ERD.md` (DDL 포함 — 스키마 정본). ERDCloud "MAD PUMP"(https://www.erdcloud.com/d/uZf9hpd2EinvksbP3)는 시각화용
+### Canonical documents (this priority order on conflict)
+1. **Screen design doc**: Figma `2aG8r8fE4uEE5ALmETw2GG` — **only the root node 16:1263 "ver4" board is canonical** (ignore other version boards)
+2. **Feature-definition doc**: Google Sheets `1fsjsZiZuB1V2dmKrDIxptzl0vKksL4g1_4pz_Fjz1x8` — tab "madpump v1" (gid=36572904). ⚠️ The "consumer-app feature-definition" tab in the same document is **a different project**, so do not read it.
+3. **ERD**: `docs/ERD.md` (includes DDL — schema canonical). ERDCloud "MAD PUMP" (https://www.erdcloud.com/d/uZf9hpd2EinvksbP3) is for visualization
 
-### 게임 3종
-| # | 게임 | 룰 요약 | 넷코드 난이도 |
+### The 3 games
+| # | Game | Rule summary | Netcode difficulty |
 |---|---|---|---|
-| 1 | 숫자 맞추기 | 타겟 숫자(1~100)에 내 숫자를 ±버튼으로 맞추고 **3초 유지 시 승리** | 하 (이벤트 기반) |
-| 2 | 총알 피하기 | P1(공격자): 방향전환+발사 / P2(회피자): 좌우 이동, 피격 시 사망. 총알 속도 랜덤 | 상 (실시간 시뮬) |
-| 3 | 펜싱 | **1초 틱 가위바위보**: 공격(key1)/회피(key2)/무행동 3지선다. 회피>공격>무행동>회피, 진 쪽 1칸 밀림, 같으면 밀림 없음. 뒤 바다에 떨어지면 패배(링아웃) | 최하 (1초 틱) |
+| 1 | Number Guess | Match your number to the target number (1~100) with the ±buttons and **win by holding for 3 seconds** | Low (event-based) |
+| 2 | Bullet Dodge | P1 (attacker): turn + fire / P2 (dodger): move left/right, dies on hit. Bullet speed random | High (real-time sim) |
+| 3 | Fencing | **1-second-tick rock-paper-scissors**: attack (key1)/dodge (key2)/no-action, a 3-way choice. dodge>attack>no-action>dodge, the loser is pushed back 1 tile, a tie has no push. Fall into the sea behind you = defeat (ring-out) | Lowest (1-second tick) |
 
-공통: 라운드 수·라운드당 시간 설정(방장), 결과 P1승/P2승/무승부 기록, 조작키 playerL={q,w} playerR={u,i} (변경 가능).
+Common: round count·per-round time setting (host), result recorded as P1 win/P2 win/draw, control keys playerL={q,w} playerR={u,i} (changeable).
 
 ---
 
-## 2. 스택 결정표
+## 2. Stack decision table
 
-| 층 | 확정 스택 | 버전 방침 |
+| Layer | Finalized stack | Version policy |
 |---|---|---|
-| 언어 | **TypeScript** (클라/서버 공통) | 최신 안정 |
-| 클라이언트 | **Vite + React** | SPA. React Router |
-| 게임 렌더링 | **Canvas 2D + requestAnimationFrame**, 순수 TS 모듈 (React 밖) | 게임 루프에 프레임워크 개입 금지 |
-| 실시간 통신 | **Socket.IO** (클라/서버) | room 기능 내장 활용 |
-| 서버 | **Node + Fastify + Socket.IO 단일 프로세스** | 정적 파일 + REST + WS 하나로 |
-| DB | **MySQL + Prisma** | 스키마는 ERDCloud DDL → prisma db pull/migrate |
-| 인증 | Google OAuth 인가 코드 플로우(서버 처리) + **세션 쿠키**. admin은 별도 ID/PW (bcrypt) | JWT 금지 (세션으로 충분) |
-| 파일 스토리지 | **Cloudflare R2** (S3 호환) — 프로필 사진 업로드용. 서버에서 sharp로 256² webp 리사이즈 + EXIF 제거 후 업로드, DB에는 키만 저장 | 업로드가 주력, 구글 프로필은 기본값 (ERD 문서 노트 12) |
-| 저장소 구조 | **npm workspaces 모노레포** (`client/` + `server/` + `shared/`) | |
-| 배포 | Railway 또는 Fly.io **단일 서비스** + 관리형 MySQL | Vercel 금지 (아래 3절) |
+| Language | **TypeScript** (client/server common) | latest stable |
+| Client | **Vite + React** | SPA. React Router |
+| Game rendering | **Canvas 2D + requestAnimationFrame**, pure TS modules (outside React) | no framework intervention in the game loop |
+| Real-time comms | **Socket.IO** (client/server) | leverage built-in room feature |
+| Server | **Node + Fastify + Socket.IO single process** | static files + REST + WS in one |
+| DB | **MySQL + Prisma** | schema from ERDCloud DDL → prisma db pull/migrate |
+| Auth | Google OAuth authorization-code flow (server-handled) + **session cookie**. admin has a separate ID/PW (bcrypt) | no JWT (sessions are enough) |
+| File storage | **Cloudflare R2** (S3-compatible) — for profile photo upload. Server resizes to 256² webp via sharp + strips EXIF before upload, DB stores only the key | upload is primary, Google profile is the default (ERD doc note 12) |
+| Repo structure | **npm workspaces monorepo** (`client/` + `server/` + `shared/`) | |
+| Deployment | Railway or Fly.io **single service** + managed MySQL | no Vercel (section 3 below) |
 
-## 3. 결정 근거 (왜 이렇게인가)
+## 3. Decision rationale (why this way)
 
-- **Next.js 배제**: 이 앱은 SSR/SEO가 무의미(로그인 뒤 게임)하고, **상시 WebSocket 서버가 필수라 Vercel 서버리스에 못 올림** → Next 최대 이점(배포)이 소멸. custom server로 우겨넣으면 복잡도만 남음. 추후 소개/마케팅 페이지가 커지면 그 부분만 별도 Next 사이트로 분리.
-- **React는 채택**: 게임 밖 UI 비중이 큼 — 로그인/닉네임 온보딩/로비 모달/리더보드/admin 콘솔(테이블·탭·검색·수정이력). 이건 "게임처럼 생긴 UI 앱" 영역이라 React가 실이득.
-- **Canvas는 React 밖**: 게임 루프(60fps rAF)와 React 렌더 모델은 섞으면 서로 방해. React는 캔버스를 마운트만 하고 게임 모듈에 제어권을 넘긴다.
-- **MySQL**: ERD 정본이 ERDCloud이고 ERDCloud export가 MySQL DDL → 설계-구현 파이프라인이 직결됨.
-- **서버 권위(server-authoritative) 판정**: 승패/점수가 분반 랭킹에 반영되고 레딧 등 외부 확산이 목표 → 클라 판정 신뢰 불가. 모든 승패 판정은 서버에서.
+- **Excluding Next.js**: this app has no meaningful SSR/SEO (the game is behind login), and **an always-on WebSocket server is mandatory, so it can't run on Vercel serverless** → Next's biggest benefit (deployment) evaporates. Cramming it in with a custom server leaves only complexity. If an intro/marketing page grows later, split just that part into a separate Next site.
+- **Adopting React**: the out-of-game UI is a large share — login/nickname onboarding/lobby modals/leaderboard/admin console (tables·tabs·search·edit history). This is the "UI app that looks like a game" domain, where React is a net gain.
+- **Canvas outside React**: mixing the game loop (60fps rAF) with the React render model has them interfere with each other. React only mounts the canvas and hands control to the game module.
+- **MySQL**: the canonical ERD is ERDCloud and ERDCloud export is MySQL DDL → the design-implementation pipeline connects directly.
+- **Server-authoritative judging**: since win/loss·score reflect into the class ranking and external spread (Reddit etc.) is a goal, client-side judging can't be trusted. All win/loss judging is on the server.
 
-## 4. 아키텍처 원칙 (구현자 필독)
+## 4. Architecture principles (must-read for implementers)
 
-### 4.1 게임 코어 = 순수 로직 모듈 + 입력 소스 추상화
+### 4.1 Game core = pure logic module + input-source abstraction
 ```
-게임 코어: (state, inputs, dt) => newState   // I/O·소켓·DOM 의존 금지, shared/ 에 위치
-입력 소스: LocalKeyboard(1인|2인) | RemoteSocket
+Game core: (state, inputs, dt) => newState   // no I/O·socket·DOM dependency, located in shared/
+Input source: LocalKeyboard(1p|2p) | RemoteSocket
 ```
-- **오프라인 모드** = 같은 코어에 키보드 2벌 입력 (서버 불필요)
-- **온라인 모드** = 같은 코어가 서버에서 권위 판정 + 클라에서 예측/표시
-- 하나의 게임 로직을 client/server가 **shared 패키지로 공유** — 두 번 구현 금지
+- **Offline mode** = 2 keyboard inputs into the same core (no server needed)
+- **Online mode** = the same core does authority judging on the server + prediction/display on the client
+- One game's logic is **shared as a shared package** across client/server — no implementing it twice
 
-### 4.2 게임별 네트워크 모델
-| 게임 | 모델 |
+### 4.2 Per-game network model
+| Game | Model |
 |---|---|
-| 게임3 펜싱 | 서버가 1초 틱 윈도우로 양쪽 입력 수집 → 상성 판정 → 결과 브로드캐스트 |
-| 게임1 숫자 | 클라는 ±1 이벤트만 전송, 서버가 현재값·"일치 3초 유지" 타이머 판정 |
-| 게임2 총알 | 서버 15~20Hz 고정 틱 시뮬(위치·투사체·충돌) 브로드캐스트, 클라는 보간 렌더 |
+| Game 3 Fencing | server collects both inputs in a 1-second tick window → matchup judgment → broadcast result |
+| Game 1 Number | client sends only ±1 events, server judges the current value·"hold-for-3-seconds match" timer |
+| Game 2 Bullets | server 15~20Hz fixed-tick sim (position·projectile·collision) broadcast, client interpolation render |
 
-### 4.3 방/매칭
-- 코드 방: 서버가 코드 발급(숫자 문자열), Socket.IO room = 코드. 방장만 라운드 설정.
-- 빠른 시작: 서버 인메모리 대기 큐 → 2명 차면 방 생성.
-- 네트워크 끊김: v1은 "그냥 두기"(기능정의서 결정) — 재접속 복구 구현 안 함.
+### 4.3 Room/matchmaking
+- Code room: server issues a code (numeric string), Socket.IO room = the code. Only the host sets rounds.
+- Quick start: server in-memory waiting queue → create a room when 2 players fill it.
+- Network drop: v1 "just leave it" (feature-doc decision) — reconnection recovery not implemented.
 
-### 4.4 DB 파이프라인
-- ERDCloud에서 스키마 수정 → Export SQL → 마이그레이션 반영 (`prisma db pull` 후 `prisma generate` 또는 SQL을 migration으로).
-- 매치 기록에 **game_type(1|2|3) 컬럼 필수** (등수 화면의 게임별 플레이 수/승률 산출).
-- 점수 가중치 등은 admin이 수정 가능해야 함(기능정의서 "점수 시스템 — 어드민에서 수정") → config 테이블로.
+### 4.4 DB pipeline
+- Modify schema in ERDCloud → Export SQL → apply to migration (`prisma db pull` then `prisma generate`, or SQL as a migration).
+- Match records **require a game_type(1|2|3) column** (for the ranking screen's per-game play count/win rate).
+- Score weights etc. must be admin-editable (feature doc "score system — editable in admin") → via a config table.
 
-## 5. 저장소 골격
+## 5. Repo skeleton
 
 ```
 madpump/
 ├─ package.json           # npm workspaces: client, server, shared
-├─ shared/                # 게임 코어 로직 + 소켓 이벤트 타입 (TS)
+├─ shared/                # game core logic + socket event types (TS)
 │  └─ src/games/{game1,game2,game3}/logic.ts
 ├─ client/                # Vite + React + TS
-│  └─ src/{ui,games,net}/ # ui=React 화면, games=Canvas 렌더러, net=socket 래퍼
+│  └─ src/{ui,games,net}/ # ui=React screens, games=Canvas renderers, net=socket wrappers
 └─ server/                # Fastify + Socket.IO + Prisma
    └─ src/{auth,rooms,games,admin,api}/
 ```
 
-## 6. 구현 우선순위 (1차 런칭 기준)
+## 6. Implementation priority (first-launch basis)
 
-1. 모노레포 스캐폴딩 + 소켓 왕복 + Google 로그인/닉네임 온보딩
-2. 코드 방 생성/입장 → **게임3 온라인** (넷코드 최소) → 게임1 온라인
-3. 매치 결과 기록 + 분반 리더보드
-4. 오프라인 모드 (코어 재사용이라 저비용)
-5. 게임2 온라인 (실시간 틱) → 빠른 시작 매칭
-6. admin 콘솔 (런칭 후 가능한 유일한 덩어리)
+1. Monorepo scaffolding + socket round-trip + Google login/nickname onboarding
+2. Code-room create/join → **game 3 online** (minimal netcode) → game 1 online
+3. Match-result recording + class leaderboard
+4. Offline mode (low cost since it reuses the core)
+5. Game 2 online (real-time tick) → quick-start matchmaking
+6. Admin console (the only chunk feasible after launch)
 
-## 7. 미확정 사항 (구현 전 결정자 확인 필요)
+## 7. Unresolved items (need decider confirmation before implementation)
 
-- 게임3: 시작 위치/낭떠러지까지 칸 수, 1초 틈 내 다중 입력 처리 규칙, 라운드 시간 종료 시 판정, 랜덤 요소 유무
-- 게임2: 배치는 ver4 기준(P1 위 트랙/P2 아래 트랙)으로 확정했으나 시트 텍스트와 상이했음 — 밸런스 수치(총알 속도 범위) 미정
-- 점수 공식(승/무/패 가중치) — admin 수정 가능 전제만 확정
+- Game 3: start position/number of tiles to the cliff, rule for handling multiple inputs within the 1-second gap, judgment at round-time expiry, presence of random elements
+- Game 2: layout finalized on the ver4 basis (P1 top track/P2 bottom track) but differed from the sheet text — balance values (bullet speed range) undecided
+- Score formula (win/draw/loss weights) — only the admin-editable premise is finalized

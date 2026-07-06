@@ -1,7 +1,7 @@
 /**
- * 게임 코어 레지스트리 — gameId(1~10) → { create, step }.
- * 서버 매치러너와 클라가 gameId로 게임 코어를 dispatch할 때 쓴다.
- * (렌더러는 클라 전용이라 여기 없음 — 순수 로직만)
+ * Game core registry — gameId(1~10) → { create, step }.
+ * Used when the server match runner and the client dispatch a game core by gameId.
+ * (Renderers are client-only, so they are not here — pure logic only)
  */
 import type { GameCore, GameResult } from './types'
 import * as game1 from './game1/logic'
@@ -17,7 +17,7 @@ import * as game10 from './game10/logic'
 
 export type GameId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
 
-/** 전 게임 공통 코어 타입(런타임 상태는 게임별) */
+/** Common core type shared by all games (runtime state is per-game) */
 type AnyCore = GameCore<{ elapsed: number; result: GameResult }>
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -34,5 +34,5 @@ export const GAME_CORES: Record<GameId, AnyCore> = {
   10: game10 as unknown as AnyCore,
 }
 
-/** 활성 게임 id 목록 (매치 러너 랜덤 추첨 풀) */
+/** List of active game ids (random draw pool for the match runner) */
 export const ALL_GAME_IDS: GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]

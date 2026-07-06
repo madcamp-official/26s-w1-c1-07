@@ -1,18 +1,18 @@
 /**
- * 게임 내부 id(1~10) → 표시 이름. 단일 정본 — GameSelect·Settings·MatchIntro가 공유.
- * (서버 시드 server/prisma/seed.ts의 game.name과 일치해야 한다)
+ * Internal game id (1~10) → display name. Single source of truth — shared by GameSelect, Settings, MatchIntro.
+ * (must match game.name in the server seed server/prisma/seed.ts)
  */
 import type { GameId } from '@/shell';
 
 export const GAME_NAMES: Record<GameId, string> = {
-  1: '숫자 맞추기',
-  2: '타이드 펜싱',
-  3: '펌프',
-  4: '미사일 매치',
-  5: '라이트 사이클',
-  6: '공룡 달리기',
-  7: '이카루스 매치',
-  8: '뿌슝뿌슝',
-  9: '스피드 오목',
-  10: '줄다리기',
+  1: 'Number Guess',
+  2: 'Tide Fencing',
+  3: 'Pump',
+  4: 'Missile Match',
+  5: 'Light Cycle',
+  6: 'Dino Run',
+  7: 'Icarus Match',
+  8: 'Pew Pew',
+  9: 'Speed Gomoku',
+  10: 'Tug of War',
 };

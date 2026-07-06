@@ -1,13 +1,13 @@
 /**
- * 게임 화면용 온라인 훅.
- * 이 게임(gameId)이 지금 온라인 매치의 현재 라운드면 { state, role, sendInput }를 반환.
- * 화면은 이때 로컬 시뮬/봇을 돌리지 않고 서버 state를 렌더 + 입력을 전송한다.
+ * Online hook for game screens.
+ * If this game (gameId) is the current round of the ongoing online match, returns { state, role, sendInput }.
+ * In that case the screen doesn't run a local sim/bot; it renders the server state + sends input.
  */
 import { useOnline, sendInput } from './online'
 import type { GameId, GameResult, OpponentView, Role } from '@madpump/shared'
 
 export interface OnlineGame {
-  /** 서버 권위 상태(렌더용 투영). null이면 아직 첫 스냅샷 전(카운트다운 등) */
+  /** Authoritative server state (projection for rendering). null means before the first snapshot (countdown, etc.) */
   state: unknown | null
   role: Role
   round: number
@@ -15,7 +15,7 @@ export interface OnlineGame {
   countdownUntil: number
   lastRoundResult: GameResult | null
   opponent: OpponentView | null
-  /** 내 입력 전송(슬롯 A=주키/B=보조키). cell(선택)=오목 등에서 로컬 커서로 고른 칸. */
+  /** Send my input (slot A=primary key / B=secondary key). cell (optional) = a cell picked with a local cursor, as in Gomoku. */
   sendInput: (slot: 'A' | 'B', type: 'down' | 'up', t: number, cell?: number) => void
 }
 

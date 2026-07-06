@@ -2,23 +2,23 @@ import type { GameInputEvent, GameResult } from '../types'
 import { GAME_DURATION } from '../types'
 
 /**
- * 게임11 = 라이트 사이클(Tron).
- *  · 두 바이크가 일정 속도로 전진하며 지나온 칸에 궤적(벽)을 남긴다.
- *  · 각 플레이어는 두 키로 좌/우 회전만 한다.
- *      P1: Q=좌회전 / W=우회전,  P2: U=좌회전 / I=우회전.
- *  · 벽(외곽)·자신/상대 궤적에 부딪히면 그 바이크는 죽는다. 마지막 생존자 승.
- *  · 정면충돌(같은 칸)·동시 사망은 DRAW. 10초까지 둘 다 생존해도 DRAW.
+ * Game 11 = Light Cycle (Tron).
+ *  · Two bikes advance at a constant speed, leaving a trail (wall) on the cells they pass.
+ *  · Each player only turns left/right with two keys.
+ *      P1: Q=turn left / W=turn right,  P2: U=turn left / I=turn right.
+ *  · Hitting a wall (edge) or your own/opponent's trail kills that bike. The last survivor wins.
+ *  · Head-on collision (same cell) or simultaneous death is a DRAW. If both survive to 10s, it's also a DRAW.
  */
 export const G5 = {
   W: 800,
   H: 450,
   GX: 64,
   GY: 36,
-  /** 한 칸 전진에 걸리는 시간(초) → 속도 */
+  /** Time to advance one cell (seconds) → speed */
   STEP: 0.05,
 } as const
 
-// 방향: 0=우 1=하 2=좌 3=상
+// Direction: 0=right 1=down 2=left 3=up
 const DX = [1, 0, -1, 0]
 const DY = [0, 1, 0, -1]
 
@@ -28,16 +28,16 @@ export interface Game5State {
   gx1: number
   gy1: number
   dir1: number
-  /** 대기 회전: 0=없음 1=좌 2=우 */
+  /** Pending turn: 0=none 1=left 2=right */
   pend1: number
   gx2: number
   gy2: number
   dir2: number
   pend2: number
   accum: number
-  /** 렌더 보간용 진행률(0~1) */
+  /** Progress ratio for render interpolation (0~1) */
   frac: number
-  /** 길이 GX*GY, 0=빈칸 1=P1궤적 2=P2궤적 */
+  /** Length GX*GY, 0=empty cell 1=P1 trail 2=P2 trail */
   occ: number[]
 }
 
@@ -59,11 +59,11 @@ export function create(_rand: () => number): Game5State {
     result: null,
     gx1,
     gy1,
-    dir1: 0, // 우
+    dir1: 0, // right
     pend1: 0,
     gx2,
     gy2,
-    dir2: 2, // 좌
+    dir2: 2, // left
     pend2: 0,
     accum: 0,
     frac: 0,
@@ -76,7 +76,7 @@ export function step(state: Game5State, events: GameInputEvent[], dt: number): G
   state.elapsed += dt
   state.accum += dt
 
-  // 회전 입력(가장 마지막 입력이 다음 스텝에 반영)
+  // Turn input (the very last input is applied on the next step)
   for (const e of events) {
     if (e.type !== 'down') continue
     switch (e.code) {
@@ -110,7 +110,7 @@ export function step(state: Game5State, events: GameInputEvent[], dt: number): G
 
     let dead1 = !inBounds(n1x, n1y) || state.occ[idx(n1x, n1y)] !== 0
     let dead2 = !inBounds(n2x, n2y) || state.occ[idx(n2x, n2y)] !== 0
-    // 같은 칸으로 진입 = 정면충돌
+    // Entering the same cell = head-on collision
     if (n1x === n2x && n1y === n2y) {
       dead1 = true
       dead2 = true

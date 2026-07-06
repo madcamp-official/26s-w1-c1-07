@@ -1,10 +1,10 @@
-/** 매치 런타임 최소 인터페이스 (rooms ↔ match 순환참조 방지) */
+/** Minimal match runtime interface (avoids rooms ↔ match circular imports) */
 import type { GameInputEvent } from '@madpump/shared'
 
 export interface MatchRuntime {
   matchId: string
-  /** 클라 입력 주입 (서버가 role로 code 재기입) */
+  /** Inject client input (server rewrites code by role) */
   pushInput(userId: string, ev: GameInputEvent): void
-  /** 강제 종료 (방 파기 등) */
+  /** Force stop (e.g. room teardown) */
   stop(): void
 }

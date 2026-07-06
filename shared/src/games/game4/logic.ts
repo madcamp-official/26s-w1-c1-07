@@ -2,10 +2,10 @@ import type { GameInputEvent, GameResult } from '../types'
 import { GAME_DURATION } from '../types'
 
 /**
- * 게임2 = 로켓 피하기.
- *  · P1은 좌우로 스캔하는 발사대에서 W로 3방향 부채꼴 탄을 발사한다.
- *  · P2는 좌우로 이동해 피하며, 체력 HP 3(피격 시 무적 0.45s).
- *  · 로켓이 적당히 느려 P2가 읽고 피할 여유가 있다.
+ * Game 2 = dodge the rockets.
+ *  · P1 fires a 3-way fan of shots with W from a launcher that scans left/right.
+ *  · P2 moves left/right to dodge, with 3 HP (0.45s of invincibility when hit).
+ *  · The rockets are slow enough that P2 has room to read and dodge them.
  */
 export const G4 = {
   W: 800,
@@ -15,22 +15,22 @@ export const G4 = {
   SCAN_SPEED: 560,
   ROCKET_W: 12,
   ROCKET_H: 28,
-  /** 기본 대비 20% 낮춘 속도 */
+  /** speed lowered by 20% from the base */
   ROCKET_SPEED_MIN: 600,
   ROCKET_SPEED_MAX: 800,
   P2_Y: 396,
-  // 수비수(아래에서 피하는 러너) 크기 0.6배 축소 — 히트박스·렌더 공용(둘 다 이 상수 사용)
-  P2_W: 27.6, // 0.6× (기존 46)
-  P2_H: 15.6, // 0.6× (기존 26)
+  // defender (the runner dodging from below) size scaled down to 0.6× — shared by hitbox and render (both use this constant)
+  P2_W: 27.6, // 0.6× (was 46)
+  P2_H: 15.6, // 0.6× (was 26)
   P2_SPEED_MIN: 1380,
   P2_SPEED_MAX: 1760,
-  // ── 발사대 3방향 부채꼴 ──
+  // ── launcher 3-way fan ──
   BULLET_COUNT: 3,
   FIRE_COOLDOWN: 0.25,
   SPREAD_DEG: 22,
   SPEED_JITTER: 0.12,
   MAX_BOUNCE: 1,
-  // ── HP 시스템 ──
+  // ── HP system ──
   MAX_HP: 3,
   IFRAME_TIME: 0.45,
 } as const
@@ -68,7 +68,7 @@ function nextRand(seed: number): { u: number; seed: number } {
   return { u: s / 4294967296, seed: s }
 }
 
-/** N방향 부채꼴 각(도). [-SPREAD..+SPREAD] 균등 분배 */
+/** N-way fan angles (degrees). Evenly distributed across [-SPREAD..+SPREAD] */
 function fanAngles(): number[] {
   const n = G4.BULLET_COUNT
   const s = G4.SPREAD_DEG
@@ -102,7 +102,7 @@ export function step(state: Game4State, events: GameInputEvent[], dt: number): G
   state.cooldown = Math.max(0, state.cooldown - dt)
   state.iframes = Math.max(0, state.iframes - dt)
 
-  // 1) 입력 — W: 발사대에서 N방향 부채꼴 발사
+  // 1) input — W: fire an N-way fan from the launcher
   for (const e of events) {
     if (e.code === 'KeyU') state.leftHeld = e.type === 'down'
     else if (e.code === 'KeyI') state.rightHeld = e.type === 'down'
@@ -129,7 +129,7 @@ export function step(state: Game4State, events: GameInputEvent[], dt: number): G
     }
   }
 
-  // 2) 발사대 이동
+  // 2) launcher movement
   state.launcherX += state.launcherDir * G4.SCAN_SPEED * dt
   if (state.launcherX < G4.MARGIN) {
     state.launcherX = G4.MARGIN
@@ -139,11 +139,11 @@ export function step(state: Game4State, events: GameInputEvent[], dt: number): G
     state.launcherDir = -1
   }
 
-  // 3) P2 이동
+  // 3) P2 movement
   const dir = (state.rightHeld ? 1 : 0) - (state.leftHeld ? 1 : 0)
   state.p2X = clamp(state.p2X + dir * state.p2Speed * dt, G4.MARGIN, G4.W - G4.MARGIN)
 
-  // 4) 탄 이동(직선) + 측벽 반사
+  // 4) bullet movement (straight line) + side-wall bounce
   const survivors: Bullet[] = []
   for (const r of state.rockets) {
     r.x += r.vx * dt
@@ -161,7 +161,7 @@ export function step(state: Game4State, events: GameInputEvent[], dt: number): G
   }
   state.rockets = survivors
 
-  // 5) 피격 판정 — 무적이 아닐 때만 1대 맞고 HP-1, 무적 부여, 맞은 탄 소멸
+  // 5) hit detection — only when not invincible: take 1 hit, HP-1, grant invincibility, destroy the hitting bullet
   if (state.iframes <= 0) {
     const px0 = state.p2X - G4.P2_W / 2
     const px1 = state.p2X + G4.P2_W / 2

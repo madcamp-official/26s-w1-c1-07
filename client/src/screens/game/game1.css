@@ -1,4 +1,4 @@
-/* S9 게임1 전용 스타일 — game1 에이전트 소유 (PLAN §2-S9 + §3.1) */
+/* S9 game1-specific styles — owned by the game1 agent (PLAN §2-S9 + §3.1) */
 
 .g1-root {
   min-height: 100vh;
@@ -15,7 +15,7 @@
   z-index: 1;
 }
 
-/* ---------------------------------------------------------------- 스테이지 */
+/* ---------------------------------------------------------------- stage */
 .g1-stage {
   flex: 1;
   min-height: 340px;
@@ -25,7 +25,7 @@
   z-index: 1;
 }
 
-/* 배경 워터마크: 초대형 아웃라인 "PUMP" 퍼플 (§3.1) */
+/* background watermark: extra-large outline "PUMP" purple (§3.1) */
 .g1-watermark {
   position: absolute;
   inset: 0;
@@ -41,7 +41,7 @@
   user-select: none;
 }
 
-/* 세 숫자 한 줄 구도 — "가운데에 맞춰라" 즉독 (§2-S9) */
+/* three numbers in one row — reads instantly as "line it up in the center" (§2-S9) */
 .g1-row {
   position: relative;
   display: flex;
@@ -52,7 +52,7 @@
   flex-wrap: wrap;
 }
 
-/* ---------------------------------------------------------------- 타겟 스코어보드 */
+/* ---------------------------------------------------------------- target scoreboard */
 .g1-target {
   position: relative;
   background: #000;
@@ -64,7 +64,7 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  /* 타겟 박스 뒤 방사형 옅은 광 (§3.1) */
+  /* faint radial glow behind the target box (§3.1) */
   box-shadow: 0 0 60px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
@@ -80,7 +80,7 @@
   color: var(--accent);
 }
 
-/* ---------------------------------------------------------------- 플레이어 패널 */
+/* ---------------------------------------------------------------- player panel */
 .g1-panel {
   position: relative;
   min-width: clamp(150px, 18vw, 210px);
@@ -105,12 +105,12 @@
   color: var(--p2);
 }
 
-/* 근접 피드백 (§3.1): |diff|≤5 → 옐로 보더 */
+/* proximity feedback (§3.1): |diff|≤5 → yellow border */
 .g1-panel--near {
   border-color: var(--accent);
 }
 
-/* |diff|≤2 → 보더 글로우 빠른 맥동 (300ms, steps — 잭팟 직전) */
+/* |diff|≤2 → fast border-glow pulse (300ms, steps — just before jackpot) */
 @keyframes g1-close-pulse {
   0%, 49% {
     box-shadow:
@@ -127,7 +127,7 @@
   animation: g1-close-pulse 300ms steps(1, end) infinite;
 }
 
-/* 일치 중: 플레이어색 글로우 고정 */
+/* while matched: fixed player-color glow */
 .g1-panel--matched {
   box-shadow:
     0 0 6px currentColor,
@@ -147,14 +147,14 @@
   letter-spacing: 0.15em;
 }
 
-/* "this is you" — 내 쪽 점멸 태그 (SPEC S9 + 주석 16:1713) */
+/* "this is you" — blinking tag on my side (SPEC S9 + comment 16:1713) */
 .g1-panel__you {
   font-size: 10px;
   color: currentColor;
   text-shadow: 0 0 4px currentColor, 0 0 12px currentColor;
 }
 
-/* ▲/▼ 증감 램프 (§3.1) */
+/* ▲/▼ up/down lamp (§3.1) */
 .g1-arrow {
   font-size: 11px;
   opacity: 0.22;
@@ -166,7 +166,7 @@
   text-shadow: 0 0 6px var(--accent);
 }
 
-/* 현재숫자 — 하드 스텝 교체 + 80ms 글로우 버스트 (§3.1). key 리마운트로 재생 */
+/* current number — hard step swap + 80ms glow burst (§3.1). replayed via key remount */
 @keyframes g1-burst {
   0% {
     filter: brightness(1.9);
@@ -183,7 +183,7 @@
   animation: g1-burst 80ms steps(2, end) both;
 }
 
-/* 코인 락인 램프 3개 — 일치 유지 진행 표시 (§3.1) */
+/* 3 coin lock-in lamps — shows progress of maintaining the match (§3.1) */
 .g1-hold {
   display: flex;
   align-items: center;
@@ -203,7 +203,7 @@
   margin-left: 4px;
 }
 
-/* ---------------------------------------------------------------- 하단 조작키 안내 */
+/* ---------------------------------------------------------------- bottom control-key guide */
 .g1-pads {
   display: flex;
   align-items: flex-end;
@@ -236,9 +236,9 @@
 }
 
 
-/* ── 새 메커니즘 UI (로직 포팅) ── */
-/* ─────────────────────────────────────────────── 새 메커니즘: 누적 속도 게이지 (game1 코어)
-   기존 UI에 1:1 대응이 없어 neon-coinop 컨셉으로 추가. 기존 클래스는 재정의하지 않는다. */
+/* ── new mechanism UI (logic port) ── */
+/* ─────────────────────────────────────────────── new mechanism: cumulative speed gauge (game1 core)
+   No 1:1 counterpart in the existing UI, so added with the neon-coinop concept. Does not redefine existing classes. */
 .g1-gauge-wrap {
   display: flex;
   flex-direction: column;

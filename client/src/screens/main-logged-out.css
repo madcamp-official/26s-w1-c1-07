@@ -1,4 +1,4 @@
-/* S1 메인 — 비로그인 (auth 에이전트 소유) — attract mode 타이틀 스크린 (PLAN §2-S1) */
+/* S1 main — logged-out (owned by the auth agent) — attract mode title screen (PLAN §2-S1) */
 
 .s1-root {
   position: relative;
@@ -8,7 +8,7 @@
   flex-direction: column;
 }
 
-/* ---- 우상단 헤더: 구글 로그인 + 설정 코인 버튼 ---- */
+/* ---- top-right header: Google login + Settings coin button ---- */
 .s1-header {
   position: absolute;
   top: 20px;
@@ -19,7 +19,7 @@
   gap: 14px;
 }
 
-/* ---- 중앙 히어로: 네온 로고 + CTA 스택 ---- */
+/* ---- center hero: neon logo + CTA stack ---- */
 .s1-hero {
   position: relative;
   z-index: 1;
@@ -49,7 +49,7 @@
   text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
 }
 
-/* 고장 램프 개그 — PUMP의 마지막 P가 간헐적으로 깜빡 (steps, 평시 대부분 점등) */
+/* faulty lamp gag — the last P in PUMP flickers intermittently (steps, mostly lit at rest) */
 @keyframes s1-faulty-lamp {
   0%, 78% { opacity: 1; }
   79%, 81% { opacity: 0.15; }
@@ -69,7 +69,7 @@
   letter-spacing: 0.34em;
 }
 
-/* CTA 세로 스택 */
+/* CTA vertical stack */
 .s1-cta {
   margin-top: 56px;
   width: min(380px, 84vw);
@@ -84,7 +84,7 @@
   margin-bottom: 2px;
 }
 
-/* ---- 하단 티커 스트립 (장식) ---- */
+/* ---- bottom ticker strip (decoration) ---- */
 .s1-ticker {
   position: absolute;
   left: 0;

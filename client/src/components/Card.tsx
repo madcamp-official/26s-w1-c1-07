@@ -1,26 +1,26 @@
 /**
- * Card — 다크 표면 + 퍼플 헤어라인 + 상단 마퀴 스트립 (PLAN §1.5).
- * (아키텍트 소유 — 구현 에이전트 수정 금지)
+ * Card — dark surface + purple hairline + top marquee strip (PLAN §1.5).
+ * (Owned by the architect — implementation agents must not modify)
  *
- * 마퀴 스트립: 캐비닛 상단 간판 인용 — 어두운 띠에 네온 제목 + 좌우 끝 소형 램프 2개.
+ * Marquee strip: a nod to the cabinet's top signboard — neon title on a dark band + 2 small lamps at each end.
  *
- * 사용법:
- *   <Card marquee="1분반 HI-SCORE" marqueeColor="var(--accent)">
- *     ...본문...
+ * Usage:
+ *   <Card marquee="Class 1 HI-SCORE" marqueeColor="var(--accent)">
+ *     ...body...
  *   </Card>
- *   marquee 생략 시 민무늬 카드. brackets로 코너 브래킷 추가(히어로 패널용).
+ *   Omitting marquee gives a plain card. Use brackets to add corner brackets (for the hero panel).
  */
 import type { HTMLAttributes, ReactNode } from 'react';
 import './card.css';
 
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  /** 상단 마퀴 스트립 제목 (생략 시 스트립 없음) */
+  /** top marquee strip title (no strip when omitted) */
   marquee?: ReactNode;
-  /** 마퀴 제목·램프 색 (기본 --accent2) */
+  /** marquee title/lamp color (default --accent2) */
   marqueeColor?: string;
-  /** 네 모서리 L자 브래킷 (히어로 패널) */
+  /** L-shaped brackets on the four corners (hero panel) */
   brackets?: boolean;
-  /** 브래킷 색 (기본 --accent2) */
+  /** bracket color (default --accent2) */
   bracketColor?: string;
   children: ReactNode;
 }

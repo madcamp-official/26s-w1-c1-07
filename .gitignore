@@ -1,7 +1,7 @@
 # deps
 node_modules/
 
-# env / secrets (절대 커밋 금지)
+# env / secrets (never commit)
 .env
 .env.*
 !.env.example
@@ -13,7 +13,7 @@ dist/
 build/
 *.tsbuildinfo
 
-# prisma 런타임 산출물
+# prisma runtime artifacts
 **/generated/
 
 # os

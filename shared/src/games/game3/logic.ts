@@ -2,19 +2,19 @@ import type { GameInputEvent, GameResult } from '../types'
 import { GAME_DURATION } from '../types'
 
 /**
- * 게임6 = 펌프(리듬 연타 대전).
- *  · P1에게는 Q/W로 이루어진 긴 스트링, P2에게는 U/I로 이루어진 긴 스트링이 주어진다.
- *  · "지금 눌러야 할 키"를 누르면 점수 +1, 다음 키로 진행한다.
- *    틀린 키를 누르면 점수 −1(타일은 그대로, 진행하지 않는다).
- *  · 제한시간이 끝나면 점수가 높은 쪽이 승리(동점은 무승부).
- *  · 스트링 길이 = 제한시간(s) × 10.
+ * Game 6 = Pump (rhythm mash-off).
+ *  · P1 is given a long string made of Q/W, P2 a long string made of U/I.
+ *  · Press the "key you must hit right now" for +1 point and advance to the next key.
+ *    Press the wrong key and you lose 1 point (the tile stays, no advance).
+ *  · When the time limit ends, the higher score wins (a tie is a Draw).
+ *  · String length = time limit (s) × 10.
  *
- * 키 인코딩: 0 = 첫 번째 키(Q / U), 1 = 두 번째 키(W / I).
+ * Key encoding: 0 = first key (Q / U), 1 = second key (W / I).
  */
 export const G3 = {
-  /** 스트링 길이 = 제한시간(초) × 이 값 */
+  /** String length = time limit (seconds) × this value */
   KEYS_PER_SECOND: 10,
-  /** 히트/미스 플래시 지속(초) */
+  /** Hit/miss flash duration (seconds) */
   FLASH: 0.12,
 } as const
 
@@ -29,10 +29,10 @@ export interface Game3State {
   p2Idx: number
   p1Score: number
   p2Score: number
-  /** 정답 히트 플래시 잔여 시간 */
+  /** Remaining time for the correct-hit flash */
   p1Flash: number
   p2Flash: number
-  /** 오답 미스 플래시 잔여 시간 */
+  /** Remaining time for the wrong-miss flash */
   p1Wrong: number
   p2Wrong: number
 }

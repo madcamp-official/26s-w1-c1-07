@@ -1,4 +1,4 @@
-/* LeaderboardTable 스타일 (아키텍트 소유) — PLAN §1.5 HI-SCORE 테이블 */
+/* LeaderboardTable styles (owned by the architect) — PLAN §1.5 HI-SCORE table */
 
 .nc-lb {
   border: 2px solid var(--p1);
@@ -27,7 +27,7 @@
   font-size: 14px;
 }
 
-/* 행 디바이더 없이 짝수행 --surface-deep (§1.5) */
+/* Even rows use --surface-deep, no row dividers (§1.5) */
 .nc-lb__table tbody tr:nth-child(even) {
   background: var(--surface-deep);
 }
@@ -47,7 +47,7 @@
   width: 40%;
 }
 
-/* 내 행: 좌측 4px 시안 바 + YOU 점멸 (§1.5) */
+/* My row: left 4px cyan bar + blinking YOU (§1.5) */
 .nc-lb__me {
   border-top: 1px solid var(--hairline);
   border-left: 4px solid var(--p1);
@@ -79,7 +79,7 @@
   text-align: center;
 }
 
-/* 코인 열 — 랭킹 기준 강조 */
+/* Coin column — emphasized as the ranking criterion */
 .nc-lb__coin {
   white-space: nowrap;
 }

@@ -1,18 +1,18 @@
 /**
- * 전역 인터랙션 규칙 — 텍스트 드래그 선택 방지.
+ * Global interaction rules — prevent text drag-selection.
  *
- * 목적: UI 텍스트(마퀴/버튼/설명 등)를 드래그로 오선택하지 못하게 한다.
- * 예외(선택 허용):
- *   1) 폼 입력 필드(input/textarea/contenteditable) — 타이핑·편집·전체선택 정상 동작.
- *   2) 온라인 "방 만들기 코드"(room-code-display) — 사용자가 드래그로 선택·복사해야 함.
+ * Purpose: keep UI text (marquee/buttons/descriptions, etc.) from being mis-selected by dragging.
+ * Exceptions (selection allowed):
+ *   1) Form input fields (input/textarea/contenteditable) — typing/editing/select-all work normally.
+ *   2) Online "create room code" (room-code-display) — the user must be able to drag-select and copy it.
  *
- * 배치: theme.css / main.tsx / App.tsx 는 아키텍트 소유(수정 금지)라 손대지 않고,
- *   앱 정적 import 그래프에 항상 포함되는 화면 모듈(GameSelect·Online)에서 이 파일을
- *   side-effect import → 부팅 시 <head>에 1회 주입되어 전역 적용된다.
+ * Placement: theme.css / main.tsx / App.tsx are owned by the architect (must not modify), so we don't touch them;
+ *   instead a screen module always present in the app's static import graph (GameSelect·Online) does a
+ *   side-effect import of this file → injected once into <head> at boot and applied globally.
  *
- * 특이성 메모: 기본 차단은 낮은 특이성(html)로 두고, 예외는 같거나 더 높은
- *   특이성 + 뒤 순서로 이겨서 재활성화한다. user-select 는 상속되므로 html 에
- *   none 을 걸면 하위가 상속, 예외 요소만 스스로 text 로 덮어쓴다.
+ * Specificity note: keep the base block at low specificity (html), and re-enable exceptions by
+ *   winning with equal-or-higher specificity + later order. user-select is inherited, so setting
+ *   none on html makes descendants inherit it, and only exception elements override themselves back to text.
  */
 html {
   -webkit-user-select: none;
@@ -21,7 +21,7 @@ html {
   user-select: none;
 }
 
-/* 예외 1) 폼 입력 — 편집/선택 가능해야 함 */
+/* Exception 1) Form inputs — must be editable/selectable */
 input,
 textarea,
 [contenteditable="true"] {
@@ -31,7 +31,7 @@ textarea,
   user-select: text;
 }
 
-/* 예외 2) 온라인 방 코드 — 드래그 선택·복사 허용 */
+/* Exception 2) Online room code — allow drag-select and copy */
 [data-testid="room-code-display"],
 [data-testid="room-code-display"] * {
   -webkit-user-select: text;
@@ -41,14 +41,14 @@ textarea,
   cursor: text;
 }
 
-/* ── 전역: 스크롤바 UI 숨김 (네온 아케이드 룩) ──────────────────
- * 스크롤 "기능"(휠/터치/드래그)은 유지하되, 어떤 스크롤 컨테이너(랭킹 모달·
- * 리더보드·모달 본문·페이지 등)에서도 스크롤바가 화면에 보이지 않게 한다.
- * 화면 크기와 무관하게 흰 스크롤바가 절대 뜨지 않는다.
+/* ── Global: hide scrollbar UI (neon arcade look) ──────────────────
+ * Keep the scroll "function" (wheel/touch/drag), but ensure the scrollbar is never
+ * visible in any scroll container (ranking modal, leaderboard, modal body, pages, etc.).
+ * A white scrollbar never appears regardless of screen size.
  */
 * {
   scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* 구 Edge/IE */
+  -ms-overflow-style: none; /* old Edge/IE */
 }
 *::-webkit-scrollbar {
   /* WebKit (Chrome/Safari/Electron) */
