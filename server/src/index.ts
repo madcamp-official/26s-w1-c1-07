@@ -5,6 +5,7 @@
  */
 import { createServer } from 'node:http'
 import { existsSync } from 'node:fs'
+import { randomInt } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import Fastify from 'fastify'
@@ -15,7 +16,9 @@ import { Server as IOServer } from 'socket.io'
 import {
   ALL_GAME_IDS,
   EV,
+  FARM_CLAIM_COOLDOWN_MS,
   nextUnlock,
+  rollFarmReward,
   type BetPayload,
   type GameId,
   type GameInputMsg,
@@ -167,6 +170,37 @@ app.post('/api/unlock', async (req, reply) => {
   }
 })
 
+// ── REST: 코인 노가다 보상 수령 ─────────────────────────────────
+// 클라가 솔로 펌프 미션(FARM_TARGET점 / FARM_DURATION초, docs/COINS.md)을 클리어하면 호출.
+// 보상 액수는 서버가 확률표(FARM_REWARD_TABLE, 기댓값 ~4.7코인)로 추첨 — 클라가 지정 불가.
+// 게임 자체는 클라 계산(로스터 로그인과 같은 신뢰 모델) — 쿨다운으로 스팸만 차단.
+const farmLastClaim = new Map<string, number>() // userId → 마지막 수령 시각(ms)
+
+app.post('/api/farm/claim', async (req, reply) => {
+  const s = getSession(req.cookies[SESSION_COOKIE])
+  if (!s) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: '로그인 필요' } })
+
+  const key = s.userId.toString()
+  const now = Date.now()
+  const last = farmLastClaim.get(key) ?? 0
+  if (now - last < FARM_CLAIM_COOLDOWN_MS) {
+    // 남은 시간을 알려줘 클라가 자동으로 기다렸다 재시도할 수 있게 (정당한 연속 클리어 보호)
+    const retryAfterMs = FARM_CLAIM_COOLDOWN_MS - (now - last)
+    return reply
+      .code(429)
+      .send({ error: { code: 'COOLDOWN', message: '잠시 후 다시 시도해주세요', retryAfterMs } })
+  }
+  farmLastClaim.set(key, now)
+
+  const reward = rollFarmReward(() => randomInt(0, 1_000_000) / 1_000_000)
+  const u = await prisma.appUser.update({
+    where: { id: s.userId },
+    data: { coins: { increment: reward } },
+    select: { coins: true },
+  })
+  return { status: 'OK', reward, coins: u.coins }
+})
+
 // ── REST: 분반 리더보드 ─────────────────────────────────────────
 // 내 분반 유저들의 온라인 매치 전적(game_match)을 score_config 점수로 집계.
 // 정렬: 점수↓ → 승수↓ → userId↑ / 동점은 같은 등수(competition ranking).
@@ -181,17 +215,13 @@ app.get('/api/leaderboard', async (req, reply) => {
 
   const users = await prisma.appUser.findMany({
     where: { groupId: group.id, deletedAt: null },
-    select: { id: true, nickname: true },
+    select: { id: true, nickname: true, coins: true },
   })
   const ids = users.map((u) => u.id)
-  const [matches, cfg] = await Promise.all([
-    prisma.gameMatch.findMany({
-      where: { deletedAt: null, OR: [{ playerAId: { in: ids } }, { playerBId: { in: ids } }] },
-      select: { playerAId: true, playerBId: true, result: true },
-    }),
-    prisma.scoreConfig.findUnique({ where: { id: 1 } }),
-  ])
-  const pt = { win: cfg?.winPoints ?? 3, draw: cfg?.drawPoints ?? 1, loss: cfg?.lossPoints ?? 0 }
+  const matches = await prisma.gameMatch.findMany({
+    where: { deletedAt: null, OR: [{ playerAId: { in: ids } }, { playerBId: { in: ids } }] },
+    select: { playerAId: true, playerBId: true, result: true },
+  })
 
   const acc = new Map<string, { wins: number; draws: number; losses: number }>()
   for (const u of users) acc.set(u.id.toString(), { wins: 0, draws: 0, losses: 0 })
@@ -215,31 +245,32 @@ app.get('/api/leaderboard', async (req, reply) => {
     return {
       userId: u.id.toString(),
       nickname: u.nickname,
-      imageUrl: null,
+      coins: u.coins,
       wins: x.wins,
       draws: x.draws,
       losses: x.losses,
-      score: x.wins * pt.win + x.draws * pt.draw + x.losses * pt.loss,
       rank: 0, // 아래에서 채움
     }
   })
+  // 정렬: 보유 코인↓ → (표시 안정용) 승수↓ → userId↑
   entries.sort((x, y) => {
-    if (y.score !== x.score) return y.score - x.score
+    if (y.coins !== x.coins) return y.coins - x.coins
     if (y.wins !== x.wins) return y.wins - x.wins
     return BigInt(x.userId) < BigInt(y.userId) ? -1 : 1
   })
-  let prevScore: number | null = null
+  // 랭크: 코인 동일 = 공동 등수 (competition ranking — 다음 등수는 인원수만큼 건너뜀)
+  let prevCoins: number | null = null
   let prevRank = 0
   entries.forEach((e, i) => {
-    if (prevScore !== null && e.score === prevScore) e.rank = prevRank
+    if (prevCoins !== null && e.coins === prevCoins) e.rank = prevRank
     else {
       e.rank = i + 1
       prevRank = e.rank
-      prevScore = e.score
+      prevCoins = e.coins
     }
   })
 
-  return { status: 'OK', groupName: s.groupName, myUserId, scoreConfig: pt, entries }
+  return { status: 'OK', groupName: s.groupName, myUserId, entries }
 })
 
 app.post('/api/auth/logout', async (req, reply) => {

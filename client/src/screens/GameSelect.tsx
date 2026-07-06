@@ -19,6 +19,7 @@ import { Button } from '../components';
 import { useDebugScreen } from '../debug';
 import { startOfflineGame } from '../state/flow';
 import { restoreSession, unlockNextGame, useSession } from '../state/session';
+import { openLoginModal } from '../modals/Login';
 import './game-select.css';
 
 interface CabinetSpec {
@@ -222,15 +223,17 @@ export default function GameSelect() {
         </div>
       )}
 
-      {/* 코인 노가다 미니게임 (준비 중 — mock 버튼) */}
+      {/* COIN FARM — 솔로 펌프 미션으로 코인 벌기 (비로그인은 로그인 모달로) */}
       <button
         type="button"
-        className="s8-grind font-display"
+        className="s8-grind font-arcade"
         data-testid="btn-coin-grind"
-        disabled
-        title="준비 중"
+        onClick={() => {
+          if (session.loggedIn) navigate('/farm');
+          else openLoginModal();
+        }}
       >
-        ⛏ 코인 노가다하기 <span className="s8-grind-soon font-arcade">SOON</span>
+        GET FREE COIN
       </button>
     </main>
   );

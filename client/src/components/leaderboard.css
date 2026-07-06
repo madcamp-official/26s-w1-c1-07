@@ -78,3 +78,8 @@
   font-size: 13px;
   text-align: center;
 }
+
+/* 코인 열 — 랭킹 기준 강조 */
+.nc-lb__coin {
+  white-space: nowrap;
+}

@@ -19,6 +19,42 @@ export const UNLOCK_ORDER: readonly GameId[] = [2, 7, 4, 8, 5, 9, 10]
 /** UNLOCK_ORDER[n] 해금 비용 */
 export const UNLOCK_COSTS: readonly number[] = [3, 3, 5, 10, 30, 50, 100]
 
+// ── 코인 노가다 (coin farm) — 솔로 펌프 미션 (docs/COINS.md) ──────
+// 로그인 유저 1인이 U/I 키로 펌프를 쳐서 제한시간 안에 목표 점수를 채우면 코인 지급.
+// 오답 1회 = 즉시 MISSION FAILED. 보상 액수는 서버가 확률표로 굴린다(클라 지정 불가).
+
+/** 제한시간(초) */
+export const FARM_DURATION = 10
+/** 미션 목표 점수 (정답 타수) */
+export const FARM_TARGET = 25
+/** 연속 보상 수령 최소 간격(ms) — 서버 쿨다운 (정상 플레이는 클리어에 최소 수 초 소요) */
+export const FARM_CLAIM_COOLDOWN_MS = 5000
+
+/**
+ * 보상 확률표 [코인, 가중치] (가중치 합 1000).
+ * 기댓값 = 4700/1000 = 4.7코인 (≈5), 최소 1 / 최대 100.
+ */
+export const FARM_REWARD_TABLE: readonly (readonly [number, number])[] = [
+  [1, 300],
+  [2, 200],
+  [3, 150],
+  [5, 180],
+  [10, 110],
+  [20, 50],
+  [50, 9],
+  [100, 1],
+]
+
+/** 확률표에서 보상 1회 추첨. rand: [0,1) 균등난수 */
+export function rollFarmReward(rand: () => number): number {
+  let r = rand() * 1000
+  for (const [coin, weight] of FARM_REWARD_TABLE) {
+    r -= weight
+    if (r < 0) return coin
+  }
+  return FARM_REWARD_TABLE[FARM_REWARD_TABLE.length - 1][0]
+}
+
 /** 해금 수(app_user.unlocked_count) → 플레이 가능한 게임 집합 */
 export function unlockedGameIds(unlockedCount: number): Set<GameId> {
   const n = Math.max(0, Math.min(UNLOCK_ORDER.length, unlockedCount))

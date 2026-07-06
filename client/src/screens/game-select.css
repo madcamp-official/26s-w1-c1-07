@@ -310,21 +310,48 @@
   font-size: 13px;
 }
 
+/* COIN FARM 버튼 — 밝은 표면 + 실시간 노란 글로우 펄스 */
 .s8-grind {
   position: fixed;
   right: 20px;
   bottom: 20px;
   z-index: 30;
-  padding: 10px 16px;
-  background: var(--surface-deep, #100c20);
-  border: 1px solid color-mix(in srgb, var(--accent2) 50%, transparent);
-  color: var(--text-muted);
-  font-size: 14px;
-  cursor: not-allowed;
-  opacity: 0.75;
+  /* 기존(10px 16px / 14px) 대비 가로·세로 약 2배 */
+  padding: 22px 40px;
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface, #241640));
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 70%, transparent);
+  cursor: pointer;
+  animation: s8-grind-glow 1.6s ease-in-out infinite;
+  transition: transform 80ms, background 120ms;
 }
-.s8-grind-soon {
-  margin-left: 6px;
-  font-size: 9px;
-  color: var(--accent2);
+.s8-grind:hover {
+  background: color-mix(in srgb, var(--accent) 24%, var(--surface, #241640));
+}
+.s8-grind:active {
+  transform: translateY(2px);
+}
+
+@keyframes s8-grind-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 8px -2px var(--accent),
+      0 0 20px -6px var(--accent);
+  }
+  50% {
+    box-shadow:
+      0 0 18px 0 var(--accent),
+      0 0 42px -4px var(--accent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .s8-grind {
+    animation: none;
+    box-shadow: 0 0 14px -2px var(--accent);
+  }
 }

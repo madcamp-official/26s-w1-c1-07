@@ -1,0 +1,121 @@
+/* 코인 노가다 (CoinFarm.tsx) — 게임6 화면 문법의 1레인 축약 */
+
+.cf-root {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px 28px;
+}
+
+.cf-topbar {
+  width: 100%;
+  max-width: 760px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cf-title {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+.cf-coins {
+  font-size: 13px;
+}
+
+.cf-stage {
+  position: relative;
+  /* 520px → 1.5배 (세로는 aspect-ratio로 자동 1.5배) */
+  width: min(92vw, 780px);
+}
+
+.cf-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 480 / 450;
+}
+
+/* 오버레이 (ready / success / fail) */
+.cf-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  text-align: center;
+  padding: 24px;
+  background: rgba(10, 8, 20, 0.82);
+}
+
+.cf-overlay__big {
+  font-size: 22px;
+  letter-spacing: 0.06em;
+}
+
+.cf-win {
+  color: var(--win, #3dff8e);
+}
+
+.cf-lose {
+  color: var(--error, #ff5470);
+}
+
+.cf-overlay__rules {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.cf-reward {
+  font-size: 30px;
+}
+
+.cf-rolling {
+  font-size: 14px;
+  animation: cf-blink 0.6s steps(2) infinite;
+}
+
+@keyframes cf-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.cf-overlay__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.cf-keys {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.cf-keys__hint {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+
+/* 비로그인 안내 패널 */
+.cf-login-req {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  text-align: center;
+  padding: 60px 24px;
+}
+.cf-topbar-spacer {
+  width: 80px;
+}

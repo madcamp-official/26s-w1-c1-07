@@ -16,6 +16,7 @@ import { useSession } from './state/session';
 import MainLoggedOut from './screens/MainLoggedOut';
 import MainLoggedIn from './screens/MainLoggedIn';
 import GameSelect from './screens/GameSelect';
+import CoinFarm from './screens/CoinFarm';
 import Game1 from './screens/game/Game1';
 import Game2 from './screens/game/Game2';
 import Game3 from './screens/game/Game3';
@@ -30,6 +31,7 @@ import LoginRequiredModal from './modals/LoginRequired';
 import LoginModal from './modals/Login';
 import SettingsModal from './modals/Settings';
 import ThemeShopModal from './modals/ThemeShop';
+import RankingModal from './modals/Ranking';
 import OnlineModal from './modals/Online';
 import MatchingModal from './modals/Matching';
 import OnlineController from './net/OnlineController';
@@ -45,6 +47,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<MainGate />} />
         <Route path="/select" element={<GameSelect />} />
+        <Route path="/farm" element={<CoinFarm />} />
         <Route path="/game/1" element={<Game1 />} />
         <Route path="/game/2" element={<Game2 />} />
         <Route path="/game/3" element={<Game3 />} />
@@ -62,6 +65,7 @@ export default function App() {
       <LoginModal />
       <SettingsModal />
       <ThemeShopModal />
+      <RankingModal />
       <OnlineModal />
       <MatchingModal />
       {/* 온라인 매치 네비게이션 + 종료 오버레이 (실서버) */}

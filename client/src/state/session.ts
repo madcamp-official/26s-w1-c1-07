@@ -103,9 +103,45 @@ export async function unlockNextGame(): Promise<{ unlockedGameId?: number; error
   }
 }
 
+/** claimFarmReward 결과 — code/retryAfterMs 는 실패 시에만 */
+export interface FarmClaimResult {
+  reward?: number;
+  error?: string;
+  /** 서버 에러 코드: 'UNAUTHENTICATED' | 'COOLDOWN' | 'NETWORK' 등 */
+  code?: string;
+  /** COOLDOWN일 때 재시도까지 남은 시간(ms) */
+  retryAfterMs?: number;
+}
+
 /**
- * 부팅 시 세션 복원 — 쿠키가 살아있으면(GET /api/me) 로그인 상태로 전환.
- * main.tsx 에서 fire-and-forget 으로 호출.
+ * 코인 노가다 미션 클리어 보상 수령 (POST /api/farm/claim) — 서버가 액수 추첨.
+ * 401(UNAUTHENTICATED)이면 서버 세션이 죽은 것 — 클라 세션도 로그아웃으로 동기화한다.
+ */
+export async function claimFarmReward(): Promise<FarmClaimResult> {
+  try {
+    const res = await fetch(`${SERVER_URL}/api/farm/claim`, { method: 'POST', credentials: 'include' });
+    const data = await res.json();
+    if (!res.ok) {
+      const code = data?.error?.code as string | undefined;
+      if (code === 'UNAUTHENTICATED') sessionStore.set({ ...INITIAL });
+      return {
+        error: data?.error?.message ?? '보상 수령 실패',
+        code,
+        retryAfterMs: data?.error?.retryAfterMs,
+      };
+    }
+    updateWallet(data.coins);
+    return { reward: data.reward };
+  } catch {
+    return { error: '서버 연결 실패', code: 'NETWORK' };
+  }
+}
+
+/**
+ * 세션 동기화 — 쿠키가 살아있으면(GET /api/me) 로그인 상태로 전환.
+ * 서버가 ANON을 답하면(서버 재시작으로 인메모리 세션 소멸 등) 클라 상태도
+ * 로그아웃으로 내린다 — 화면만 로그인인 "유령 세션"이 남지 않게.
+ * main.tsx 부팅 시 + 각 화면 진입 시 fire-and-forget 으로 호출.
  */
 export async function restoreSession(): Promise<void> {
   try {
@@ -113,8 +149,9 @@ export async function restoreSession(): Promise<void> {
     if (!res.ok) return;
     const data = await res.json();
     if (data.status === 'USER' && data.user) setLoggedInUser(data.user);
+    else if (data.status === 'ANON' && sessionStore.get().loggedIn) sessionStore.set({ ...INITIAL });
   } catch {
-    // 서버 미기동 등 — 비로그인 상태 유지
+    // 서버 미기동/네트워크 오류 — 판단 불가이므로 현 상태 유지
   }
 }
 
