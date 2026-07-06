@@ -42,6 +42,8 @@ import {
 import { setDebugGame, useDebugScreen } from '../../debug';
 import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
+import RoundIntro from './RoundIntro';
+import { isRoundIntroActive } from '../../state/roundIntroGate';
 import './game10.css';
 
 // ---------------------------------------------------------------------------
@@ -629,6 +631,7 @@ export default function Game10() {
 
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
+      if (isRoundIntroActive()) { last = now; return; }
       const dt = Math.min(0.5, (now - last) / 1000);
       last = now;
       let s = stateRef.current;
@@ -739,15 +742,6 @@ export default function Game10() {
 
       <div data-testid="game-stage" className={`crt-bezel g10-stage ${urgent ? 'urgent' : ''}`}>
         <canvas ref={canvasRef} className="g10-canvas" aria-label="게임9 스테이지 — 줄다리기" />
-
-        {flow.phase === 'playing' && flow.currentRound > 0 && (
-          <div key={flow.currentRound} className="g10-round-intro" aria-hidden>
-            <span className="font-arcade c-accent glow-text g10-round-intro__big">
-              ROUND {flow.currentRound}
-            </span>
-            <span className="font-arcade c-muted g10-round-intro__sub">ALT-MASH TO PULL!</span>
-          </div>
-        )}
       </div>
 
       {/* 온스크린 키캡. 온라인은 U/I 두 키만 쓰므로, 내 역할(색) 쪽 컨트롤만 표기·점등한다.
@@ -794,6 +788,7 @@ export default function Game10() {
       )}
 
       <ResultOverlay />
+      <RoundIntro />
     </main>
   );
 }

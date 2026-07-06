@@ -47,6 +47,8 @@ import { useOnlineRender } from '../../net/useOnlineRender';
 import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';
 import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
+import RoundIntro from './RoundIntro';
+import { isRoundIntroActive } from '../../state/roundIntroGate';
 import './game3.css';
 
 // ---------------------------------------------------------------------------
@@ -608,6 +610,7 @@ export default function Game3() {
 
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
+      if (isRoundIntroActive()) { last = now; return; }
       const dt = Math.min(0.5, (now - last) / 1000);
       last = now;
       let s = stateRef.current;
@@ -747,14 +750,6 @@ export default function Game3() {
       <div data-testid="game-stage" className={`crt-bezel g3-stage ${urgent ? 'urgent' : ''}`}>
         <canvas ref={canvasRef} className="g3-canvas" aria-label="게임6 스테이지 — 펌프 연타 대전" />
 
-        {flow.phase === 'playing' && flow.currentRound > 0 && (
-          <div key={flow.currentRound} className="g3-round-intro" aria-hidden>
-            <span className="font-arcade c-accent glow-text g3-round-intro__big">
-              ROUND {flow.currentRound}
-            </span>
-            <span className="font-arcade c-muted g3-round-intro__sub">MASH THE PADS!</span>
-          </div>
-        )}
       </div>
 
       {/* 온스크린 키캡 — 실제 배정 키 표기 (SPEC Q2), 입력 순간 램프 점등 */}
@@ -787,6 +782,7 @@ export default function Game3() {
       )}
 
       <ResultOverlay />
+      <RoundIntro />
     </main>
   );
 }

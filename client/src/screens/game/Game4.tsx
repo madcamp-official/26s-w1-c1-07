@@ -35,6 +35,8 @@ import { setDebugGame, useDebugScreen } from '../../debug';
 import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';
 import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
+import RoundIntro from './RoundIntro';
+import { isRoundIntroActive } from '../../state/roundIntroGate';
 import './game4.css';
 
 // ---------------------------------------------------------------------------
@@ -781,6 +783,7 @@ export default function Game4() {
 
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
+      if (isRoundIntroActive()) { last = now; return; }
       const dt = Math.min(0.1, (now - last) / 1000); // 초 단위, 100ms 클램프
       last = now;
       let s = stateRef.current;
@@ -977,15 +980,6 @@ export default function Game4() {
             ))}
           </div>
         </div>
-
-        {flow.phase === 'playing' && flow.currentRound > 0 && (
-          <div key={flow.currentRound} className="g4-round-intro" aria-hidden>
-            <span className="font-arcade c-accent glow-text g4-round-intro__big">
-              ROUND {flow.currentRound}
-            </span>
-            <span className="font-arcade c-muted g4-round-intro__sub">DODGE THE TRACERS</span>
-          </div>
-        )}
       </div>
 
       {/* 온스크린 키캡 — 실제 배정 키 표기 (SPEC Q2), 입력 순간 램프 점등 */}
@@ -1028,6 +1022,7 @@ export default function Game4() {
       )}
 
       <ResultOverlay />
+      <RoundIntro />
     </main>
   );
 }

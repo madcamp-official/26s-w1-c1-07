@@ -1,0 +1,151 @@
+/**
+ * RoundIntro 전용 스타일 — 라운드 시작 직전 "플레이 방법" 오버레이 (전 게임 공용).
+ * ResultOverlay(.rov)와 같은 코인옵 무드: 코너 브래킷 + sign-on 플리커 + 플레이어색 글로우.
+ * z-index 89 = 온라인 YOU 배너(88) 위, 결과 오버레이 .rov/.onl-overlay(90) 아래.
+ * 인트로 동안 시뮬은 roundIntroGate가 정지시키고, 이 오버레이는 시각/안내만 담당(클릭 통과).
+ */
+
+.ri {
+  position: fixed;
+  inset: 0;
+  z-index: 89;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: none;
+  background: rgba(13, 2, 33, 0.82);
+  animation: ri-scrim-in 240ms ease-out both;
+}
+.ri.ri--out {
+  animation: ri-scrim-out 300ms ease-in both;
+}
+
+/* 승패색 대신 '플레이어색'을 --ri-color로 주입 (ResultOverlay의 --rov-color와 동일 패턴) */
+.ri__panel {
+  --ri-color: var(--accent);
+  --bracket-color: var(--ri-color);
+  position: relative;
+  background: var(--surface);
+  border: 2px solid var(--ri-color);
+  box-shadow:
+    0 0 6px var(--ri-color),
+    0 0 22px color-mix(in srgb, var(--ri-color) 45%, transparent),
+    inset 0 0 8px color-mix(in srgb, var(--ri-color) 22%, transparent);
+  padding: 28px clamp(24px, 6vw, 56px) 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  min-width: min(440px, 92vw);
+  max-width: 92vw;
+  text-align: center;
+}
+
+/* 역할 태그(비대칭) / "내 색" 칩 */
+.ri__tag {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  padding: 5px 12px;
+  border-radius: 3px;
+  color: var(--bg);
+  background: var(--ri-color);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ri-color) 55%, transparent);
+}
+
+/* 게임명 — 한글 가독성 우선(Gugi/display), 플레이어색 글로우 + 1~2회 펄스 */
+.ri__name {
+  margin: 0;
+  font-size: clamp(20px, 3.4vw, 30px);
+  line-height: 1.2;
+  color: var(--ri-color);
+  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  text-wrap: balance;
+  animation: ri-pulse 700ms ease-in-out 400ms 2 alternate;
+}
+
+/* 한 줄 플레이 방법 — 산세리프 본문(작은 픽셀폰트로 한글 뭉개짐 방지) */
+.ri__line {
+  margin: 0;
+  font-size: clamp(14px, 1.9vw, 17px);
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--text);
+  max-width: 26ch;
+  text-wrap: balance;
+}
+.ri__line em {
+  font-style: normal;
+  font-weight: 800;
+  color: var(--accent);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* 키캡 영역 */
+.ri__keys {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+.ri__side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 210px;
+}
+.ri__who {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.ri__who.is-p1 { color: var(--p1); }
+.ri__who.is-p2 { color: var(--p2); }
+.ri__subline {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  min-height: 2.6em;
+}
+.ri__caps {
+  display: flex;
+  gap: 10px;
+}
+.ri__vs {
+  align-self: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 0 2px;
+}
+
+/* "▶ 곧 시작" 안내 — 결과 오버레이의 CONTINUE? 캡션과 같은 톤 */
+.ri__ready {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  margin-top: 2px;
+}
+
+@keyframes ri-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes ri-scrim-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes ri-pulse {
+  from { text-shadow: 0 0 2px currentColor; }
+  to { text-shadow: 0 0 6px currentColor, 0 0 22px currentColor; }
+}
+
+/* 정보는 오버레이가 아니라 HUD/게임에 있으므로, 모션 축소 시 애니메이션 전부 제거(정적 표시) */
+@media (prefers-reduced-motion: reduce) {
+  .ri,
+  .ri.ri--out,
+  .ri__name {
+    animation: none;
+  }
+}

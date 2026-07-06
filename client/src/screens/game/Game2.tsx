@@ -39,6 +39,8 @@ import { functionColors, sendInput as onlineSendInput } from '../../net/online';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
 import { EndFlash } from '../../game/EndFlash';
 import ResultOverlay from './ResultOverlay';
+import RoundIntro from './RoundIntro';
+import { isRoundIntroActive } from '../../state/roundIntroGate';
 import './game2.css';
 
 // 연출 상수 (로직 비침범 — 판정은 전부 @madpump/shared 코어)
@@ -273,6 +275,11 @@ export default function Game2() {
     let last = performance.now();
 
     const step = (now: number) => {
+      // 라운드 인트로 중엔 시뮬 정지(코어 step 스킵) + last 갱신으로 재개 시 dt 점프 방지
+      if (isRoundIntroActive()) {
+        last = now;
+        return;
+      }
       const dtMs = clamp(now - last, 0, 250);
       last = now;
       const st = stateRef.current;
@@ -595,10 +602,6 @@ export default function Game2() {
               </div>
             )}
 
-            {/* 라운드 시작 사인 (비차단) */}
-            <div key={`intro-${flow.currentRound}`} className="g2-intro font-arcade">
-              ROUND {Math.max(1, flow.currentRound)} — FIGHT!
-            </div>
           </div>
 
           {/* 기본 종료 플래시 — result 확정 순간 흰 섬광 (스테이지 relative 컨테이너 기준 오버레이) */}
@@ -667,6 +670,7 @@ export default function Game2() {
 
       {/* 라운드/매치 결과 오버레이 (game1 소유 공용 — import만) */}
       <ResultOverlay />
+      <RoundIntro />
     </main>
   );
 }

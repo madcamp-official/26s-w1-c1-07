@@ -42,6 +42,8 @@ import {
 import { setDebugGame, useDebugScreen } from '../../debug';
 import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
+import RoundIntro from './RoundIntro';
+import { isRoundIntroActive } from '../../state/roundIntroGate';
 import './game6.css';
 
 // ---------------------------------------------------------------------------
@@ -751,6 +753,7 @@ export default function Game6() {
 
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
+      if (isRoundIntroActive()) { last = now; return; }
       // 초 단위 dt, 물리 안정성을 위해 100ms 클램프(대형 dt 시 점프/충돌 튀는 것 방지)
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
@@ -907,15 +910,6 @@ export default function Game6() {
 
       <div data-testid="game-stage" className={`crt-bezel g6-stage ${urgent ? 'urgent' : ''}`}>
         <canvas ref={canvasRef} className="g6-canvas" aria-label="게임4 스테이지 — 공룡 달리기" />
-
-        {flow.phase === 'playing' && flow.currentRound > 0 && (
-          <div key={flow.currentRound} className="g6-round-intro" aria-hidden>
-            <span className="font-arcade c-accent glow-text g6-round-intro__big">
-              ROUND {flow.currentRound}
-            </span>
-            <span className="font-arcade c-muted g6-round-intro__sub">SURVIVE 10s · RUN!</span>
-          </div>
-        )}
       </div>
 
       {/* 온스크린 키캡 — 실제 배정 키 표기(SPEC Q2), 입력 순간 램프 점등. W는 홀드라 ducking 반영 */}
@@ -961,6 +955,7 @@ export default function Game6() {
       )}
 
       <ResultOverlay />
+      <RoundIntro />
     </main>
   );
 }

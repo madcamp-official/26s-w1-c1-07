@@ -48,6 +48,8 @@ import { functionColors, onlineStore, sendInput as onlineSendInput } from '../..
 import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import { setDebugGame, useDebugScreen } from '../../debug';
 import ResultOverlay from './ResultOverlay';
+import RoundIntro from './RoundIntro';
+import { isRoundIntroActive } from '../../state/roundIntroGate';
 import './game9.css';
 
 // ---------------------------------------------------------------------------
@@ -716,6 +718,7 @@ export default function Game9() {
 
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
+      if (isRoundIntroActive()) { last = now; return; }
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       let s = stateRef.current;
@@ -847,14 +850,6 @@ export default function Game9() {
       <div data-testid="game-stage" className={`crt-bezel g9-stage ${urgent ? 'urgent' : ''}`}>
         <canvas ref={canvasRef} className="g9-canvas" aria-label="게임7 스테이지 — 스피드 오목" />
 
-        {flow.phase === 'playing' && flow.currentRound > 0 && (
-          <div key={flow.currentRound} className="g9-round-intro" aria-hidden>
-            <span className="font-arcade c-accent glow-text g9-round-intro__big">
-              ROUND {flow.currentRound}
-            </span>
-            <span className="font-display c-p1 g9-round-intro__sub">먼저 3목을 만들어라</span>
-          </div>
-        )}
       </div>
 
       {/* 온스크린 키캡 — 실제 배정 키 표기(SPEC Q2), 입력 순간 램프 점등 */}
@@ -888,6 +883,7 @@ export default function Game9() {
       )}
 
       <ResultOverlay />
+      <RoundIntro />
     </main>
   );
 }

@@ -42,6 +42,8 @@ import { useOnlineRender } from '../../net/useOnlineRender';
 import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';
 import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
+import RoundIntro from './RoundIntro';
+import { isRoundIntroActive } from '../../state/roundIntroGate';
 import './game5.css';
 
 // ---------------------------------------------------------------------------
@@ -621,6 +623,13 @@ export default function Game5() {
 
     const frame = (now: number) => {
       if (stopped) return;
+      // 라운드 인트로 중엔 시뮬 정지(코어 step 스킵) + last 갱신으로 재개 시 dt 점프 방지.
+      // frame이 자기-스케줄 rAF 콜백이므로 다음 프레임은 계속 요청(체인 유지, Game1 loop 구조와 동일).
+      if (isRoundIntroActive()) {
+        last = now;
+        raf = requestAnimationFrame(frame);
+        return;
+      }
       const dt = Math.min(0.1, (now - last) / 1000); // 초 단위, 100ms 클램프(격자 순간이동 방지)
       last = now;
       let s = stateRef.current;
@@ -743,15 +752,6 @@ export default function Game5() {
             P2 CYCLE
           </span>
         </div>
-
-        {flow.phase === 'playing' && flow.currentRound > 0 && (
-          <div key={flow.currentRound} className="g5-round-intro" aria-hidden>
-            <span className="font-arcade c-accent glow-text g5-round-intro__big">
-              ROUND {flow.currentRound}
-            </span>
-            <span className="font-arcade c-muted g5-round-intro__sub">LAST RIDER STANDING</span>
-          </div>
-        )}
       </div>
 
       {/* 온스크린 키캡 — 실제 배정 키(SPEC Q2) + 입력 순간 램프 점등 */}
@@ -783,6 +783,7 @@ export default function Game5() {
       )}
 
       <ResultOverlay />
+      <RoundIntro />
     </main>
   );
 }

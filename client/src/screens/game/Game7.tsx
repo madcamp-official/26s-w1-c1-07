@@ -45,6 +45,8 @@ import {
 import { setDebugGame, useDebugScreen } from '../../debug';
 import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
+import RoundIntro from './RoundIntro';
+import { isRoundIntroActive } from '../../state/roundIntroGate';
 import './game7.css';
 
 // ---------------------------------------------------------------------------
@@ -648,6 +650,11 @@ export default function Game7() {
     let last = performance.now();
 
     const frame = (now: number) => {
+      // 라운드 인트로 중엔 시뮬 정지(코어 step 스킵) + last 갱신으로 재개 시 dt 점프 방지
+      if (isRoundIntroActive()) {
+        last = now;
+        return;
+      }
       const dt = Math.min(0.1, (now - last) / 1000); // 초 단위, 100ms 클램프(중력 폭주 방지)
       if (dt <= 0) return;
       last = now;
@@ -796,13 +803,6 @@ export default function Game7() {
           <span className="g7-hazard__row g7-hazard__row--spike font-arcade">▲ SPIKES</span>
           <span className="g7-hazard__row g7-hazard__row--magma font-arcade">MAGMA ▲</span>
         </div>
-
-        {flow.phase === 'playing' && flow.currentRound > 0 && (
-          <div key={flow.currentRound} className="g7-round-intro" aria-hidden>
-            <span className="font-arcade c-accent glow-text g7-round-intro__big">ROUND {flow.currentRound}</span>
-            <span className="font-arcade c-muted g7-round-intro__sub">HOVER · AIM · FIRE</span>
-          </div>
-        )}
       </div>
 
       {/* 온스크린 키캡 — 실제 배정 키(SPEC Q2), 입력 순간 램프 점등 */}
@@ -833,6 +833,7 @@ export default function Game7() {
       )}
 
       <ResultOverlay />
+      <RoundIntro />
     </main>
   );
 }

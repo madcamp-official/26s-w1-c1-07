@@ -48,6 +48,8 @@ import { useOnlineRender } from '../../net/useOnlineRender';
 import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';
 import { EndFlash } from '../../game/EndFlash';
 import ResultOverlay from './ResultOverlay';
+import RoundIntro from './RoundIntro';
+import { isRoundIntroActive } from '../../state/roundIntroGate';
 import './game1.css';
 
 interface ValuePulse {
@@ -212,6 +214,11 @@ export default function Game1() {
 
     const step = (now: number) => {
       if (stopped) return;
+      // 라운드 인트로 중엔 시뮬 정지(코어 step 스킵) + last 갱신으로 재개 시 dt 점프 방지
+      if (isRoundIntroActive()) {
+        last = now;
+        return;
+      }
       const dtSec = Math.min(0.5, (now - last) / 1000);
       if (dtSec <= 0) return;
       last = now;
@@ -459,6 +466,7 @@ export default function Game1() {
       )}
 
       <ResultOverlay />
+      <RoundIntro />
     </main>
   );
 }

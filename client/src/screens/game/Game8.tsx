@@ -52,6 +52,8 @@ import {
   type Particle,
 } from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
+import RoundIntro from './RoundIntro';
+import { isRoundIntroActive } from '../../state/roundIntroGate';
 import './game8.css';
 
 // ---------------------------------------------------------------------------
@@ -725,6 +727,7 @@ export default function Game8() {
 
     const step = (now: number) => {
       if (stopped) return;
+      if (isRoundIntroActive()) { last = now; return; }
       const dt = Math.min(0.5, (now - last) / 1000);
       if (dt <= 0) return;
       last = now;
@@ -926,14 +929,6 @@ export default function Game8() {
           </span>
         </div>
 
-        {flow.phase === 'playing' && flow.currentRound > 0 && (
-          <div key={flow.currentRound} className="g8-round-intro" aria-hidden>
-            <span className="font-arcade c-accent glow-text g8-round-intro__big">
-              ROUND {flow.currentRound}
-            </span>
-            <span className="font-arcade c-muted g8-round-intro__sub">DEFEND YOUR CANNON</span>
-          </div>
-        )}
       </div>
 
       {/* 온스크린 키캡 — 실제 배정 키(SPEC Q2) + 입력 순간 램프 점등 */}
@@ -966,6 +961,7 @@ export default function Game8() {
       )}
 
       <ResultOverlay />
+      <RoundIntro />
     </main>
   );
 }
