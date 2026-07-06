@@ -57,7 +57,6 @@ export default function MainLoggedIn() {
           🪙 {session.coins}
         </span>
         <p className="s2-greet">
-          <span className="font-arcade s2-greet-tag c-p1 glow-text">PLAYER 1:</span>
           <span className="font-display s2-greet-name c-p1 glow-text">{nickname}</span>
           <span className="font-display s2-greet-hello">님 안녕하세요</span>
         </p>
