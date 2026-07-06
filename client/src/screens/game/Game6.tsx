@@ -45,6 +45,9 @@ import ResultOverlay from './ResultOverlay';
 import RoundIntro from './RoundIntro';
 import { isRoundIntroActive } from '../../state/roundIntroGate';
 import { sfx } from '@/audio';
+import { getTheme } from '../../state/theme';
+import { game6Draw } from './render/game6';
+import type { Geom } from './render/game6/types';
 import './game6.css';
 
 // ---------------------------------------------------------------------------
@@ -562,6 +565,26 @@ function drawScene(
 }
 
 // ---------------------------------------------------------------------------
+// 테마별 렌더 디스패치 — 현재 테마의 bespoke drawScene을 고른다(없으면 neon 기본).
+// 좌표/스케일은 GEOM으로 고정 전달 → 어떤 테마 조합이어도 동일 좌표계(크로스플레이 불변).
+// getTheme()을 매 프레임 읽으므로 테마 전환은 다음 프레임에 즉시 반영.
+// ---------------------------------------------------------------------------
+const GEOM: Geom = { CW, CH, SC, X, Y, STARS };
+
+function renderScene(
+  ctx: CanvasRenderingContext2D,
+  s: Game6State,
+  fx: readonly Fx[],
+  now: number,
+  p1IsYou: boolean,
+  p2IsYou: boolean,
+): void {
+  const draw = game6Draw[getTheme()];
+  if (draw) draw(ctx, s, fx, now, p1IsYou, p2IsYou, GEOM);
+  else drawScene(ctx, s, fx, now, p1IsYou, p2IsYou); // neon-coinop = 기본(로컬)
+}
+
+// ---------------------------------------------------------------------------
 // 스냅샷 사이 보간(외삽) — 서버 스냅샷을 dt초만큼 각 오브젝트 '자기 속도'로 전진시킨
 // 표시용 상태를 만든다. 스냅샷에 vy·grounded·obstacles가 이미 있어 ID 매칭이 불필요하고
 // 추가 지연도 0. 착지/방향전환 순간만 미세 오차이며 다음 스냅샷이 즉시 교정한다.
@@ -750,7 +773,7 @@ export default function Game6() {
           // 종료(result) 시엔 외삽하지 않는다(파편/러쉬 연출을 서버 최종 상태 그대로 유지).
           const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
           const view = extraDt > 0 && s.result === null ? extrapolate(s, extraDt) : s;
-          drawScene(ctx, view, fxRef.current, now, disp.P1.isYou, disp.P2.isYou);
+          renderScene(ctx, view, fxRef.current, now, disp.P1.isYou, disp.P2.isYou);
           endRef.current.update(s.result, now);
           drawEndFlash(ctx, CW, CH, endRef.current.age(now));
         }
@@ -892,7 +915,7 @@ export default function Game6() {
       if (ctx) {
         const disp = getPlayerDisplays(getFlow());
         fxRef.current = fxRef.current.filter((f) => now - f.t < 1200);
-        drawScene(ctx, s, fxRef.current, now, disp.P1.isYou, disp.P2.isYou);
+        renderScene(ctx, s, fxRef.current, now, disp.P1.isYou, disp.P2.isYou);
         endRef.current.update(s.result, now);
         drawEndFlash(ctx, CW, CH, endRef.current.age(now));
       }
