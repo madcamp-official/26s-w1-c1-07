@@ -21,7 +21,7 @@
  *  · online 모드면 P2는 봇(라이트 사이클 생존 AI가 좌/우 회전키를 합성).
  *  · 매 틱 setDebugGame(state), 언마운트 setDebugGame(null).
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { game10, G10, GAME_DURATION } from '@madpump/shared';
 import type { Game10State, GameInputEvent } from '@madpump/shared';
@@ -39,7 +39,7 @@ import {
 } from '../../state/flow';
 import { setDebugGame, useDebugScreen } from '../../debug';
 import { useOnlineRender } from '../../net/useOnlineRender';
-import { sendInput as onlineSendInput } from '../../net/online';
+import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';
 import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
 import './game10.css';
@@ -58,7 +58,7 @@ const CELL_H = CH / GY; // 12.5
 const DX = [1, 0, -1, 0];
 const DY = [0, 1, 0, -1];
 
-const COL = {
+const COL0 = {
   bgTop: '#160a33', // --surface-deep
   bgBottom: '#0d0221', // --bg
   grid: 'rgba(211,0,197,0.07)', // --accent2 dim
@@ -74,6 +74,19 @@ const COL = {
   accent2: '#d300c5',
   hot: '#f4f0ff', // --text
 } as const;
+
+/**
+ * 색=플레이어 종속(역할 아님): 모듈 기본 COL0은 P1엔티티=시안('blue')·P2엔티티=핑크('red').
+ * 이 라운드 실제 플레이어 색(functionColors)이 P1=빨강이면 p1/p2(그리고 body)를 스왑한 로컬 COL을 준다.
+ * → 아래 COL.p1/p2/p1body/p2body 사용부가 자동으로 '플레이어 색'을 따른다(온라인/오프라인 draw 공통).
+ * 오프라인/색 정보 없음이면 functionColors가 기본을 줘서 기존과 동일(시안 P1 / 핑크 P2).
+ */
+function playerCol() {
+  const fc = functionColors();
+  return fc.p1 === 'red'
+    ? { ...COL0, p1: COL0.p2, p1body: COL0.p2body, p2: COL0.p1, p2body: COL0.p1body }
+    : COL0;
+}
 
 const ARCADE_FONT = '"Press Start 2P", monospace';
 
@@ -161,6 +174,9 @@ function drawScene(
   p1IsYou: boolean,
   p2IsYou: boolean,
 ): void {
+  // 색=플레이어 종속: 모듈 COL을 이 라운드 실제 플레이어 색으로 스왑한 로컬 COL로 그림자화.
+  // 아래 COL.p1/p2/p1body/p2body(궤적·hot·바이크)가 자동으로 P1/P2 기능 엔티티의 플레이어 색을 따른다.
+  const COL = playerCol();
   const remMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
   const urgent = remMs <= 5000 && s.result === null;
 
@@ -328,7 +344,7 @@ function drawBike(
   ctx.fillStyle = color;
   ctx.fillRect(cx - CELL_W / 2 + 1.5, cy - CELL_H / 2 + 1.5, CELL_W - 3, CELL_H - 3);
   ctx.shadowBlur = 0;
-  ctx.fillStyle = COL.hot;
+  ctx.fillStyle = COL0.hot;
   ctx.fillRect(cx - 2, cy - 2, 4, 4);
   ctx.restore();
 
@@ -343,8 +359,8 @@ function drawBike(
   const ly = Math.max(12, cy - CELL_H / 2 - 3);
   ctx.fillText(label, cx, ly);
   if (showYou) {
-    ctx.fillStyle = COL.accent;
-    ctx.shadowColor = COL.accent;
+    ctx.fillStyle = COL0.accent;
+    ctx.shadowColor = COL0.accent;
     ctx.fillText('YOU', cx, Math.max(24, ly - 12));
   }
   ctx.restore();
@@ -386,6 +402,14 @@ export default function Game10() {
   // 입력 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref(stale-closure 방지)
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
+
+  // 내 색(플레이어 종속, 역할과 독립) — 원시값만 선택 구독 → 색 배정(매치 시작)에서만 리렌더.
+  // 키캡/HUD 표식 색을 역할이 아니라 이 색으로 준다.
+  const myColor = useSyncExternalStore(
+    onlineStore.subscribe,
+    () => onlineStore.get().myColor ?? 'blue',
+    () => onlineStore.get().myColor ?? 'blue',
+  );
 
   const [qLit, flashQ] = useKeyLamp();
   const [wLit, flashW] = useKeyLamp();
@@ -537,6 +561,8 @@ export default function Game10() {
 
     // 판정 순간 크래시 연출 산출(승패 순간에만 글리치)
     const onResult = (s: Game10State, now: number) => {
+      // 크래시 파편/플래시/캡션 색도 플레이어 종속(바이크와 동일 색): 로컬 COL 그림자화.
+      const COL = playerCol();
       const timeout = s.elapsed >= GAME_DURATION - 1e-6;
       let dead1 = false;
       let dead2 = false;
@@ -673,6 +699,8 @@ export default function Game10() {
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
   const urgent = flow.phase === 'playing' && hudMs <= 5000;
+  // 라이더 표식 색=플레이어 종속: P1 기능 엔티티가 빨강이면 칩 색을 스왑(캔버스 바이크 색과 일치).
+  const colorSwap = functionColors().p1 === 'red';
 
   return (
     <main data-testid="scr-game10" className="g10-root">
@@ -706,10 +734,14 @@ export default function Game10() {
       <div data-testid="game-stage" className={`crt-bezel g10-stage ${urgent ? 'urgent' : ''}`}>
         <canvas ref={canvasRef} className="g10-canvas anim-sign-on" aria-label="게임10 스테이지 — 라이트 사이클" />
 
-        {/* 좌상단 라이더 표식(시안 P1 / 핑크 P2) */}
+        {/* 좌상단 라이더 표식 — 색=플레이어 종속(P1/P2 기능 엔티티의 실제 플레이어 색) */}
         <div className="g10-riders" aria-hidden>
-          <span className="g10-rider g10-rider--p1 font-arcade">P1 CYCLE</span>
-          <span className="g10-rider g10-rider--p2 font-arcade">P2 CYCLE</span>
+          <span className={`g10-rider ${colorSwap ? 'g10-rider--p2' : 'g10-rider--p1'} font-arcade`}>
+            P1 CYCLE
+          </span>
+          <span className={`g10-rider ${colorSwap ? 'g10-rider--p1' : 'g10-rider--p2'} font-arcade`}>
+            P2 CYCLE
+          </span>
         </div>
 
         {flow.phase === 'playing' && flow.currentRound > 0 && (
@@ -726,11 +758,11 @@ export default function Game10() {
       {isOnline ? (
         <div className="g10-keys g10-keys--online">
           <div className="g10-keys__group">
-            <span className={`g10-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {myRole === 'P1' ? '파랑' : '빨강'} · CYCLE
+            <span className={`g10-keys__tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}>
+              YOU · {myColor === 'blue' ? '파랑' : '빨강'} · CYCLE
             </span>
-            <KeyCap role={myRole ?? 'P2'} keyChar="U" icon="↺" lit={uLit} label="좌회전" />
-            <KeyCap role={myRole ?? 'P2'} keyChar="I" icon="↻" lit={iLit} label="우회전" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="↺" lit={uLit} label="좌회전" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="↻" lit={iLit} label="우회전" />
           </div>
           <span className="g10-keys__hint font-arcade">U 좌회전 · I 우회전 — TURN TO SURVIVE</span>
         </div>

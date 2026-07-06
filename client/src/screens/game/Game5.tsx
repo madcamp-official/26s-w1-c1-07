@@ -24,7 +24,7 @@
  *   online 모드 → P2 대포는 봇(가장 위협적인 몬스터로 조준·발사), 사람은 P1(q/w)
  *   ★코어는 원본 mutate 후 동일 참조 반환 → 이전값 비교는 step 호출 전에 스칼라 스냅샷.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { game5, G5, GAME_DURATION } from '@madpump/shared';
 import type { Game5State, Monster, GameInputEvent } from '@madpump/shared';
@@ -42,7 +42,7 @@ import {
 } from '../../state/flow';
 import { setDebugGame, useDebugScreen } from '../../debug';
 import { useOnlineRender } from '../../net/useOnlineRender';
-import { sendInput as onlineSendInput } from '../../net/online';
+import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';
 import {
   createEndTracker,
   drawEndFlash,
@@ -63,8 +63,8 @@ const CH = G5.H; // 450
 
 const ARCADE = "'Press Start 2P', monospace";
 
-/** theme.css §1 팔레트(값만 복사 — import 금지) */
-const COL = {
+/** theme.css §1 팔레트(값만 복사 — import 금지). 역할 기본색 = P1 시안 / P2 핑크. */
+const COL0 = {
   field: '#1a0b2e', // --bg-raised
   deep: '#160a33', // --surface-deep
   p1: '#05d9e8',
@@ -76,6 +76,22 @@ const COL = {
   muted: '#9d8fbf',
   error: '#ff3864',
 } as const;
+
+type Pal = Record<keyof typeof COL0, string>;
+
+/**
+ * 색 = 플레이어 종속(역할 아님) 로컬 팔레트.
+ * 이 라운드 P1/P2 '기능 엔티티'의 실제 플레이어 색으로 p1/p2(+dim)를 배치한다:
+ *  functionColors().p1='red' 이면 P1엔티티=핑크·P2엔티티=시안이 되도록 p1↔p2를 스왑.
+ *  나머지(field/deep/accent/accent2/error 등)는 플레이어와 무관하므로 불변.
+ *  오프라인·색 정보 없음 → functionColors 기본값({p1:'blue',p2:'red'}) → COL0 그대로(기존 동작 동일).
+ */
+function playerCol(): Pal {
+  const fc = functionColors();
+  return fc.p1 === 'red'
+    ? { ...COL0, p1: COL0.p2, p1dim: COL0.p2dim, p2: COL0.p1, p2dim: COL0.p1dim }
+    : COL0;
+}
 
 /** 대포 고정 위치 (코어 규약과 동일) */
 const P1 = { x: G5.CX - G5.GAP, y: G5.CY };
@@ -134,7 +150,7 @@ function drawBaseRing(ctx: CanvasRenderingContext2D, p: { x: number; y: number }
   ctx.restore();
 }
 
-function drawMonster(ctx: CanvasRenderingContext2D, m: Monster, reduce: boolean): void {
+function drawMonster(ctx: CanvasRenderingContext2D, m: Monster, COL: Pal, reduce: boolean): void {
   const target = m.target === 1 ? P1 : P2;
   const coreCol = m.target === 1 ? COL.p1 : COL.p2;
 
@@ -187,9 +203,10 @@ function drawMonster(ctx: CanvasRenderingContext2D, m: Monster, reduce: boolean)
   ctx.restore();
 }
 
-function drawShot(ctx: CanvasRenderingContext2D, x: number, y: number, vx: number, vy: number, owner: 1 | 2): void {
+function drawShot(ctx: CanvasRenderingContext2D, x: number, y: number, vx: number, vy: number, owner: 1 | 2, COL: Pal): void {
   const col = owner === 1 ? COL.p1 : COL.p2;
-  const rgb = owner === 1 ? '5,217,232' : '255,42,109';
+  // rgb는 트레이서 그라디언트용 — 해석된 색(시안/핑크)에서 역산해 스왑에도 정확히 따른다.
+  const rgb = col === COL0.p1 ? '5,217,232' : '255,42,109';
   const tx = x - vx * 0.05;
   const ty = y - vy * 0.05;
   ctx.save();
@@ -230,10 +247,10 @@ function drawCannon(
     const prox = 1 - nearestDist / DANGER_R;
     const pulse = reduce ? 0.6 : 0.45 + 0.45 * Math.sin(now / 70);
     ctx.save();
-    ctx.strokeStyle = COL.error;
+    ctx.strokeStyle = COL0.error;
     ctx.globalAlpha = Math.min(0.85, prox * pulse + 0.15);
     ctx.lineWidth = 2;
-    ctx.shadowColor = COL.error;
+    ctx.shadowColor = COL0.error;
     ctx.shadowBlur = 12;
     ctx.beginPath();
     ctx.arc(p.x, p.y, G5.CANNON_R + 9, 0, Math.PI * 2);
@@ -297,14 +314,14 @@ function drawCannon(
   ctx.shadowBlur = 6;
   ctx.fillText(label, p.x, p.y + G5.CANNON_R + 18);
   if (isYou && (reduce || Math.floor(now / 500) % 2 === 0)) {
-    ctx.fillStyle = COL.accent;
-    ctx.shadowColor = COL.accent;
+    ctx.fillStyle = COL0.accent;
+    ctx.shadowColor = COL0.accent;
     ctx.fillText('YOU', p.x, p.y - G5.CANNON_R - 12);
   }
   ctx.restore();
 }
 
-function drawFx(ctx: CanvasRenderingContext2D, f: Fx, now: number, reduce: boolean): void {
+function drawFx(ctx: CanvasRenderingContext2D, f: Fx, COL: Pal, now: number, reduce: boolean): void {
   const age = now - f.t;
   if (f.kind === 'muzzle') {
     if (age >= 110) return;
@@ -392,6 +409,9 @@ function drawScene(
   p2IsYou: boolean,
   reduce: boolean,
 ): void {
+  // 색 = 플레이어 종속(역할 아님) — P1/P2 기능 엔티티를 실제 플레이어 색으로 칠한다.
+  // 로컬 COL이 모듈 COL0를 shadow → 아래 COL.p1/p2 사용부가 자동으로 플레이어 색을 따른다.
+  const COL = playerCol();
   const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
   const urgent = remainingMs <= 5000 && s.result === null;
 
@@ -423,10 +443,10 @@ function drawScene(
   drawBaseRing(ctx, P2, COL.p2);
 
   // 몬스터
-  for (const m of s.monsters) drawMonster(ctx, m, reduce);
+  for (const m of s.monsters) drawMonster(ctx, m, COL, reduce);
 
   // 총알
-  for (const sh of s.shots) drawShot(ctx, sh.x, sh.y, sh.vx, sh.vy, sh.owner);
+  for (const sh of s.shots) drawShot(ctx, sh.x, sh.y, sh.vx, sh.vy, sh.owner, COL);
 
   // 대포
   const near1 = nearestMonsterDist(s.monsters, P1);
@@ -435,7 +455,7 @@ function drawScene(
   drawCannon(ctx, P2, s.p2Angle, s.p2Cooldown, COL.p2, COL.p2dim, near2, 'P2', p2IsYou, now, reduce);
 
   // 이펙트
-  for (const f of fx) drawFx(ctx, f, now, reduce);
+  for (const f of fx) drawFx(ctx, f, COL, now, reduce);
 
   // 승패 순간 크로마틱 어버레이션 1프레임
   const chroma = fx.find((f) => f.kind === 'chroma');
@@ -586,6 +606,14 @@ export default function Game5() {
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
 
+  // 색 = 플레이어 종속(역할과 독립). 키캡/YOU 태그를 이 색으로 칠한다.
+  // 색은 매치 경계에서만 바뀌는 원시값 → 선택 구독으로 60Hz 리렌더 없이 반응.
+  const myColor = useSyncExternalStore(
+    onlineStore.subscribe,
+    () => onlineStore.get().myColor ?? 'blue',
+    () => onlineStore.get().myColor ?? 'blue',
+  );
+
   // direct-URL 복구 + prefers-reduced-motion 기록 + 디버그 브리지 정리
   useEffect(() => {
     const f = getFlow();
@@ -734,6 +762,9 @@ export default function Game5() {
           setScores({ p1: s.p1Score, p2: s.p2Score });
         }
 
+        // 색 = 플레이어 종속(역할 아님) — fx 색도 P1/P2 엔티티의 실제 플레이어 색으로.
+        const COL = playerCol();
+
         // ── 렌더 전용 이펙트 파생 (로직 비침범) ──
         // 발사: 쿨다운이 0→FIRE_COOLDOWN 으로 오른 순간(포신 끝에 머즐 스파크)
         if (s.p1Cooldown > prevP1Cd) {
@@ -844,6 +875,10 @@ export default function Game5() {
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
   const urgent = flow.phase === 'playing' && hudMs <= 5000;
+  // 색 = 플레이어 종속 — 스코어 셀도 P1/P2 엔티티의 실제 플레이어 색으로(blue→--p1 시안 / red→--p2 핑크).
+  const fc = functionColors();
+  const p1KillCls = fc.p1 === 'blue' ? 'g5-score--p1' : 'g5-score--p2';
+  const p2KillCls = fc.p2 === 'blue' ? 'g5-score--p1' : 'g5-score--p2';
 
   return (
     <main data-testid="scr-game5" className="g5-screen">
@@ -878,13 +913,13 @@ export default function Game5() {
         <canvas ref={canvasRef} className="g5-canvas" aria-label="게임5 스테이지 — 몬스터 포격전" />
 
         {/* 새 메커니즘: 격추 점수 — neon 스코어 셀 (P1 좌상 / P2 우상) */}
-        <div className="g5-score g5-score--p1" aria-label={`P1 격추 ${scores.p1}`}>
+        <div className={`g5-score ${p1KillCls}`} aria-label={`P1 격추 ${scores.p1}`}>
           <span className="g5-score__label font-arcade">P1 KILLS</span>
           <span key={scores.p1} className="g5-score__num font-arcade">
             {scores.p1}
           </span>
         </div>
-        <div className="g5-score g5-score--p2" aria-label={`P2 격추 ${scores.p2}`}>
+        <div className={`g5-score ${p2KillCls}`} aria-label={`P2 격추 ${scores.p2}`}>
           <span className="g5-score__label font-arcade">P2 KILLS</span>
           <span key={scores.p2} className="g5-score__num font-arcade">
             {scores.p2}
@@ -903,14 +938,14 @@ export default function Game5() {
 
       {/* 온스크린 키캡 — 실제 배정 키(SPEC Q2) + 입력 순간 램프 점등 */}
       {isOnline ? (
-        // 온라인: 로컬 플레이어(U/I)만, 내 색으로. U=방향전환(slotA) / I=발사(slotB).
+        // 온라인: 로컬 플레이어(U/I)만. 색=내 플레이어 색(역할 아님). U=방향전환(slotA) / I=발사(slotB).
         <div className="g5-keys g5-keys--online">
           <div className="g5-keys__group">
-            <span className={`g5-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {myRole === 'P1' ? '파랑' : '빨강'}
+            <span className={`g5-keys__tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}>
+              YOU · {myColor === 'blue' ? '파랑' : '빨강'}
             </span>
-            <KeyCap role={myRole ?? 'P2'} keyChar="U" icon="⇄" lit={uLit} label="방향전환" />
-            <KeyCap role={myRole ?? 'P2'} keyChar="I" icon="◉" lit={iLit} label="발사" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="⇄" lit={uLit} label="방향전환" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="◉" lit={iLit} label="발사" />
           </div>
           <span className="g5-keys__hint font-arcade">SHOOT THE INVADERS</span>
         </div>

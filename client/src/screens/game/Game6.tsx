@@ -26,10 +26,10 @@
  *   result 확정 → (RESULT_FX_MS 글리치 후) reportRoundEnd(매핑) 1회 → <ResultOverlay />
  *   online 모드 → P2는 봇(정답 키를 인간 페이스로 연타, 소량 미스). 사람은 P1(q/w).
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { game6, G6, SEQ_LEN, GAME_DURATION } from '@madpump/shared';
-import type { Game6State, GameInputEvent } from '@madpump/shared';
+import type { Game6State, GameInputEvent, PlayerColor } from '@madpump/shared';
 import type { MatchResult, PlayerRole } from '@/shell';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
@@ -44,7 +44,7 @@ import {
 } from '../../state/flow';
 import { setDebugGame, useDebugScreen } from '../../debug';
 import { useOnlineRender } from '../../net/useOnlineRender';
-import { sendInput as onlineSendInput } from '../../net/online';
+import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';
 import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
 import './game6.css';
@@ -55,7 +55,7 @@ import './game6.css';
 const CW = 800;
 const CH = 450;
 
-const COL = {
+const COL0 = {
   field: '#1a0b2e', // --bg-raised
   deep: '#160a33', // --surface-deep
   surface: '#241640', // --surface
@@ -69,6 +69,19 @@ const COL = {
   muted: '#9d8fbf',
   text: '#f4f0ff',
 } as const;
+
+/**
+ * 색을 '역할'이 아니라 '플레이어'에 종속시키는 로컬 팔레트.
+ * P1 기능 엔티티 색이 파랑이면 COL0 그대로(P1=시안/P2=핑크), 빨강이면 p1/p2(및 dim) 쌍을 스왑.
+ * 오프라인/색 정보 없음 = functionColors 기본 {p1:'blue',p2:'red'} → COL0 반환(기존 동작 보존).
+ */
+type Pal = Record<keyof typeof COL0, string>; // as const 리터럴 타입 회피(스왑 대입 허용)
+function palette(): Pal {
+  const fc = functionColors();
+  return fc.p1 === 'red'
+    ? { ...COL0, p1: COL0.p2, p1dim: COL0.p2dim, p2: COL0.p1, p2dim: COL0.p1dim }
+    : COL0;
+}
 
 const ARCADE = '"Press Start 2P", monospace';
 
@@ -116,13 +129,15 @@ interface RenderBundle {
   reduceMotion: boolean;
   p1IsYou: boolean;
   p2IsYou: boolean;
+  /** 플레이어 종속 색 팔레트(역할 아님) — drawScene/drawLane이 이 색으로 P1/P2 엔티티를 칠한다. */
+  col: Pal;
 }
 
 // ---------------------------------------------------------------------------
 // 캔버스 렌더러 (순수 그리기 — state는 읽기만)
 // ---------------------------------------------------------------------------
 function drawScene(ctx: CanvasRenderingContext2D, s: Game6State, r: RenderBundle): void {
-  const { now, urgent, reduceMotion } = r;
+  const { now, urgent, reduceMotion, col: COL } = r;
 
   // --- 필드 ---
   ctx.clearRect(0, 0, CW, CH);
@@ -214,6 +229,7 @@ function drawScene(ctx: CanvasRenderingContext2D, s: Game6State, r: RenderBundle
 /** 한 레인(플레이어) 그리기 */
 function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game6State, r: RenderBundle): void {
   const isP1 = side === 'P1';
+  const { now, reduceMotion, col: COL } = r; // 로컬 COL(플레이어 색 스왑본) — 사용 전에 선언
   const laneX = isP1 ? P1_X : P2_X;
   const color = isP1 ? COL.p1 : COL.p2;
   const dim = isP1 ? COL.p1dim : COL.p2dim;
@@ -225,7 +241,6 @@ function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game6State
   const scroll = isP1 ? r.p1Scroll : r.p2Scroll;
   const scoreFxT = r.scoreFx[side];
   const isYou = isP1 ? r.p1IsYou : r.p2IsYou;
-  const { now, reduceMotion } = r;
 
   // 오답 셰이크 (레인 타일 그룹에만)
   const shakeX =
@@ -431,6 +446,14 @@ export default function Game6() {
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
 
+  // 색은 플레이어 종속(역할과 독립) — 키캡/YOU 표시는 내 색으로. 선택 구독이라 색 바뀔 때만
+  // 리렌더(60Hz 스냅샷 churn 없음). 오프라인/색 정보 없으면 기본 'blue'.
+  const myColor = useSyncExternalStore(
+    onlineStore.subscribe,
+    () => onlineStore.get().myColor ?? 'blue',
+    () => 'blue',
+  ) as PlayerColor;
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const eventsRef = useRef<GameInputEvent[]>([]);
   const p1ScrollRef = useRef(0);
@@ -555,6 +578,7 @@ export default function Game6() {
           reduceMotion: reduceMotionRef.current,
           p1IsYou: displays.P1.isYou,
           p2IsYou: displays.P2.isYou,
+          col: palette(),
         });
         endRef.current.update(s.result, now);
         drawEndFlash(ctx, CW, CH, endRef.current.age(now));
@@ -588,6 +612,8 @@ export default function Game6() {
       last = now;
       let s = stateRef.current;
       if (!s) return;
+      // 색은 플레이어 종속(역할 아님) — 이 프레임의 P1/P2 엔티티 색 팔레트. 오프라인이면 COL0(기존 동작).
+      const COL = palette();
 
       if (s.result === null) {
         const events = eventsRef.current;
@@ -674,6 +700,7 @@ export default function Game6() {
           reduceMotion: reduceMotionRef.current,
           p1IsYou: displays.P1.isYou,
           p2IsYou: displays.P2.isYou,
+          col: COL,
         });
         endRef.current.update(s.result, now);
         drawEndFlash(ctx, CW, CH, endRef.current.age(now));
@@ -735,11 +762,11 @@ export default function Game6() {
         // 온라인: 로컬 플레이어(U/I)만, 내 색으로. U=왼쪽 패드, I=오른쪽 패드.
         <div className="g6-keys g6-keys--online">
           <div className="g6-keys__group">
-            <span className={`g6-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {myRole === 'P1' ? '파랑' : '빨강'} · PUMP
+            <span className={`g6-keys__tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}>
+              YOU · {myColor === 'blue' ? '파랑' : '빨강'} · PUMP
             </span>
-            <KeyCap role={myRole ?? 'P2'} keyChar="U" icon="◀" lit={uLit} label="왼쪽" />
-            <KeyCap role={myRole ?? 'P2'} keyChar="I" icon="▶" lit={iLit} label="오른쪽" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="◀" lit={uLit} label="왼쪽" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="▶" lit={iLit} label="오른쪽" />
           </div>
           <span className="g6-keys__hint font-arcade c-muted">HIT THE GLOWING PAD</span>
         </div>

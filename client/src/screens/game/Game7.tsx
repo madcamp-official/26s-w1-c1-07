@@ -31,7 +31,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { game7, G7, GAME_DURATION, maxRun } from '@madpump/shared';
-import type { Game7State, GameInputEvent } from '@madpump/shared';
+import type { Game7State, GameInputEvent, PlayerColor } from '@madpump/shared';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
 import {
@@ -44,7 +44,7 @@ import {
   useFlow,
 } from '../../state/flow';
 import { useOnlineRender } from '../../net/useOnlineRender';
-import { sendInput as onlineSendInput } from '../../net/online';
+import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';
 import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import { setDebugGame, useDebugScreen } from '../../debug';
 import ResultOverlay from './ResultOverlay';
@@ -65,8 +65,10 @@ const BR = BX + BOARD; // 648
 const BB = BY + BOARD; // 454
 const STONE_R = 20;
 
-// theme.css 토큰 값 복사 (§1.1)
-const COL = {
+// theme.css 토큰 값 복사 (§1.1) — 모듈 기본 팔레트(역할 기준 P1=시안 / P2=핑크).
+// 색은 플레이어 종속: drawScene 맨 위에서 functionColors()로 로컬 COL을 스왑해
+// P1/P2 기능 엔티티가 실제 플레이어 색을 따르게 한다(개별 치환 최소화).
+const COL0 = {
   field: '#160a33', // --surface-deep
   raised: '#1a0b2e', // --bg-raised
   grid: '#d300c5', // --accent2 (네온 퍼플 그리드/보더)
@@ -79,6 +81,21 @@ const COL = {
   text: '#f4f0ff', // --text
   error: '#ff3864', // --error (턴타임 임박 경고)
 } as const;
+
+/** COL0(리터럴)과 스왑된 로컬 팔레트 모두 담는 타입 — drawScene가 만든 로컬 COL을 헬퍼로 넘길 때 사용. */
+interface Palette {
+  field: string;
+  raised: string;
+  grid: string;
+  p1: string;
+  p1dim: string;
+  p2: string;
+  p2dim: string;
+  accent: string;
+  muted: string;
+  text: string;
+  error: string;
+}
 
 const FONT_ARCADE = '"Press Start 2P", monospace';
 const DIRS: ReadonlyArray<readonly [number, number]> = [
@@ -204,9 +221,10 @@ function drawStone(
   y: number,
   player: number,
   strong: boolean,
+  col: Palette,
 ): void {
-  const color = player === 1 ? COL.p1 : COL.p2;
-  const dim = player === 1 ? COL.p1dim : COL.p2dim;
+  const color = player === 1 ? col.p1 : col.p2;
+  const dim = player === 1 ? col.p1dim : col.p2dim;
   ctx.save();
   ctx.shadowColor = color;
   ctx.shadowBlur = strong ? 16 : 6; // 방금 놓인 돌만 강한 글로우 (§ 발광 절제)
@@ -277,8 +295,9 @@ function drawSidePanel(
   isTurn: boolean,
   isYou: boolean,
   now: number,
+  col: Palette,
 ): void {
-  const color = player === 1 ? COL.p1 : COL.p2;
+  const color = player === 1 ? col.p1 : col.p2;
   const label = player === 1 ? 'P1' : 'P2';
   const stones = countStones(board, player);
   const run = maxRun(board, player);
@@ -287,8 +306,8 @@ function drawSidePanel(
   txt(ctx, label, cx, 172, 16, color, isTurn ? 10 : 3);
   if (isTurn) txt(ctx, 'TO PLAY', cx, 196, 8, color, 4);
   // 통계
-  txt(ctx, `STONES ${stones}`, cx, 226, 10, COL.muted, 0);
-  txt(ctx, `RUN ${run}`, cx, 252, 12, runHot ? color : COL.muted, runHot ? 6 : 0);
+  txt(ctx, `STONES ${stones}`, cx, 226, 10, col.muted, 0);
+  txt(ctx, `RUN ${run}`, cx, 252, 12, runHot ? color : col.muted, runHot ? 6 : 0);
   // 진행 램프 3개(연속 목 수) — 3 = 승리 임박
   const lampY = 280;
   for (let i = 0; i < 3; i++) {
@@ -302,7 +321,7 @@ function drawSidePanel(
       ctx.shadowBlur = 8;
       ctx.fill();
     } else {
-      ctx.fillStyle = COL.field;
+      ctx.fillStyle = col.field;
       ctx.fill();
       ctx.strokeStyle = 'rgba(211,0,197,0.35)';
       ctx.lineWidth = 1;
@@ -324,6 +343,14 @@ function drawScene(
   winLine: WinLine | null,
   meta: { p1IsYou: boolean; p2IsYou: boolean; reduced: boolean },
 ): void {
+  // 색은 플레이어 종속(역할 아님) — P1/P2 기능 엔티티를 실제 플레이어 색으로 칠한다.
+  //  fc.p1==='red'면 P1엔티티=핑크·P2엔티티=시안이 되도록 로컬 COL을 스왑 → 아래 COL.p1/p2 사용부가 자동 반영.
+  //  (온라인/오프라인 draw 경로가 모두 이 함수를 통과하므로 여기 한 곳만 스왑하면 된다.)
+  const fc = functionColors();
+  const COL: Palette =
+    fc.p1 === 'red'
+      ? { ...COL0, p1: COL0.p2, p1dim: COL0.p2dim, p2: COL0.p1, p2dim: COL0.p1dim }
+      : COL0;
   const playing = s.result === null;
   const turnColor = s.turn === 1 ? COL.p1 : COL.p2;
 
@@ -384,7 +411,7 @@ function drawScene(
     const p = s.board[idx];
     if (p === 0) continue;
     const { x, y } = pt(idx);
-    drawStone(ctx, x, y, p, idx === s.lastPlaced);
+    drawStone(ctx, x, y, p, idx === s.lastPlaced, COL);
   }
 
   // --- 배치 펄스 / AUTO 태그 ---
@@ -498,8 +525,8 @@ function drawScene(
   txt(ctx, 'PLACE TIME', CW / 2, barY + 26, 10, COL.muted, 0);
 
   // --- 좌/우 정보 컬럼 ---
-  drawSidePanel(ctx, 156, 1, s.board, playing && s.turn === 1, meta.p1IsYou, now);
-  drawSidePanel(ctx, 804, 2, s.board, playing && s.turn === 2, meta.p2IsYou, now);
+  drawSidePanel(ctx, 156, 1, s.board, playing && s.turn === 1, meta.p1IsYou, now, COL);
+  drawSidePanel(ctx, 804, 2, s.board, playing && s.turn === 2, meta.p2IsYou, now, COL);
 
   // --- 판정 순간 글리치 (승패 순간에만, 1회) ---
   const glitch = fx.find((f) => f.kind === 'glitch');
@@ -784,6 +811,8 @@ export default function Game7() {
 
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
+  // 내 색(매치 고정, 플레이어 종속) — 온라인 키캡을 역할이 아니라 이 색으로 칠한다. 오프라인/미설정=blue.
+  const myColor: PlayerColor = onlineStore.get().myColor ?? 'blue';
   const urgent = flow.phase === 'playing' && hudMs <= 5000;
 
   return (
@@ -830,14 +859,15 @@ export default function Game7() {
 
       {/* 온스크린 키캡 — 실제 배정 키 표기(SPEC Q2), 입력 순간 램프 점등 */}
       {isOnline ? (
-        // 온라인: U/I 두 키만 사용 → 로컬 플레이어(내 role)의 컨트롤만 내 색으로 표기.
+        // 온라인: U/I 두 키만 사용 → 내 컨트롤을 '내 색'(myColor)으로 표기.
+        // 색은 플레이어 종속(역할 무관), 동작 라벨(놓기/방해)은 양 역할 공통이라 그대로.
         <div className="g7-keys g7-keys--online">
           <div className="g7-keys__group">
-            <span className={`g7-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {myRole === 'P1' ? '파랑' : '빨강'} · PLACE
+            <span className={`g7-keys__tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}>
+              YOU · {myColor === 'blue' ? '파랑' : '빨강'} · PLACE
             </span>
-            <KeyCap role={myRole ?? 'P2'} keyChar="U" icon="●" lit={uLit} label="놓기" />
-            <KeyCap role={myRole ?? 'P2'} keyChar="I" icon="✦" lit={iLit} label="방해" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="●" lit={uLit} label="놓기" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="✦" lit={iLit} label="방해" />
           </div>
           <span className="g7-keys__hint font-arcade c-muted">AIM SCANNER · FIRST 3-ROW WINS</span>
         </div>

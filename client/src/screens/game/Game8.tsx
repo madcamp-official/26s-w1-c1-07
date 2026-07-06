@@ -24,14 +24,14 @@
  *  · online 모드 → P2는 봇(생존 호버 + 정렬 시 발사 + 탄 회피 휴리스틱).
  *  · 매 틱 setDebugGame(state), 언마운트 setDebugGame(null).
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { game8, G8, GAME_DURATION, magmaSurfaceY } from '@madpump/shared';
 import type { Game8State, GameInputEvent } from '@madpump/shared';
 import type { MatchResult } from '@/shell';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { useOnlineRender } from '../../net/useOnlineRender';
-import { sendInput as onlineSendInput } from '../../net/online';
+import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
 import {
   exitMatch,
@@ -53,7 +53,7 @@ import './game8.css';
 const CW = G8.W;
 const CH = G8.H;
 
-const COL = {
+const COL0 = {
   field: '#1a0b2e', // --bg-raised
   deep: '#160a33', // --surface-deep
   bg: '#0d0221', // --bg
@@ -69,6 +69,18 @@ const COL = {
 } as const;
 
 const ARCADE_FONT = '"Press Start 2P", monospace';
+
+/**
+ * 색은 플레이어 종속(역할과 독립) — functionColors()에 따라 P1/P2 엔티티 색을 '플레이어 색'으로 스왑한 팔레트.
+ * fc.p1==='red'면 P1엔티티=빨강(핑크)·P2엔티티=파랑(시안)이 되도록 p1/p2(및 dim) 교환.
+ * 오프라인/색 정보 없으면 fc={p1:'blue',p2:'red'} → COL0 그대로(기존 룩 유지).
+ */
+function themedCols() {
+  const fc = functionColors();
+  return fc.p1 === 'red'
+    ? { ...COL0, p1: COL0.p2, p1dim: COL0.p2dim, p2: COL0.p1, p2dim: COL0.p1dim }
+    : COL0;
+}
 
 /** 판정 → 결과 오버레이 사이 인게임 연출(피격 파편/글리치) 시간 */
 const RESULT_FX_MS = 620;
@@ -158,6 +170,8 @@ function computeBotEvents(
 // 캔버스 렌더러 (순수 그리기)
 // ---------------------------------------------------------------------------
 function drawScene(ctx: CanvasRenderingContext2D, s: Game8State, fx: readonly Fx[], now: number, ui: DrawUi): void {
+  // 색은 플레이어 종속 — 로컬 COL이 아래 COL.p1/p2 사용부(총알·기체·FX)를 플레이어 색으로 덮는다.
+  const COL = themedCols();
   const surf = magmaSurfaceY(s.elapsed);
   const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
   const urgent = remainingMs <= 5000 && s.result === null;
@@ -459,6 +473,12 @@ export default function Game8() {
   // 입력 핸들러(장수 리스너)가 항상 최신 '온라인 활성 여부'를 보게 하는 stale-closure 방지 ref
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
+  // 내 색(매치 고정, 역할과 독립). 키캡/YOU 표기는 이 색으로 — 값이 바뀔 때만 리렌더(스냅샷마다 X).
+  const myColor = useSyncExternalStore(
+    onlineStore.subscribe,
+    () => onlineStore.get().myColor ?? 'blue',
+    () => onlineStore.get().myColor ?? 'blue',
+  );
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const actionsRef = useRef<GameInputEvent[]>([]);
@@ -633,6 +653,8 @@ export default function Game8() {
       last = now;
       let s = stateRef.current;
       if (!s) return;
+      // FX(머즐/파편/캡션) 색도 플레이어 종속 팔레트로 — 오프라인은 기본 role 색과 동일.
+      const COL = themedCols();
 
       if (s.result === null) {
         const events = actionsRef.current;
@@ -788,11 +810,11 @@ export default function Game8() {
         // 온라인: 로컬 플레이어 컨트롤만(U=점프 / I=발사), 내 색으로 표기
         <div className="g8-keys g8-keys--online">
           <div className="g8-keys__group">
-            <span className={`g8-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {myRole === 'P1' ? '파랑' : '빨강'} · HOVER · FIRE
+            <span className={`g8-keys__tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}>
+              YOU · {myColor === 'blue' ? '파랑' : '빨강'} · HOVER · FIRE
             </span>
-            <KeyCap role={myRole ?? 'P2'} keyChar="U" icon="▲" lit={uLit} label="점프" />
-            <KeyCap role={myRole ?? 'P2'} keyChar="I" icon="◉" lit={iLit} label="발사" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="▲" lit={uLit} label="점프" />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="◉" lit={iLit} label="발사" />
           </div>
         </div>
       ) : (

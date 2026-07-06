@@ -45,7 +45,7 @@ import {
 import { setDebugGame, useDebugScreen } from '../../debug';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { useOnlineRender } from '../../net/useOnlineRender';
-import { sendInput as onlineSendInput } from '../../net/online';
+import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';
 import { EndFlash } from '../../game/EndFlash';
 import ResultOverlay from './ResultOverlay';
 import './game1.css';
@@ -301,6 +301,10 @@ export default function Game1() {
 
   const displays = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
+  // 색은 플레이어 종속(역할 아님). fc.p1/.p2 = 이 라운드 P1/P2 기능 엔티티의 실제 플레이어 색.
+  // 오프라인/색 정보 없음 = 기본 {p1:'blue', p2:'red'} → 기존 동작과 동일. myColor = 내 색(YOU 표시용).
+  const fc = functionColors();
+  const myColor = onlineStore.get().myColor ?? 'blue';
   const timeRemainingMs = Math.max(0, (GAME_DURATION - game.elapsed) * 1000);
   const urgent = flow.phase === 'playing' && game.result === null && timeRemainingMs <= 5000;
 
@@ -322,10 +326,13 @@ export default function Game1() {
 
     const pl = pulseRef.current[role];
     const dir = pl && pl.until > performance.now() ? pl.dir : null;
-    const color = isP1 ? 'var(--p1)' : 'var(--p2)';
+    // 이 엔티티(P1/P2 기능)의 실제 플레이어 색으로 칠한다(역할 아님).
+    // 'blue'=기존 P1색(시안 --p1), 'red'=기존 P2색(핑크 --p2). 색으로 패널 클래스/게이지·램프색 선택.
+    const isBlue = (isP1 ? fc.p1 : fc.p2) === 'blue';
+    const color = isBlue ? 'var(--p1)' : 'var(--p2)';
     const cls = [
       'g1-panel',
-      isP1 ? 'g1-panel--p1' : 'g1-panel--p2',
+      isBlue ? 'g1-panel--p1' : 'g1-panel--p2',
       near ? 'g1-panel--near' : '',
       close ? 'g1-panel--close' : '',
       matched ? 'g1-panel--matched' : '',
@@ -426,13 +433,14 @@ export default function Game1() {
       {isOnline ? (
         <footer className="g1-pads g1-pads--online">
           <div className="g1-pad-group">
+            {/* 색은 내 플레이어 색(myColor)으로 — 역할이 색을 정하지 않는다. 동작 라벨/아이콘은 유지. */}
             <span
-              className={`g1-pads-tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}
+              className={`g1-pads-tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}
             >
-              YOU · {myRole === 'P1' ? '파랑' : '빨강'}
+              YOU · {myColor === 'blue' ? '파랑' : '빨강'}
             </span>
-            <KeyCap role={myRole ?? 'P2'} keyChar="U" icon="▼" label="내리기" lit={p2DownLit} />
-            <KeyCap role={myRole ?? 'P2'} keyChar="I" icon="▲" label="올리기" lit={p2UpLit} />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="U" icon="▼" label="내리기" lit={p2DownLit} />
+            <KeyCap role={myColor === 'blue' ? 'P1' : 'P2'} keyChar="I" icon="▲" label="올리기" lit={p2UpLit} />
           </div>
           <span className="g1-pads-hint font-arcade">MATCH THE TARGET · HOLD 1 SEC</span>
         </footer>

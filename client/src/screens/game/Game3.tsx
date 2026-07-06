@@ -35,7 +35,7 @@ import {
 } from '../../state/flow';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { useOnlineRender } from '../../net/useOnlineRender';
-import { sendInput as onlineSendInput } from '../../net/online';
+import { functionColors, sendInput as onlineSendInput } from '../../net/online';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
 import { EndFlash } from '../../game/EndFlash';
 import ResultOverlay from './ResultOverlay';
@@ -57,6 +57,12 @@ const POSE_ICON: Record<Pose, string> = { NEUTRAL: '·', ATTACK: '⚔', DODGE: '
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const clamp01 = (v: number) => clamp(v, 0, 1);
+
+/**
+ * 플레이어 색('blue'|'red') → 기존 역할 CSS 변수. 색은 플레이어 종속(역할 아님):
+ * 'blue' = 기존 P1색(--p1 시안), 'red' = 기존 P2색(--p2 핑크).
+ */
+const colorVar = (c: 'blue' | 'red') => (c === 'blue' ? 'var(--p1)' : 'var(--p2)');
 
 /** pos(-EDGE..EDGE) → 아레나 가로 % */
 const posToPct = (pos: number) => 50 + clamp(pos, -1.14, 1.14) * HALF_TRACK;
@@ -349,6 +355,15 @@ export default function Game3() {
   const p2 = game?.p2;
   const result = game?.result ?? null;
 
+  // 색은 플레이어 종속(역할 아님) — P1/P2 기능 엔티티의 실제 플레이어 색으로 칠한다.
+  // 오프라인/정보없음이면 기본 {p1:'blue', p2:'red'} → 기존(P1 시안 / P2 핑크)과 동일.
+  const fc = functionColors();
+  const p1Color = colorVar(fc.p1); // P1 엔티티(공격측 자리) 색
+  const p2Color = colorVar(fc.p2); // P2 엔티티(회피측 자리) 색
+  // 온라인 하단 컨트롤(YOU)은 내 역할이 어느 색인지로 표기.
+  const myPlayerColor = myRole === 'P1' ? fc.p1 : fc.p2;
+  const myColorVar = colorVar(myPlayerColor);
+
   const p1Pos = c - HALF_GAP;
   const p2Pos = c + HALF_GAP;
 
@@ -380,7 +395,7 @@ export default function Game3() {
   const advFrac = clamp(c / EDGE, -1, 1); // -1..1
   const advPct = Math.abs(advFrac) * 50; // 절반폭 대비
   const advFillLeft = advFrac >= 0 ? 50 : 50 - advPct;
-  const advColor = advFrac >= 0 ? 'var(--p1)' : 'var(--p2)';
+  const advColor = advFrac >= 0 ? p1Color : p2Color;
   const advMarkerLeft = 50 + advFrac * 50;
 
   const pose1 = poseOf(p1, now);
@@ -405,15 +420,15 @@ export default function Game3() {
     ? lastFeed.kind === 'whiff'
       ? 'var(--text-muted)'
       : lastFeed.victim === 'P1'
-        ? 'var(--p2)'
-        : 'var(--p1)'
+        ? p2Color
+        : p1Color
     : 'var(--text)';
   const feedMultStr = lastFeed && lastFeed.mult && lastFeed.mult > 1.05 ? ` ×${lastFeed.mult.toFixed(1)}` : '';
   const feedPos = lastFeed ? (lastFeed.victim === 'P1' ? p1Pos : p2Pos) : 0;
 
   const ringOutFx = ringOut;
   const endcapColor =
-    result === 'P1' ? 'var(--p1)' : result === 'P2' ? 'var(--p2)' : 'var(--accent2)';
+    result === 'P1' ? p1Color : result === 'P2' ? p2Color : 'var(--accent2)';
 
   // 검객 옆 부가 연출(콤보/리포스트/피격 스파크)
   const fighterFx = (role: PlayerRole) => {
@@ -486,33 +501,33 @@ export default function Game3() {
                 <span className="g3a-advbar__marker" style={{ left: `${advMarkerLeft}%` }} />
               </div>
               <div className="g3a-advbar__cap font-arcade">
-                <span className="c-p2">◀ P2</span>
+                <span style={{ color: p2Color }}>◀ P2</span>
                 <span className="c-muted">CLASH</span>
-                <span className="c-p1">P1 ▶</span>
+                <span style={{ color: p1Color }}>P1 ▶</span>
               </div>
             </div>
 
             {/* 남은 여유 램프 (자기 낭떠러지까지 — §3.3 톤 재사용) */}
             <div className="g3-safe g3-safe--p1">
-              <span className="g3-safe__label font-arcade c-p1">P1 SAFE</span>
+              <span className="g3-safe__label font-arcade" style={{ color: p1Color }}>P1 SAFE</span>
               <span className="lamps">
                 {Array.from({ length: SAFE_SEGS }, (_, i) => (
                   <span
                     key={i}
                     className={`lamp ${i < litSafeP1 ? 'lit' : ''}`}
-                    style={{ '--lamp-color': 'var(--p1)' } as CSSProperties}
+                    style={{ '--lamp-color': p1Color } as CSSProperties}
                   />
                 ))}
               </span>
             </div>
             <div className="g3-safe g3-safe--p2">
-              <span className="g3-safe__label font-arcade c-p2">P2 SAFE</span>
+              <span className="g3-safe__label font-arcade" style={{ color: p2Color }}>P2 SAFE</span>
               <span className="lamps">
                 {Array.from({ length: SAFE_SEGS }, (_, i) => (
                   <span
                     key={i}
                     className={`lamp ${i < litSafeP2 ? 'lit' : ''}`}
-                    style={{ '--lamp-color': 'var(--p2)' } as CSSProperties}
+                    style={{ '--lamp-color': p2Color } as CSSProperties}
                   />
                 ))}
               </span>
@@ -539,10 +554,11 @@ export default function Game3() {
             <div className="g3a-tide g3a-tide--left" style={{ width: `${tideW}%` }} aria-hidden />
             <div className="g3a-tide g3a-tide--right" style={{ width: `${tideW}%` }} aria-hidden />
 
-            {/* 검객 — 좌=P1 시안 / 우=P2 핑크 (색 구분 고정) */}
+            {/* 검객 — 색은 플레이어 종속(역할 아님). P1/P2 엔티티의 실제 플레이어 색으로.
+                내부 SVG/스파크/콤보는 currentColor라 검객의 color만 정하면 자동 반영. */}
             <div
               className={`g3-fighter g3-fighter--rt g3-fighter--p1 ${p1Fell ? 'g3-fighter--fall' : ''} ${riposte1 ? 'g3a-riposte' : ''}`}
-              style={{ left: `${posToPct(p1Pos)}%` }}
+              style={{ left: `${posToPct(p1Pos)}%`, color: p1Color }}
               aria-label={`P1 위치: 낙사선까지 여유 ${litSafeP1}칸`}
             >
               <FencerSvg pose={pose1} />
@@ -550,7 +566,7 @@ export default function Game3() {
             </div>
             <div
               className={`g3-fighter g3-fighter--rt g3-fighter--p2 ${p2Fell ? 'g3-fighter--fall' : ''} ${riposte2 ? 'g3a-riposte' : ''}`}
-              style={{ left: `${posToPct(p2Pos)}%` }}
+              style={{ left: `${posToPct(p2Pos)}%`, color: p2Color }}
               aria-label={`P2 위치: 낙사선까지 여유 ${litSafeP2}칸`}
             >
               <FencerSvg pose={pose2} />
@@ -594,17 +610,29 @@ export default function Game3() {
           // 온라인: 로컬 플레이어(내 역할)의 U/I 컨트롤만, 내 색으로 표기.
           // 펜싱은 대칭 게임(P1/P2 동작 동일: U=공격, I=회피)이라 아이콘/라벨은 역할과 무관.
           <footer className="g3-controls g3-controls--online">
-            <div className={`g3-pad ${myRole === 'P1' ? 'g3-pad--p1' : 'g3-pad--p2'}`}>
-              <div className={`g3-stance ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}>
+            <div className={`g3-pad ${myPlayerColor === 'blue' ? 'g3-pad--p1' : 'g3-pad--p2'}`}>
+              <div className="g3-stance" style={{ color: myColorVar }}>
                 <span className="g3-stance__label">
-                  YOU · {myRole === 'P1' ? '파랑' : '빨강'}
+                  YOU · {myPlayerColor === 'blue' ? '파랑' : '빨강'}
                 </span>
                 <span className="g3-stance__icon">
                   {POSE_ICON[myRole === 'P1' ? pose1 : pose2]}
                 </span>
               </div>
-              <KeyCap role={myRole ?? 'P2'} keyChar="U" icon="⚔" label="공격" lit={litP2Atk} />
-              <KeyCap role={myRole ?? 'P2'} keyChar="I" icon="🛡" label="회피" lit={litP2Dod} />
+              <KeyCap
+                role={myPlayerColor === 'blue' ? 'P1' : 'P2'}
+                keyChar="U"
+                icon="⚔"
+                label="공격"
+                lit={litP2Atk}
+              />
+              <KeyCap
+                role={myPlayerColor === 'blue' ? 'P1' : 'P2'}
+                keyChar="I"
+                icon="🛡"
+                label="회피"
+                lit={litP2Dod}
+              />
             </div>
             <div className="g3-hint c-muted">
               실시간 넉백 — 공격(⚔)은 상대를 밀고, 회피(🛡)로 막으면 되받아친다 · 밀물이 링을 조인다 ·

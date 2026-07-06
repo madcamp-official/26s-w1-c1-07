@@ -21,14 +21,14 @@
  *  · 매 틱 setDebugGame(state), 언마운트 setDebugGame(null)
  *  · online 모드: P2(장애물 생성)는 봇 — 쿨타임마다 무작위 장애물 투척(사람은 P1=q/w)
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { game4, G4, GAME_DURATION } from '@madpump/shared';
 import type { Game4State, Obstacle, GameInputEvent } from '@madpump/shared';
 import type { MatchResult } from '@/shell';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { useOnlineRender } from '../../net/useOnlineRender';
-import { sendInput as onlineSendInput } from '../../net/online';
+import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
 import {
   exitMatch,
@@ -52,7 +52,9 @@ const CW = 960;
 const CH = 540;
 const SC = CW / G4.W; // 1.2 (== CH / G4.H)
 
-const COL = {
+// 모듈 기본 팔레트(P1=시안/P2=핑크). 색은 '역할'이 아니라 '플레이어'를 따라야 하므로
+// drawScene 맨 위에서 functionColors()로 로컬 COL을 shadow해 P1/P2 엔티티 색을 스왑한다.
+const COL0 = {
   field: '#1a0b2e', // --bg-raised
   deep: '#160a33', // --surface-deep
   p1: '#05d9e8', // --p1 (공룡 — 시안)
@@ -64,6 +66,9 @@ const COL = {
   muted: '#9d8fbf',
   win: '#39ff88',
 } as const;
+
+/** 스왑된 로컬 팔레트도 담을 수 있게 값 타입을 넓힌 팔레트(스프라이트 헬퍼 인자용) */
+type ColPalette = { readonly [K in keyof typeof COL0]: string };
 
 const ARCADE_FONT = '"Press Start 2P", monospace';
 
@@ -114,15 +119,16 @@ function drawDino(
   grounded: boolean,
   runPhase: number,
   blink: boolean,
+  col: ColPalette,
 ): void {
   const boxH = ducking ? G4.DINO_DUCK_H : G4.DINO_H;
   const mx = (x: number) => leftPx + x * SC;
   const my = (y: number) => bottomPx - (boxH - y) * SC; // y: 0=top .. boxH=bottom
 
   ctx.save();
-  ctx.strokeStyle = COL.p1;
-  ctx.fillStyle = COL.p1dim;
-  ctx.shadowColor = COL.p1;
+  ctx.strokeStyle = col.p1;
+  ctx.fillStyle = col.p1dim;
+  ctx.shadowColor = col.p1;
   ctx.shadowBlur = 10;
   ctx.lineWidth = 2.2;
   ctx.lineJoin = 'round';
@@ -161,7 +167,7 @@ function drawDino(
     leg(21, frontH);
     // 눈
     ctx.shadowBlur = 0;
-    ctx.fillStyle = COL.p1;
+    ctx.fillStyle = col.p1;
     ctx.beginPath();
     ctx.arc(mx(34), my(9), 1.6 * SC, 0, Math.PI * 2);
     ctx.fill();
@@ -182,7 +188,7 @@ function drawDino(
     leg(12, backH);
     leg(23, frontH);
     ctx.shadowBlur = 0;
-    ctx.fillStyle = COL.p1;
+    ctx.fillStyle = col.p1;
     ctx.beginPath();
     ctx.arc(mx(39), my(7), 1.5 * SC, 0, Math.PI * 2);
     ctx.fill();
@@ -191,14 +197,19 @@ function drawDino(
 }
 
 /** 선인장(P2 점프 장애물, 핑크). 지면(ground)에 바닥을 붙임 */
-function drawCactus(ctx: CanvasRenderingContext2D, leftPx: number, groundPx: number): void {
+function drawCactus(
+  ctx: CanvasRenderingContext2D,
+  leftPx: number,
+  groundPx: number,
+  col: ColPalette,
+): void {
   const H = G4.CACTUS_H;
   const mx = (x: number) => leftPx + x * SC;
   const my = (y: number) => groundPx - (H - y) * SC; // y: 0=top .. H=bottom(ground)
   ctx.save();
-  ctx.strokeStyle = COL.p2;
-  ctx.fillStyle = COL.p2dim;
-  ctx.shadowColor = COL.p2;
+  ctx.strokeStyle = col.p2;
+  ctx.fillStyle = col.p2dim;
+  ctx.shadowColor = col.p2;
   ctx.shadowBlur = 10;
   ctx.lineWidth = 2.2;
   ctx.lineJoin = 'round';
@@ -217,13 +228,19 @@ function drawCactus(ctx: CanvasRenderingContext2D, leftPx: number, groundPx: num
 }
 
 /** 새(P2 숙이기 장애물, 핑크). 머리 높이로 날아옴 + 날갯짓(phase) */
-function drawBird(ctx: CanvasRenderingContext2D, leftPx: number, topPx: number, phase: number): void {
+function drawBird(
+  ctx: CanvasRenderingContext2D,
+  leftPx: number,
+  topPx: number,
+  phase: number,
+  col: ColPalette,
+): void {
   const mx = (x: number) => leftPx + x * SC;
   const my = (y: number) => topPx + y * SC; // 박스 상단 기준 (0..28)
   ctx.save();
-  ctx.strokeStyle = COL.p2;
-  ctx.fillStyle = COL.p2dim;
-  ctx.shadowColor = COL.p2;
+  ctx.strokeStyle = col.p2;
+  ctx.fillStyle = col.p2dim;
+  ctx.shadowColor = col.p2;
   ctx.shadowBlur = 10;
   ctx.lineWidth = 2.2;
   ctx.lineJoin = 'round';
@@ -247,7 +264,7 @@ function drawBird(ctx: CanvasRenderingContext2D, leftPx: number, topPx: number, 
   ctx.stroke();
   // 눈
   ctx.shadowBlur = 0;
-  ctx.fillStyle = COL.p2;
+  ctx.fillStyle = col.p2;
   ctx.beginPath();
   ctx.arc(mx(12), my(12), 1.4 * SC, 0, Math.PI * 2);
   ctx.fill();
@@ -265,6 +282,15 @@ function drawScene(
   p1IsYou: boolean,
   p2IsYou: boolean,
 ): void {
+  // 색은 플레이어 종속(역할 아님) — P1/P2 기능 엔티티를 실제 플레이어 색으로 칠한다.
+  //  P1엔티티가 파랑이면 COL0 그대로, 빨강이면 p1/p2 색 스왑. 로컬 COL을 shadow → 아래 COL.p1/p2·헬퍼가 자동 반영.
+  const fc = functionColors();
+  const COL: ColPalette =
+    fc.p1 === 'red'
+      ? { ...COL0, p1: COL0.p2, p1dim: COL0.p2dim, p2: COL0.p1, p2dim: COL0.p1dim }
+      : COL0;
+  // 상태 구동 P2 글로우(스폰 섬광·리로드 게이지 외곽)용 rgb — 하드코딩 핑크가 아니라 P2 플레이어 색을 따른다.
+  const p2rgb = fc.p2 === 'red' ? '255,42,109' : '5,217,232';
   const horizon = Y(G4.GROUND_Y);
   const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
   const urgent = remainingMs <= 5000 && s.result === null;
@@ -356,8 +382,8 @@ function drawScene(
 
   // --- 장애물(핑크) ---
   for (const o of s.obstacles) {
-    if (o.type === 'jump') drawCactus(ctx, X(o.x), horizon);
-    else drawBird(ctx, X(o.x), Y(G4.BIRD_TOP), o.phase);
+    if (o.type === 'jump') drawCactus(ctx, X(o.x), horizon, COL);
+    else drawBird(ctx, X(o.x), Y(G4.BIRD_TOP), o.phase, COL);
   }
 
   // --- P2 투척 섬광(spawnAnim 파생) — 오른쪽 끝에서 장애물이 튀어나오는 순간 ---
@@ -366,8 +392,8 @@ function drawScene(
     ctx.save();
     ctx.globalAlpha = 0.5 * a;
     const grad = ctx.createLinearGradient(CW, 0, CW - 90, 0);
-    grad.addColorStop(0, 'rgba(255,42,109,0.9)');
-    grad.addColorStop(1, 'rgba(255,42,109,0)');
+    grad.addColorStop(0, `rgba(${p2rgb},0.9)`);
+    grad.addColorStop(1, `rgba(${p2rgb},0)`);
     ctx.fillStyle = grad;
     ctx.fillRect(CW - 90, horizon - 150, 90, 170);
     ctx.restore();
@@ -386,6 +412,7 @@ function drawScene(
       s.grounded,
       s.runPhase,
       blink,
+      COL,
     );
   }
   // 공룡 그림자(지면 원형)
@@ -431,7 +458,7 @@ function drawScene(
     ctx.fillText(p2IsYou ? 'P2(YOU) RELOAD' : 'P2 RELOAD', gx + gw, gy - 4);
     ctx.shadowBlur = 0;
     // 트랙
-    ctx.strokeStyle = 'rgba(255,42,109,0.4)';
+    ctx.strokeStyle = `rgba(${p2rgb},0.4)`;
     ctx.lineWidth = 1;
     ctx.strokeRect(gx, gy, gw, gh);
     ctx.fillStyle = COL.p2dim;
@@ -607,6 +634,14 @@ export default function Game4() {
   const isOnlineRef = useRef(isOnline);
   isOnlineRef.current = isOnline;
 
+  // 내 색(매치 고정, 역할과 독립) — 키캡/HUD 색은 이 값으로. match:start에서만 바뀌므로
+  // 원시값 선택 구독이라 60Hz 스냅샷엔 리렌더 없음(값 동일 시 useSyncExternalStore가 생략).
+  const myColor = useSyncExternalStore(
+    onlineStore.subscribe,
+    () => onlineStore.get().myColor ?? 'blue',
+    () => onlineStore.get().myColor ?? 'blue',
+  );
+
   // direct-URL 복구 + 이탈 시 디버그 브리지 정리
   useEffect(() => {
     const f = getFlow();
@@ -773,7 +808,7 @@ export default function Game4() {
               fxRef.current.push({
                 kind: 'caption',
                 text: 'SAFE!',
-                color: COL.p1,
+                color: COL0.p1,
                 x: G4.DINO_X + 4,
                 y: G4.GROUND_Y - G4.DINO_H - 30,
                 t: now,
@@ -793,7 +828,7 @@ export default function Game4() {
               {
                 kind: 'caption',
                 text: 'CRASH!',
-                color: COL.p2,
+                color: COL0.p2,
                 x: G4.DINO_X + 12,
                 y: G4.GROUND_Y - G4.DINO_H - 26,
                 t: now,
@@ -807,7 +842,7 @@ export default function Game4() {
               {
                 kind: 'caption',
                 text: 'SURVIVED!',
-                color: COL.p1,
+                color: COL0.p1,
                 x: G4.W / 2,
                 y: G4.GROUND_Y - G4.DINO_H - 30,
                 t: now,
@@ -885,24 +920,24 @@ export default function Game4() {
 
       {/* 온스크린 키캡 — 실제 배정 키 표기(SPEC Q2), 입력 순간 램프 점등. W는 홀드라 ducking 반영 */}
       {isOnline ? (
-        // 온라인: U/I 두 키만 쓰고 내 역할만 조작 — 내 색·내 역할의 동작으로 표기.
-        // 비대칭 게임(P1=주자, P2=스포너)이라 역할별로 U(주키)/I(보조키) 동작이 다름.
+        // 온라인: U/I 두 키만 쓰고 내 역할만 조작. 색은 내 플레이어색(myColor)으로,
+        // 동작 라벨/아이콘은 역할(myRole) 유지 — 비대칭 게임(P1=주자, P2=스포너).
         <div className="g4-keys g4-keys--online">
           <div className="g4-keys__group">
             <span
-              className={`g4-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}
+              className={`g4-keys__tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}
             >
-              YOU · {myRole === 'P1' ? '파랑 · RUN' : '빨강 · SPAWN'}
+              YOU · {myColor === 'blue' ? '파랑' : '빨강'} · {myRole === 'P1' ? 'RUN' : 'SPAWN'}
             </span>
             <KeyCap
-              role={myRole ?? 'P2'}
+              role={myColor === 'blue' ? 'P1' : 'P2'}
               keyChar="U"
               icon={myRole === 'P1' ? '▲' : '▂'}
               lit={uLit}
               label={myRole === 'P1' ? '점프' : '선인장'}
             />
             <KeyCap
-              role={myRole ?? 'P2'}
+              role={myColor === 'blue' ? 'P1' : 'P2'}
               keyChar="I"
               icon={myRole === 'P1' ? '▼' : '▔'}
               lit={iLit}

@@ -28,7 +28,7 @@ import { game9, G9, GAME_DURATION } from '@madpump/shared';
 import type { Game9State, GameInputEvent } from '@madpump/shared';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { useOnlineRender } from '../../net/useOnlineRender';
-import { sendInput as onlineSendInput } from '../../net/online';
+import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
 import {
   exitMatch,
@@ -62,19 +62,26 @@ const FLOOR_Y = ROPE_Y + 60;
 
 const ARCADE = '"Press Start 2P", monospace';
 
-/** theme.css 토큰값 복사 (캔버스는 CSS 변수를 읽지 못하므로 hex 상수로) */
-const COL = {
+/**
+ * theme.css 토큰값 복사 (캔버스는 CSS 변수를 읽지 못하므로 hex 상수로).
+ * p1/p2는 '역할'이 아니라 '플레이어 색'의 기준값이다: p1=파랑(blue,시안), p2=빨강(red,핑크).
+ * drawScene 맨 위에서 functionColors()로 P1/P2 기능 엔티티의 실제 플레이어 색을 반영해 로컬 COL로 스왑한다.
+ */
+const COL0 = {
   field: '#1a0b2e', // --bg-raised
   deep: '#160a33', // --surface-deep
   text: '#f4f0ff', // --text
   muted: '#9d8fbf', // --text-muted
   accent: '#fdf500', // --accent (코인옐로)
   accent2: '#d300c5', // --accent2 (네온퍼플)
-  p1: '#05d9e8', // --p1 (시안, 왼쪽 고정)
-  p1dim: '#0a3a4a', // --p1-dim
-  p2: '#ff2a6d', // --p2 (핑크, 오른쪽 고정)
-  p2dim: '#4a0a26', // --p2-dim
+  p1: '#05d9e8', // 파랑(blue) 기준색 — 시안
+  p1dim: '#0a3a4a', // 파랑 dim
+  p2: '#ff2a6d', // 빨강(red) 기준색 — 핑크
+  p2dim: '#4a0a26', // 빨강 dim
 } as const;
+
+/** 색 팔레트 타입 — 스왑된 로컬 COL(값이 리터럴이 아닌 string)도 담기 위함 */
+type Palette = { [K in keyof typeof COL0]: string };
 
 /** 판정 → 결과 오버레이 전환 사이 인게임 슬램 연출 시간 */
 const RESULT_FX_MS = 620;
@@ -147,9 +154,10 @@ function drawPuller(
   lean: number,
   isYou: boolean,
   now: number,
+  col: Palette,
 ): void {
   const isP1 = side === 'P1';
-  const color = isP1 ? COL.p1 : COL.p2;
+  const color = isP1 ? col.p1 : col.p2;
   const dir = isP1 ? -1 : 1; // 바깥(당기는) 방향
   const hipY = ROPE_Y + 30;
   const shoulderX = baseX + dir * lean;
@@ -191,8 +199,8 @@ function drawPuller(
     ctx.save();
     ctx.font = `10px ${ARCADE}`;
     ctx.textAlign = 'center';
-    ctx.fillStyle = COL.accent;
-    ctx.shadowColor = COL.accent;
+    ctx.fillStyle = col.accent;
+    ctx.shadowColor = col.accent;
     ctx.shadowBlur = 8;
     ctx.fillText('YOU', headX, headY - 16);
     ctx.restore();
@@ -206,8 +214,9 @@ function drawKnot(
   pos: number,
   now: number,
   reduce: boolean,
+  col: Palette,
 ): void {
-  const color = pos < -0.02 ? COL.p1 : pos > 0.02 ? COL.p2 : COL.text;
+  const color = pos < -0.02 ? col.p1 : pos > 0.02 ? col.p2 : col.text;
   // 매듭 (마름모)
   ctx.save();
   ctx.translate(markerX, ROPE_Y);
@@ -219,7 +228,7 @@ function drawKnot(
   ctx.restore();
   // 밝은 중심
   ctx.save();
-  ctx.fillStyle = COL.text;
+  ctx.fillStyle = col.text;
   ctx.beginPath();
   ctx.arc(markerX, ROPE_Y, 3.2, 0, Math.PI * 2);
   ctx.fill();
@@ -255,6 +264,14 @@ function drawScene(
   who: WhoYou,
   reduce: boolean,
 ): void {
+  // 색은 플레이어 종속(역할 아님) — P1/P2 기능 엔티티의 실제 플레이어 색으로 칠한다.
+  //  P1엔티티 색이 파랑이면 COL0 그대로, 빨강이면 p1/p2(+dim) 스왑. 로컬 COL로 shadow → 아래 COL.p1/p2 자동 반영.
+  //  ('blue'=기존 P1색 시안, 'red'=기존 P2색 핑크. 오프라인/정보없음이면 fc={p1:'blue',p2:'red'}→스왑 없음.)
+  const fc = functionColors();
+  const COL: Palette =
+    fc.p1 === 'red'
+      ? { ...COL0, p1: COL0.p2, p1dim: COL0.p2dim, p2: COL0.p1, p2dim: COL0.p1dim }
+      : COL0;
   const pos = clampPos(s.pos);
   const markerX = markerXOf(s.pos);
   const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
@@ -365,11 +382,11 @@ function drawScene(
   // --- 파이터 (당김 순간 야크 + 우세 시 젖힘) ---
   const p1Lean = 8 + Math.max(0, -pos) * 16 + (s.p1Flash > 0 ? (s.p1Flash / G9.FLASH) * 6 : 0);
   const p2Lean = 8 + Math.max(0, pos) * 16 + (s.p2Flash > 0 ? (s.p2Flash / G9.FLASH) * 6 : 0);
-  drawPuller(ctx, 'P1', LEFT_BASE_X, clampLean(p1Lean), who.p1IsYou, now);
-  drawPuller(ctx, 'P2', RIGHT_BASE_X, clampLean(p2Lean), who.p2IsYou, now);
+  drawPuller(ctx, 'P1', LEFT_BASE_X, clampLean(p1Lean), who.p1IsYou, now, COL);
+  drawPuller(ctx, 'P2', RIGHT_BASE_X, clampLean(p2Lean), who.p2IsYou, now, COL);
 
   // --- 매듭 + 깃발 ---
-  drawKnot(ctx, markerX, pos, now, reduce);
+  drawKnot(ctx, markerX, pos, now, reduce, COL);
 
   // --- 당김 충격파 링 ---
   for (const f of fx) {
@@ -688,6 +705,8 @@ export default function Game9() {
   const players = getPlayerDisplays(flow);
   const wins = getRoundWins(flow);
   const urgent = flow.phase === 'playing' && hudMs <= 5000;
+  // 내 색(매치 고정, 역할과 독립) — 키캡 색은 이 색으로. 매치 내 불변이라 비반응 읽기로 충분.
+  const myColor = isOnline ? (onlineStore.get().myColor ?? 'blue') : 'blue';
 
   return (
     <main data-testid="scr-game9" className="g9-screen">
@@ -737,19 +756,19 @@ export default function Game9() {
         <div className="g9-keys g9-keys--online">
           <div className="g9-keys__group">
             <span
-              className={`g9-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}
+              className={`g9-keys__tag font-arcade ${myColor === 'blue' ? 'c-p1' : 'c-p2'}`}
             >
-              YOU · {myRole === 'P1' ? '파랑' : '빨강'} · 번갈아 당기기
+              YOU · {myColor === 'blue' ? '파랑' : '빨강'} · 번갈아 당기기
             </span>
             <KeyCap
-              role={myRole ?? 'P2'}
+              role={myColor === 'blue' ? 'P1' : 'P2'}
               keyChar="U"
               icon={myRole === 'P1' ? '◀' : '▶'}
               lit={uLit}
               label="당기기"
             />
             <KeyCap
-              role={myRole ?? 'P2'}
+              role={myColor === 'blue' ? 'P1' : 'P2'}
               keyChar="I"
               icon={myRole === 'P1' ? '◀' : '▶'}
               lit={iLit}
