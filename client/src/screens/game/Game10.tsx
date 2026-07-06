@@ -44,6 +44,7 @@ import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endF
 import ResultOverlay from './ResultOverlay';
 import RoundIntro from './RoundIntro';
 import { isRoundIntroActive } from '../../state/roundIntroGate';
+import { sfx } from '@/audio';
 import './game10.css';
 
 // ---------------------------------------------------------------------------
@@ -589,11 +590,18 @@ export default function Game10() {
         setDebugGame(stateRef.current);
       }
       let raf = 0;
+      let prevP1Pulls = stateRef.current?.p1Pulls ?? 0;
+      let prevP2Pulls = stateRef.current?.p2Pulls ?? 0;
       const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
         const s = stateRef.current;
         const ctx = canvasRef.current?.getContext('2d');
         if (!s || !ctx) return;
+        // 서버 스냅샷의 유효 당김(pull 카운트 증가)이 이번 프레임 처음 감지된 순간만 1회.
+        if (s.p1Pulls > prevP1Pulls) sfx('g10-pull');
+        if (s.p2Pulls > prevP2Pulls) sfx('g10-pull');
+        prevP1Pulls = s.p1Pulls;
+        prevP2Pulls = s.p2Pulls;
         fxRef.current = fxRef.current.filter((f) => now - f.t < 1400);
         const disp = getPlayerDisplays(getFlow());
         drawScene(
@@ -661,8 +669,8 @@ export default function Game10() {
         setHudMs(Math.ceil(remainingMs / 1000) * 1000);
 
         // ---- 렌더 전용 파생 ----
-        if (s.p1Pulls > prevP1Pulls) fxRef.current.push({ kind: 'shock', side: 'P1', t: now });
-        if (s.p2Pulls > prevP2Pulls) fxRef.current.push({ kind: 'shock', side: 'P2', t: now });
+        if (s.p1Pulls > prevP1Pulls) { fxRef.current.push({ kind: 'shock', side: 'P1', t: now }); sfx('g10-pull'); }
+        if (s.p2Pulls > prevP2Pulls) { fxRef.current.push({ kind: 'shock', side: 'P2', t: now }); sfx('g10-pull'); }
         const mxPrev = markerXOf(prevPos);
         const mxNow = markerXOf(s.pos);
         if (Math.abs(mxNow - mxPrev) > 0.3) trailRef.current.push({ x: mxPrev, t: now });

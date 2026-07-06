@@ -50,6 +50,7 @@ import { EndFlash } from '../../game/EndFlash';
 import ResultOverlay from './ResultOverlay';
 import RoundIntro from './RoundIntro';
 import { isRoundIntroActive } from '../../state/roundIntroGate';
+import { sfx } from '@/audio';
 import './game1.css';
 
 interface ValuePulse {
@@ -97,6 +98,8 @@ export default function Game1() {
   const eventsRef = useRef<GameInputEvent[]>([]);
   const reportedRef = useRef(false);
   const pulseRef = useRef<Record<PlayerRole, ValuePulse | null>>({ P1: null, P2: null });
+  // g1-gauge-max: 플레이어별 게이지가 처음 최대(≈100)에 도달한 순간 1회만 울리기 위한 가드.
+  const gaugeMaxRef = useRef<Record<PlayerRole, boolean>>({ P1: false, P2: false });
   const botNextAtRef = useRef(0);
   const botHeldRef = useRef<'up' | 'down' | null>(null);
 
@@ -126,6 +129,7 @@ export default function Game1() {
         if (e.type === 'down') {
           if (e.code === 'KeyU') lampRef.current.flashP2Down();
           else lampRef.current.flashP2Up();
+          sfx('g1-tap');
         }
         const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
         onlineSendInput(slot, e.type, e.t);
@@ -136,6 +140,7 @@ export default function Game1() {
       const isP2 = e.code === 'KeyU' || e.code === 'KeyI';
       if (f.mode === 'online' && isP2) return; // 온라인 P2 = 봇
       if (e.type === 'down') {
+        sfx('g1-tap');
         switch (e.code) {
           case 'KeyQ':
             lampRef.current.flashP1Down();
@@ -169,6 +174,7 @@ export default function Game1() {
     reportedRef.current = false;
     eventsRef.current = [];
     pulseRef.current = { P1: null, P2: null };
+    gaugeMaxRef.current = { P1: false, P2: false };
     botNextAtRef.current = 0;
     botHeldRef.current = null;
     setGame({ ...s });
@@ -189,6 +195,7 @@ export default function Game1() {
       if (!stateRef.current) {
         const seed = game1.create(Math.random);
         stateRef.current = seed;
+        gaugeMaxRef.current = { P1: false, P2: false };
         setGame({ ...seed });
         setDebugGame(seed);
       }
@@ -197,6 +204,15 @@ export default function Game1() {
         raf = requestAnimationFrame(loop);
         const s = stateRef.current;
         if (!s) return;
+        // g1-gauge-max: 서버 스냅샷 게이지가 최대(≈100)에 근접한 첫 순간에 플레이어별 1회.
+        if (!gaugeMaxRef.current.P1 && s.p1Gauge >= G1.GAUGE_MAX - 10) {
+          gaugeMaxRef.current.P1 = true;
+          sfx('g1-gauge-max');
+        }
+        if (!gaugeMaxRef.current.P2 && s.p2Gauge >= G1.GAUGE_MAX - 10) {
+          gaugeMaxRef.current.P2 = true;
+          sfx('g1-gauge-max');
+        }
         // 스냅샷 사이 외삽: 마지막 스냅샷을 경과 dt(≤50ms)만큼 각 플레이어 값을 '자기 속도'로 전진.
         // 값(p1/p2)만 대상 — 코어 advance와 동일 공식. 종료(result≠null) 시엔 외삽하지 않는다.
         const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
@@ -272,6 +288,17 @@ export default function Game1() {
       if (d1 !== 0) pulseRef.current.P1 = { dir: d1 > 0 ? 'up' : 'down', until: now + 160 };
       const d2 = Math.round(next.p2) - prevP2;
       if (d2 !== 0) pulseRef.current.P2 = { dir: d2 > 0 ? 'up' : 'down', until: now + 160 };
+
+      // g1-gauge-max: 게이지가 최대(≈100)에 근접한 첫 순간에 플레이어별 1회.
+      // (코어가 매 step 감쇠를 적용하므로 저장값은 100에 정확히 닿지 않는다 → 상한 근접 임계치로 판정.)
+      if (!gaugeMaxRef.current.P1 && next.p1Gauge >= G1.GAUGE_MAX - 10) {
+        gaugeMaxRef.current.P1 = true;
+        sfx('g1-gauge-max');
+      }
+      if (!gaugeMaxRef.current.P2 && next.p2Gauge >= G1.GAUGE_MAX - 10) {
+        gaugeMaxRef.current.P2 = true;
+        sfx('g1-gauge-max');
+      }
 
       gameRef.current = next; // 다음 프레임 입력용(코어가 계속 mutate)
       setGame({ ...next }); // 새 참조로 강제 리렌더(코어는 동일 객체를 반환하므로 clone 필수)

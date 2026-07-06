@@ -50,6 +50,7 @@ import { setDebugGame, useDebugScreen } from '../../debug';
 import ResultOverlay from './ResultOverlay';
 import RoundIntro from './RoundIntro';
 import { isRoundIntroActive } from '../../state/roundIntroGate';
+import { sfx } from '@/audio';
 import './game9.css';
 
 // ---------------------------------------------------------------------------
@@ -629,8 +630,10 @@ export default function Game9() {
         if (isOnlineRef.current) {
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           if (e.type === 'down') {
-            if (e.code === 'KeyU') lampRef.current.flashU();
-            else lampRef.current.flashI();
+            if (e.code === 'KeyU') {
+              lampRef.current.flashU();
+              sfx('g9-place-stone'); // 착수 입력
+            } else lampRef.current.flashI();
           }
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
           const cell = e.code === 'KeyU' ? localCursorRef.current : undefined;
@@ -643,10 +646,14 @@ export default function Game9() {
         const isP2 = e.code === 'KeyU' || e.code === 'KeyI';
         if (offlineBotMode && isP2) return; // 오프라인 봇 모드: P2 = 봇
         if (e.type === 'down') {
-          if (e.code === 'KeyQ') lampRef.current.flashQ();
-          else if (e.code === 'KeyW') lampRef.current.flashW();
-          else if (e.code === 'KeyU') lampRef.current.flashU();
-          else if (e.code === 'KeyI') lampRef.current.flashI();
+          if (e.code === 'KeyQ') {
+            lampRef.current.flashQ();
+            sfx('g9-place-stone'); // P1 착수 입력
+          } else if (e.code === 'KeyW') lampRef.current.flashW();
+          else if (e.code === 'KeyU') {
+            lampRef.current.flashU();
+            sfx('g9-place-stone'); // P2 착수 입력
+          } else if (e.code === 'KeyI') lampRef.current.flashI();
         }
         if (f.phase === 'playing') eventsRef.current.push(e);
       },

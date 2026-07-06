@@ -13,6 +13,7 @@ import { Button } from '../components';
 import { openModal } from '../state/flow';
 import { openLoginModal } from '../modals/Login';
 import { useDebugScreen } from '../debug';
+import '@/audio'; // 전역 오디오(UI/플로우/코인 SFX + BGM) 자기초기화 — 잠긴 파일 미수정
 import './main-logged-out.css';
 
 const TICKER_TEXT = 'Q·W VS U·I — TWO BUTTONS. ONE WINNER. +++ ';

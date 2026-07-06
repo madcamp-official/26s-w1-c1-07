@@ -54,6 +54,7 @@ import {
 import ResultOverlay from './ResultOverlay';
 import RoundIntro from './RoundIntro';
 import { isRoundIntroActive } from '../../state/roundIntroGate';
+import { sfx } from '@/audio';
 import './game8.css';
 
 // ---------------------------------------------------------------------------
@@ -649,7 +650,10 @@ export default function Game8() {
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
           if (e.type === 'down') {
             if (e.code === 'KeyU') flashU();
-            else flashI();
+            else {
+              flashI(); // I=발사(slotB)
+              sfx('g8-cannon-fire');
+            }
           }
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
           onlineSendInput(slot, e.type, e.t ?? performance.now() / 1000);
@@ -662,13 +666,19 @@ export default function Game8() {
         if (e.code === 'KeyQ') {
           if (e.type === 'down') flashQ();
         } else if (e.code === 'KeyW') {
-          if (e.type === 'down') flashW();
+          if (e.type === 'down') {
+            flashW();
+            sfx('g8-cannon-fire'); // P1 발사 입력
+          }
         } else if (e.code === 'KeyU') {
           if (botMode) return; // 온라인(봇) P2 = 봇 대행
           if (e.type === 'down') flashU();
         } else if (e.code === 'KeyI') {
           if (botMode) return;
-          if (e.type === 'down') flashI();
+          if (e.type === 'down') {
+            flashI();
+            sfx('g8-cannon-fire'); // P2 발사 입력
+          }
         }
         if (f.phase === 'playing') actionsRef.current.push(e);
       },
@@ -791,11 +801,14 @@ export default function Game8() {
 
         // 격추: 이번 step 전 배열엔 있으나 후 배열엔 없는 몬스터 = 총알에 맞아 소멸
         if (prevMonsters !== s.monsters) {
+          let hit = false;
           for (const m of prevMonsters) {
             if (!s.monsters.includes(m)) {
+              hit = true;
               fxRef.current.push({ kind: 'shards', x: m.x, y: m.y, color: COL.accent2, t: now });
             }
           }
+          if (hit) sfx('g8-monster-hit'); // 이번 step에 격추된 몬스터가 있는 순간(1회, 15ms 중복은 엔진 억제)
         }
 
         // 판정 순간(1회) — 대포 피격(즉사) vs 시간초과(점수) 구분
@@ -808,6 +821,7 @@ export default function Game8() {
             else if (Math.hypot(m.x - P2.x, m.y - P2.y) <= touchR) loser = 2;
           }
           if (loser !== null) {
+            sfx('g8-cannon-damaged'); // 대포가 몬스터에 피격돼 파괴된 임팩트(패자 죽는 소리, 1회)
             // 대포 파괴 — 폭발 + 글리치
             const pos = loser === 1 ? P1 : P2;
             const col = loser === 1 ? COL.p1 : COL.p2;

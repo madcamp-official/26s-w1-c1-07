@@ -44,6 +44,7 @@ import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endF
 import ResultOverlay from './ResultOverlay';
 import RoundIntro from './RoundIntro';
 import { isRoundIntroActive } from '../../state/roundIntroGate';
+import { sfx } from '@/audio';
 import './game5.css';
 
 // ---------------------------------------------------------------------------
@@ -454,6 +455,7 @@ export default function Game5() {
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
           onlineSendInput(slot, e.type, e.t ?? performance.now() / 1000);
           if (e.type === 'down') {
+            sfx('g5-turn');
             if (e.code === 'KeyU') flashU();
             else flashI();
           }
@@ -463,15 +465,27 @@ export default function Game5() {
         const f = getFlow();
         const online = f.mode === 'online';
         if (e.code === 'KeyQ') {
-          if (e.type === 'down') flashQ();
+          if (e.type === 'down') {
+            sfx('g5-turn');
+            flashQ();
+          }
         } else if (e.code === 'KeyW') {
-          if (e.type === 'down') flashW();
+          if (e.type === 'down') {
+            sfx('g5-turn');
+            flashW();
+          }
         } else if (e.code === 'KeyU') {
           if (online) return; // 온라인 mock: P2 = 봇
-          if (e.type === 'down') flashU();
+          if (e.type === 'down') {
+            sfx('g5-turn');
+            flashU();
+          }
         } else if (e.code === 'KeyI') {
           if (online) return;
-          if (e.type === 'down') flashI();
+          if (e.type === 'down') {
+            sfx('g5-turn');
+            flashI();
+          }
         }
         if (f.phase === 'playing') eventsRef.current.push(e);
       },
@@ -575,6 +589,8 @@ export default function Game5() {
         dead2 = true;
       }
       deadRef.current = { p1: dead1, p2: dead2 };
+      // 크래시(죽는 소리) 임팩트 — 실제 사망이 있을 때만 1회(타임아웃 무승부 제외).
+      if (dead1 || dead2) sfx('g5-crash');
 
       const cellPx = (gx: number, gy: number, dir: number) => {
         const cx = Math.min(GX - 1, Math.max(0, gx + DX[dir]));

@@ -47,6 +47,7 @@ import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endF
 import ResultOverlay from './ResultOverlay';
 import RoundIntro from './RoundIntro';
 import { isRoundIntroActive } from '../../state/roundIntroGate';
+import { sfx } from '@/audio';
 import './game7.css';
 
 // ---------------------------------------------------------------------------
@@ -93,6 +94,36 @@ function toMatchResult(r: 'P1' | 'P2' | 'DRAW'): MatchResult {
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+/**
+ * 라운드 종료 임팩트 SFX(패자 사인) — result 전이 순간에 1회만 호출한다(호출부에서 가드).
+ *  · 승리 팡파레는 전역 레이어가 울리므로 여기선 승리 징글을 울리지 않는다.
+ *  · 패자 판별: 승자 탄이 패자 사각형과 겹치면 피격(g7-hit),
+ *    아니면 발끝이 마그마 표면 아래면 추락사(g7-magma-death). 천장 가시 사망은 매핑 없음(무음).
+ */
+function playRoundEndSfx(s: Game7State): void {
+  const surf = magmaSurfaceY(s.elapsed);
+  const inMagma = (y: number) => y + G7.PH / 2 >= surf;
+  if (s.result === 'DRAW') {
+    if (inMagma(s.p1Y) || inMagma(s.p2Y)) sfx('g7-magma-death');
+    return;
+  }
+  if (s.result !== 'P1' && s.result !== 'P2') return;
+  const winner = s.result === 'P1' ? 1 : 2;
+  const loserX = s.result === 'P1' ? G7.P2_X : G7.P1_X;
+  const loserY = s.result === 'P1' ? s.p2Y : s.p1Y;
+  const hitByBullet = s.bullets.some(
+    (b) =>
+      b.owner === winner &&
+      b.x + G7.BULLET_R > loserX - G7.PW / 2 &&
+      b.x - G7.BULLET_R < loserX + G7.PW / 2 &&
+      b.y + G7.BULLET_R > loserY - G7.PH / 2 &&
+      b.y - G7.BULLET_R < loserY + G7.PH / 2,
+  );
+  if (hitByBullet) sfx('g7-hit');
+  else if (inMagma(loserY)) sfx('g7-magma-death');
+  // else: 천장 가시 사망 — 매핑 없음(무음)
+}
 
 /** sign-on 플리커 off 창(등장 시 프레임 blank). f = age/420 ∈ [0,1) */
 function signOffWindow(f: number): boolean {
@@ -543,9 +574,11 @@ export default function Game7() {
             if (e.type === 'down') {
               jumpPendingRef.current = true;
               flashU();
+              sfx('g7-flap');
             }
           } else if (e.type === 'down') {
             flashI();
+            sfx('g7-shoot');
           }
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
           onlineSendInput(slot, e.type, e.t ?? performance.now() / 1000);
@@ -555,15 +588,27 @@ export default function Game7() {
         const f = getFlow();
         const online = f.mode === 'online';
         if (e.code === 'KeyQ') {
-          if (e.type === 'down') flashQ();
+          if (e.type === 'down') {
+            flashQ();
+            sfx('g7-flap');
+          }
         } else if (e.code === 'KeyW') {
-          if (e.type === 'down') flashW();
+          if (e.type === 'down') {
+            flashW();
+            sfx('g7-shoot');
+          }
         } else if (e.code === 'KeyU') {
           if (online) return;
-          if (e.type === 'down') flashU();
+          if (e.type === 'down') {
+            flashU();
+            sfx('g7-flap');
+          }
         } else if (e.code === 'KeyI') {
           if (online) return;
-          if (e.type === 'down') flashI();
+          if (e.type === 'down') {
+            flashI();
+            sfx('g7-shoot');
+          }
         }
         if (f.phase === 'playing') actionsRef.current.push(e);
       },
@@ -581,12 +626,18 @@ export default function Game7() {
       mountAtRef.current = performance.now();
       predYRef.current = null; // 입장/재진입 경계 — 다음 스냅샷에서 내 기체 예측을 다시 스냅
       jumpPendingRef.current = false;
+      resultAtRef.current = 0; // 서버 result 전이 1회 감지용 가드 리셋
       let raf = 0;
       const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
         const ctx = canvasRef.current?.getContext('2d');
         const s = stateRef.current;
         if (!ctx || !s) return;
+        // 서버 권위 result가 처음 확정된 프레임에만 패자 임팩트음 1회
+        if (s.result !== null && resultAtRef.current === 0) {
+          resultAtRef.current = now;
+          playRoundEndSfx(s);
+        }
         fxRef.current = fxRef.current.filter((f) => now - f.t < 1200);
         const players = getPlayerDisplays(getFlow());
 
@@ -699,6 +750,7 @@ export default function Game7() {
         // 판정 순간 이펙트(글리치는 승패 순간에만)
         if (s.result !== null && resultAtRef.current === 0) {
           resultAtRef.current = now;
+          playRoundEndSfx(s); // 패자 임팩트음(피격/추락) — 이 블록은 라운드당 1회
           fxRef.current.push({ kind: 'chroma', t: now });
           if (s.result === 'P1') {
             fxRef.current.push(
