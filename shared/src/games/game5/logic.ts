@@ -2,7 +2,7 @@ import type { GameInputEvent, GameResult } from '../types'
 import { GAME_DURATION } from '../types'
 
 /**
- * 게임5 = 몬스터 포격전 (대칭 대결).
+ * 게임5 = 뿌슝뿌슝 (대칭 대결).
  *  · 두 플레이어는 화면 중앙에 약간의 간격을 두고 대포 형태로 자리한다.
  *      P1 왼쪽 대포 (CX-GAP, CY) / P2 오른쪽 대포 (CX+GAP, CY).
  *  · 몬스터는 화면 가장자리 랜덤 지점에서 생성돼 목표 대포로 직선 이동한다.

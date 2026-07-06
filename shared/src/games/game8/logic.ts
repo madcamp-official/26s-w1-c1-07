@@ -2,7 +2,7 @@ import type { GameInputEvent, GameResult } from '../types'
 import { GAME_DURATION } from '../types'
 
 /**
- * 게임8 = 마그마 총격 듀얼.
+ * 게임8 = 이카루스 매치.
  *  · P1(왼쪽)·P2(오른쪽)이 서로 마주 보고, 먼저 상대를 맞히는 쪽이 승리한다.
  *  · 두 플레이어는 화면 맨 위에서 스폰돼 중력으로 낙하한다. x 위치는 고정.
  *      Q/U: 살짝 점프(위로 작은 임펄스, 공중에서도 가능) — 플래피 방식으로 높이 조절.

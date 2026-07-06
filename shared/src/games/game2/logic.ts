@@ -2,7 +2,7 @@ import type { GameInputEvent, GameResult } from '../types'
 import { GAME_DURATION } from '../types'
 
 /**
- * 게임2 = 로켓 피하기.
+ * 게임2 = 미사일 매치.
  *  · P1은 좌우로 스캔하는 발사대에서 W로 3방향 부채꼴 탄을 발사한다.
  *  · P2는 좌우로 이동해 피하며, 체력 HP 3(피격 시 무적 0.45s).
  *  · 로켓이 적당히 느려 P2가 읽고 피할 여유가 있다.

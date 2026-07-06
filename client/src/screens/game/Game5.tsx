@@ -1,5 +1,5 @@
 /**
- * 게임5 — 몬스터 포격전 (NEON COIN-OP). 담당: game5 에이전트.
+ * 게임5 — 뿌슝뿌슝 (NEON COIN-OP). 담당: game5 에이전트.
  * 컨테이너 testid: scr-game5 / 부품: game-stage(CRT 베젤), hud-*(HudFrame 내장), btn-exit
  *
  * ── 원칙 ────────────────────────────────────────────────────────────────
@@ -804,7 +804,7 @@ export default function Game5() {
         >
           ◀ 나가기
         </Button>
-        <span className="g5-title font-arcade c-muted">게임5 · 몬스터 포격전</span>
+        <span className="g5-title font-arcade c-muted">게임5 · 뿌슝뿌슝</span>
       </div>
 
       <div className="g5-hudwrap">
@@ -819,7 +819,7 @@ export default function Game5() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g5-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g5-canvas" aria-label="게임5 스테이지 — 몬스터 포격전" />
+        <canvas ref={canvasRef} className="g5-canvas" aria-label="게임5 스테이지 — 뿌슝뿌슝" />
 
         {/* 새 메커니즘: 격추 점수 — neon 스코어 셀 (P1 좌상 / P2 우상) */}
         <div className="g5-score g5-score--p1" aria-label={`P1 격추 ${scores.p1}`}>

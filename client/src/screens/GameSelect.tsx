@@ -32,13 +32,13 @@ interface CabinetSpec {
 const CAB_COLORS = ['var(--accent)', 'var(--p1)', 'var(--p2)', 'var(--accent2)', 'var(--win)'];
 const CAB_NAMES: Record<GameId, string> = {
   1: '숫자 맞추기',
-  2: '로켓 피하기',
-  3: '펜싱',
+  2: '미사일 매치',
+  3: '타이드 펜싱',
   4: '공룡 달리기',
-  5: '몬스터 포격전',
+  5: '뿌슝뿌슝',
   6: '펌프',
   7: '스피드 오목',
-  8: '마그마 총격 듀얼',
+  8: '이카루스 매치',
   9: '줄다리기',
   10: '라이트 사이클',
 };

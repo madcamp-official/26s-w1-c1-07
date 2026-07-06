@@ -150,3 +150,10 @@
   color: var(--accent);
   vertical-align: middle;
 }
+
+/* 방 설정 톱니 코인 버튼 — 메인의 설정 버튼 제거 후 유일한 설정 진입점이라 크게 */
+.s6-code-tools .nc-coinbtn {
+  width: 56px;
+  height: 56px;
+  font-size: 28px;
+}

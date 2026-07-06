@@ -1,5 +1,5 @@
 /**
- * 게임8 · 마그마 총격 듀얼 (NEON COIN-OP). 담당: game8 에이전트.
+ * 게임8 · 이카루스 매치 (NEON COIN-OP). 담당: game8 에이전트.
  * 컨테이너 testid: scr-game8 / 부품: game-stage(CRT 베젤), hud-*(HudFrame 내장), btn-exit
  *
  * ── 게임(코어 game8) 요약 ─────────────────────────────────────────────
@@ -688,7 +688,7 @@ export default function Game8() {
         >
           ◀ 나가기
         </Button>
-        <span className="g8-title font-arcade c-muted">게임8 · 마그마 총격 듀얼</span>
+        <span className="g8-title font-arcade c-muted">게임8 · 이카루스 매치</span>
       </div>
 
       <div className="g8-hudwrap">
@@ -703,7 +703,7 @@ export default function Game8() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g8-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g8-canvas" aria-label="게임8 스테이지 — 마그마 총격 듀얼" />
+        <canvas ref={canvasRef} className="g8-canvas" aria-label="게임8 스테이지 — 이카루스 매치" />
 
         {/* 위험 안내 배지 — 마그마 상승/천장 가시 (좌상단, 무발광 캡션) */}
         <div className="g8-hazard" aria-hidden>

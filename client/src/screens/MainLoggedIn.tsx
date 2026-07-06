@@ -10,7 +10,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Card, CoinButton, LeaderboardTable } from '../components';
+import { Button, Card, LeaderboardTable } from '../components';
 import type { LeaderboardRow } from '../components';
 import { useDebugScreen } from '../debug';
 import { logout, restoreSession, useSession } from '../state/session';
@@ -70,14 +70,6 @@ export default function MainLoggedIn() {
         >
           로그아웃
         </Button>
-        <CoinButton
-          data-testid="btn-settings"
-          label="설정"
-          color="var(--accent2)"
-          onClick={() => openModal('settings')}
-        >
-          ⚙
-        </CoinButton>
       </header>
 
       <div className="s2-body">
