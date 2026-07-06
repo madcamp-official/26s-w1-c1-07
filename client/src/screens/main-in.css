@@ -149,3 +149,22 @@
   border-color: var(--accent2);
   box-shadow: 0 0 12px -3px var(--accent2);
 }
+
+/* 리더보드 패널 클릭 → 전체 랭킹 모달 */
+.s2-lb-click {
+  display: block;
+  width: 100%;
+  text-align: inherit;
+  cursor: pointer;
+  transition: filter 120ms;
+}
+.s2-lb-click:hover {
+  filter: brightness(1.15);
+}
+.s2-lb-more {
+  display: block;
+  margin-top: 10px;
+  text-align: right;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
