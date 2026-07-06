@@ -133,90 +133,9 @@
 .s8-dot--p2 { border: 2px solid var(--p2); }
 
 /* ---- 픽토그램 ---- */
-.s8-picto {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-}
-
-/* 게임1: 세븐세그먼트풍 '87' + ↑↓ */
-.s8-picto--g1 {
-  flex-direction: column;
-  gap: 6px;
-}
-
-.s8-g1-num {
-  font-size: 30px;
-  color: var(--accent);
-  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
-}
-
-.s8-g1-arrow {
-  font-size: 10px;
-}
-
-.s8-g1-arrow--up { color: var(--p1); }
-.s8-g1-arrow--down { color: var(--p2); }
-
-/* 게임2: 낙하 총알 트레일 3줄 */
-.s8-picto--g2 {
-  gap: 22px;
-  align-items: flex-start;
-  padding-top: 18px;
-}
-
-.s8-g2-trail {
-  width: 4px;
-  height: 64px;
-  background: linear-gradient(to bottom, transparent, var(--accent));
-  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 60%, transparent);
-}
-
-.s8-g2-trail:nth-child(2) { height: 92px; margin-top: -10px; }
-.s8-g2-trail:nth-child(3) { height: 48px; margin-top: 14px; }
-
 .s8-cabinet:hover .s8-g2-trail {
   transform: translateY(8px);
   transition: transform 120ms steps(2, end);
-}
-
-/* 게임3: 교차 검 2자루 + 지그재그 파도 */
-.s8-picto--g3 {
-  flex-direction: column;
-  gap: 14px;
-}
-
-.s8-g3-blades {
-  position: relative;
-  width: 64px;
-  height: 56px;
-}
-
-.s8-g3-blade {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 60px;
-  height: 3px;
-}
-
-.s8-g3-blade--p1 {
-  background: var(--p1);
-  box-shadow: 0 0 6px var(--p1);
-  transform: translate(-50%, -50%) rotate(38deg);
-}
-
-.s8-g3-blade--p2 {
-  background: var(--p2);
-  box-shadow: 0 0 6px var(--p2);
-  transform: translate(-50%, -50%) rotate(-38deg);
-}
-
-.s8-g3-wave {
-  width: 80%;
-  height: 14px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -225,6 +144,8 @@
     transition: none;
   }
 }
+
+/* (게임 픽토그램 스타일은 components/game-pictogram.css로 이동 — 슬롯머신과 공유) */
 
 /* ── 10게임 대응: 캐비닛 줄바꿈 스크롤 + 게임4~10 번호 픽토그램 ── */
 .s8-floor {
@@ -236,17 +157,6 @@
 .s8-cabinet {
   width: clamp(150px, 15vw, 196px);
 }
-.s8-picto--gN {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-}
-.s8-gN-num {
-  font-size: clamp(30px, 4vw, 48px);
-  color: var(--cab-color, var(--accent));
-}
-
 /* ── 코인 해금 (S8 확장) ── */
 .s8-coins {
   font-size: 13px;
@@ -356,23 +266,4 @@
   }
 }
 
-/* ── 게임 픽토그램 네온 유틸 (SVG 씬 · pictograms.ts) ── */
-.gpic svg {
-  width: 88%;
-  height: 88%;
-  overflow: visible; /* 글로우가 씬 경계에서 잘리지 않도록 (스크린이 최종 클립) */
-}
-.gp-cyan { color: var(--p1); }
-.gp-pink { color: var(--p2); }
-.gp-yellow { color: var(--accent); }
-.gp-mag { color: var(--accent2); }
-.gp-green { color: var(--win); }
-.gp-dim { color: var(--text-muted); }
-.gp-white { color: var(--text); }
-.gp-fill { fill: currentColor; stroke: none; }
-.gp-stroke { fill: none; stroke: currentColor; }
-.gp-glow { filter: drop-shadow(0 0 1.5px currentColor) drop-shadow(0 0 5px currentColor); }
-.gp-dim2 { opacity: 0.4; }
-.gp-grid { opacity: 0.28; }
-.gp-faint { opacity: 0.6; }
-.gp-magma { opacity: 0.22; }
+/* (게임 픽토그램 네온 유틸은 components/game-pictogram.css 로 이동 — 슬롯머신과 공유) */

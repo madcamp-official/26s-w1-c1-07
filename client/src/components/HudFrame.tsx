@@ -20,6 +20,7 @@
  */
 import type { PlayerRole } from '@/shell';
 import type { PlayerDisplay } from '../state/flow';
+import { useOnline } from '../net/online';
 import { Avatar } from './Avatar';
 import './hudframe.css';
 
@@ -57,6 +58,16 @@ export function HudFrame({
   timeRemainingMs,
   className = '',
 }: HudFrameProps) {
+  // 온라인 매치 중엔 라운드 표기를 서버 값(9라운드·현재 라운드)으로 보정 —
+  // 게임 화면들은 오프라인용 flow 값을 넘기므로 여기서 한 번에 덮는다(10개 화면 공통).
+  const o = useOnline();
+  const onlineActive =
+    o.matchId !== null &&
+    (o.phase === 'slot' || o.phase === 'countdown' || o.phase === 'playing' || o.phase === 'round-result');
+  if (onlineActive) {
+    roundCount = o.totalRounds;
+    currentRound = Math.max(1, o.round);
+  }
   const secs = Math.ceil(timeRemainingMs / 1000);
   const urgent = timeRemainingMs <= 5000;
   return (

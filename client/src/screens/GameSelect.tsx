@@ -18,12 +18,12 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GAME_ORDER, isLockable, unlockCost, unlockedGameIds } from '@madpump/shared';
 import type { GameId } from '@/shell';
-import { Button } from '../components';
+import { Button, GamePictogram } from '../components';
 import { useDebugScreen } from '../debug';
 import { startOfflineGame } from '../state/flow';
 import { restoreSession, unlockGame, useSession } from '../state/session';
 import { openLoginModal } from '../modals/Login';
-import { FINAL_PICTOS } from './pictograms';
+import { GAME_NAMES } from '../game/gameNames';
 import './game-select.css';
 import '../global-interaction.css';
 
@@ -37,89 +37,14 @@ interface CabinetSpec {
 }
 
 const CAB_COLORS = ['var(--accent)', 'var(--p1)', 'var(--p2)', 'var(--accent2)', 'var(--win)'];
-const CAB_NAMES: Record<GameId, string> = {
-  1: '숫자 맞추기',
-  2: '타이드 펜싱',
-  3: '펌프',
-  4: '미사일 매치',
-  5: '라이트 사이클',
-  6: '공룡 달리기',
-  7: '이카루스 매치',
-  8: '뿌슝뿌슝',
-  9: '스피드 오목',
-  10: '줄다리기',
-};
 /** GAME_ORDER 순으로 캐비닛 구성 — 라벨/색은 위치, 정체성(id·이름·픽토)은 내부 id */
 const CABINETS: CabinetSpec[] = (GAME_ORDER as readonly GameId[]).map((id, i) => ({
   id,
   displayNo: i + 1,
   title: `GAME ${i + 1}`,
-  name: CAB_NAMES[id],
+  name: GAME_NAMES[id],
   colorVar: CAB_COLORS[i % CAB_COLORS.length],
 }));
-
-/**
- * 게임별 스크린 픽토그램 (순수 장식).
- * 고유 아트: 숫자맞추기=1 / 펜싱=2 / 로켓=4. 그 외는 표시 번호.
- * (s8-picto--g1/g2/g3 클래스는 아트 스타일 훅일 뿐 id 와 무관 — game-select.css)
- */
-function Pictogram({ id, displayNo }: { id: GameId; displayNo: number }) {
-  if (id === 1) {
-    return (
-      <div className="s8-picto s8-picto--g1" aria-hidden>
-        <span className="s8-g1-arrow s8-g1-arrow--up font-arcade">▲</span>
-        <span className="s8-g1-num font-arcade">87</span>
-        <span className="s8-g1-arrow s8-g1-arrow--down font-arcade">▼</span>
-      </div>
-    );
-  }
-  if (id === 4) {
-    return (
-      <div className="s8-picto s8-picto--g2" aria-hidden>
-        <span className="s8-g2-trail" />
-        <span className="s8-g2-trail" />
-        <span className="s8-g2-trail" />
-      </div>
-    );
-  }
-  if (id === 2) {
-    return (
-      <div className="s8-picto s8-picto--g3" aria-hidden>
-        <span className="s8-g3-blades">
-          <span className="s8-g3-blade s8-g3-blade--p1" />
-          <span className="s8-g3-blade s8-g3-blade--p2" />
-        </span>
-        <svg className="s8-g3-wave" viewBox="0 0 120 14" preserveAspectRatio="none">
-          <polyline
-            points="0,12 15,3 30,12 45,3 60,12 75,3 90,12 105,3 120,12"
-            fill="none"
-            stroke="var(--p1)"
-            strokeWidth="2"
-          />
-        </svg>
-      </div>
-    );
-  }
-  // 대표 픽토그램 (pictograms.ts, 게임 내부 id 기준): 펌프3·라이트사이클5·공룡6·마그마7·몬스터8·오목9·줄다리기10
-  const finalPicto = FINAL_PICTOS[id];
-  if (finalPicto) {
-    return (
-      <div className="s8-picto gpic" aria-hidden>
-        <svg
-          viewBox="0 0 120 108"
-          preserveAspectRatio="xMidYMid meet"
-          dangerouslySetInnerHTML={{ __html: finalPicto }}
-        />
-      </div>
-    );
-  }
-  // 안전망: 표시 번호 픽토그램
-  return (
-    <div className="s8-picto s8-picto--gN" aria-hidden>
-      <span className="s8-gN-num font-arcade glow-text">{displayNo}</span>
-    </div>
-  );
-}
 
 export default function GameSelect() {
   useDebugScreen('scr-game-select');
@@ -209,7 +134,7 @@ export default function GameSelect() {
                 <span className="lamp" aria-hidden />
               </span>
               <span className="s8-screen">
-                <Pictogram id={cab.id} displayNo={cab.displayNo} />
+                <GamePictogram id={cab.id} displayNo={cab.displayNo} />
                 {isLocked && (
                   <span className="s8-lock" aria-hidden>
                     <span className="s8-lock-icon">🔒</span>

@@ -23,6 +23,7 @@ export type OnlinePhase =
   | 'connecting'
   | 'queue'
   | 'room'
+  | 'slot' // match:start 수신 ~ 1라운드 round:start 사이 — 슬롯머신 + VS(베팅 공개) 인트로
   | 'countdown'
   | 'playing'
   | 'round-result'
@@ -56,6 +57,29 @@ export interface OnlineState {
   coinDelta: number | null
   /** 정산 후 내 보유 코인 */
   coinBalance: number | null
+  /** 슬롯머신 3릴 결과 — 라운드 r 게임 = slotGames[(r-1) % 3] */
+  slotGames: GameId[] | null
+  /** 이 매치의 베팅 (VS 화면·ALL-IN 표시) */
+  myBet: number | null
+  oppBet: number | null
+  myAllIn: boolean
+  oppAllIn: boolean
+  /** 리벤지: 내 신청 자격 (match:end에서 패자에게만 non-null) */
+  revenge: { stake: number; allIn: boolean } | null
+  /** 리벤지 하위 상태 — none / waiting(신청 후 응답 대기) / offered(승자: 수락 다이얼로그) */
+  revengePhase: 'none' | 'waiting' | 'offered'
+  /** 승자가 받은 리벤지 오퍼 */
+  revengeOffer: {
+    fromNickname: string
+    yourStake: number
+    yourAllIn: boolean
+    oppStake: number
+    oppAllIn: boolean
+    timeoutMs: number
+    receivedAt: number
+  } | null
+  /** 리벤지 무산(거절/취소/타임아웃/불가) — 클라는 이걸 보고 메인으로 복귀 */
+  revengeClosed: { reason: string } | null
   error: string | null
 }
 
@@ -81,6 +105,15 @@ const INITIAL: OnlineState = {
   recordedMatchId: null,
   coinDelta: null,
   coinBalance: null,
+  slotGames: null,
+  myBet: null,
+  oppBet: null,
+  myAllIn: false,
+  oppAllIn: false,
+  revenge: null,
+  revengePhase: 'none',
+  revengeOffer: null,
+  revengeClosed: null,
   error: null,
 }
 
@@ -172,6 +205,11 @@ function wire(s: Socket) {
       opponent: OpponentView
       yourColor: PlayerColor
       oppColor: PlayerColor
+      slotGames?: GameId[]
+      yourBet?: number
+      oppBet?: number
+      yourAllIn?: boolean
+      oppAllIn?: boolean
     }) =>
       onlineStore.set({
         matchId: m.matchId,
@@ -180,11 +218,29 @@ function wire(s: Socket) {
         opponent: m.opponent,
         myColor: m.yourColor,
         oppColor: m.oppColor,
+        slotGames: m.slotGames ?? null,
+        myBet: m.yourBet ?? null,
+        oppBet: m.oppBet ?? null,
+        myAllIn: m.yourAllIn ?? false,
+        oppAllIn: m.oppAllIn ?? false,
         matchResult: null,
         recordedMatchId: null,
+        revenge: null,
+        revengePhase: 'none',
+        revengeOffer: null,
+        revengeClosed: null,
+        phase: 'slot', // 슬롯머신 + VS 인트로 (round:start가 countdown으로 전환)
       }),
   )
-  s.on(EV.roundStart, (m: { matchId: string; round: number; gameId: GameId; role: Role; countdownMs: number }) =>
+  // 종료 상태(aborted/match-end)면 이후 라운드 이벤트를 무시한다.
+  // 서버는 상대 이탈 후에도 매치를 끝까지 연산해 game:state/round:start를 계속 보내는데,
+  // 이걸 반영하면 'aborted'(OPPONENT LEFT) 오버레이가 게임 화면으로 되살아나 버림.
+  const isTerminal = () => {
+    const p = getOnline().phase
+    return p === 'aborted' || p === 'match-end'
+  }
+  s.on(EV.roundStart, (m: { matchId: string; round: number; gameId: GameId; role: Role; countdownMs: number }) => {
+    if (isTerminal()) return
     onlineStore.set({
       round: m.round,
       gameId: m.gameId,
@@ -194,24 +250,67 @@ function wire(s: Socket) {
       serverSeq: -1,
       lastRoundResult: null,
       countdownUntil: performance.now() + m.countdownMs,
-    }),
-  )
+    })
+  })
   s.on(EV.gameState, (m: { seq: number; state: unknown }) => {
+    if (isTerminal()) return
     if (m.seq <= getOnline().serverSeq) return // 순서 역전 무시
     onlineStore.set({ serverState: m.state, serverSeq: m.seq, phase: 'playing' })
   })
-  s.on(EV.roundEnd, (m: { result: GameResult }) =>
-    onlineStore.set({ phase: 'round-result', lastRoundResult: m.result }),
+  s.on(EV.roundEnd, (m: { result: GameResult }) => {
+    if (isTerminal()) return
+    onlineStore.set({ phase: 'round-result', lastRoundResult: m.result })
+  })
+  s.on(
+    EV.matchEnd,
+    (m: {
+      result: SlotResult
+      recordedMatchId: string
+      coinDelta?: number
+      coinBalance?: number
+      revenge?: { stake: number; allIn: boolean } | null
+    }) => {
+      startRequestedForRoom = null // 같은 방 재대결 허용
+      onlineStore.set({
+        phase: 'match-end',
+        matchResult: m.result,
+        recordedMatchId: m.recordedMatchId,
+        coinDelta: m.coinDelta ?? null,
+        coinBalance: m.coinBalance ?? null,
+        revenge: m.revenge ?? null,
+        revengePhase: 'none',
+        revengeOffer: null,
+        revengeClosed: null,
+      })
+    },
   )
-  s.on(EV.matchEnd, (m: { result: SlotResult; recordedMatchId: string; coinDelta?: number; coinBalance?: number }) => {
-    startRequestedForRoom = null // 같은 방 재대결 허용
-    onlineStore.set({
-      phase: 'match-end',
-      matchResult: m.result,
-      recordedMatchId: m.recordedMatchId,
-      coinDelta: m.coinDelta ?? null,
-      coinBalance: m.coinBalance ?? null,
-    })
+  // ── 리벤지 (docs/ONLINE_MATCH.md) ──
+  s.on(
+    EV.revengeOffer,
+    (m: {
+      fromNickname: string
+      yourStake: number
+      yourAllIn: boolean
+      oppStake: number
+      oppAllIn: boolean
+      timeoutMs: number
+    }) =>
+      onlineStore.set({
+        revengePhase: 'offered',
+        revengeOffer: { ...m, receivedAt: performance.now() },
+      }),
+  )
+  s.on(EV.revengeResult, (m: { accepted: boolean; reason?: string }) => {
+    if (m.accepted) {
+      // 수락 — 곧바로 match:start(슬롯 인트로)가 이어지므로 하위 상태만 정리
+      onlineStore.set({ revengePhase: 'none', revengeOffer: null, revengeClosed: null })
+    } else {
+      onlineStore.set({
+        revengePhase: 'none',
+        revengeOffer: null,
+        revengeClosed: { reason: m.reason ?? 'DECLINED' },
+      })
+    }
   })
   s.on(EV.matchAborted, () => {
     startRequestedForRoom = null
@@ -237,13 +336,12 @@ export function leaveQueue(): void {
   onlineStore.set({ phase: 'idle' })
 }
 export function createRoom(
-  rounds: number,
   games: GameId[],
   bet: number,
 ): Promise<{ room: RoomSnapshot | null; message?: string }> {
   return new Promise((resolve) => {
     if (!socket) return resolve({ room: null, message: '연결 안 됨' })
-    socket.emit(EV.roomCreate, { rounds, games, bet }, (ack: { ok: boolean; data?: RoomSnapshot; message?: string }) => {
+    socket.emit(EV.roomCreate, { games, bet }, (ack: { ok: boolean; data?: RoomSnapshot; message?: string }) => {
       if (ack?.ok && ack.data) {
         onlineStore.set({ room: ack.data, phase: 'room' })
         resolve({ room: ack.data })
@@ -282,6 +380,33 @@ export function sendInput(slot: 'A' | 'B', type: 'down' | 'up', t: number, cell?
   const matchId = getOnline().matchId
   if (!socket || !matchId) return
   socket.emit(EV.gameInput, { matchId, code: slot === 'A' ? 'KeyQ' : 'KeyW', type, t, cell })
+}
+
+// ── 리벤지 액션 ──
+/** 패자 → 리벤지 신청. 실패(승자 이탈 등) 시 메시지와 함께 false — 클라는 메인으로 복귀 */
+export function requestRevenge(): Promise<{ ok: boolean; message?: string }> {
+  return new Promise((resolve) => {
+    if (!socket) return resolve({ ok: false, message: '연결 안 됨' })
+    socket.emit(EV.revengeRequest, {}, (ack: { ok: boolean; message?: string }) => {
+      if (ack?.ok) {
+        onlineStore.set({ revengePhase: 'waiting', revengeClosed: null })
+        resolve({ ok: true })
+      } else resolve({ ok: false, message: ack?.message })
+    })
+  })
+}
+
+/** 승자 → 오퍼 응답 (수락 시 서버가 revenge:result → match:start 순으로 보낸다) */
+export function respondRevenge(accept: boolean): void {
+  socket?.emit(EV.revengeRespond, { accept }, () => {})
+}
+
+/**
+ * 패자 → 대기 중 신청 취소. 로컬 phase를 바꾸지 않고 서버 확정(revenge:result)을 기다린다.
+ * (승자 '수락'과의 경합에서 취소가 지면 서버가 accepted:true+match:start를 보내 그대로 매치로 진입 — #1)
+ */
+export function cancelRevenge(): void {
+  socket?.emit(EV.revengeCancel)
 }
 
 /** 매치 종료/이탈 후 온라인 상태 초기화(소켓은 유지) */

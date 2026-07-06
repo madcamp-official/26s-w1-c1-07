@@ -34,9 +34,16 @@ const TICK_MS = Math.round(1000 / SIM_HZ) // ≈16ms — 계산 틱 간격
 const DT = TICK_MS / 1000
 const BROADCAST_EVERY = Math.max(1, Math.round(SIM_HZ / BROADCAST_HZ)) // 1 → 매 틱 전송 = 60Hz
 const GAME_DURATION = 10
-const COUNTDOWN_MS = 3000
-const ROUND_GAP_MS = 2500 // round:end 후 다음 라운드까지
-const TOTAL_ROUNDS = 3
+// 아래 타이밍 상수는 E2E 테스트에서만 env로 단축한다(운영 기본값 불변).
+const COUNTDOWN_MS = Number(process.env.MATCH_COUNTDOWN_MS ?? 3000)
+const ROUND_GAP_MS = Number(process.env.MATCH_ROUND_GAP_MS ?? 2500) // round:end 후 다음 라운드까지
+/** 온라인 매치는 항상 9라운드 — 슬롯 3릴 × 3회전 (릴 k = 라운드 k, k+3, k+6) */
+const TOTAL_ROUNDS = 9
+/**
+ * match:start(슬롯 결과·베팅 공개) 후 1라운드 round:start까지의 대기.
+ * 클라 연출: 릴 스핀 → 1.2s/1.5s/1.8s 순차 정지(0.3s 간격) → 2.5s부터 VS(베팅 공개) 2초.
+ */
+const INTRO_MS = Number(process.env.MATCH_INTRO_MS ?? 4700)
 
 interface Participant {
   userId: string
@@ -46,6 +53,8 @@ interface Participant {
   imageUrl: string | null
   /** 이 매치에 건 코인 (참가 시 검증 완료) */
   bet: number
+  /** 베팅 = 참가 시점 보유 전액이면 true (VS 화면 ALL-IN 표시) */
+  allIn: boolean
 }
 
 export class MatchRunner implements MatchRuntime {
@@ -56,9 +65,9 @@ export class MatchRunner implements MatchRuntime {
   private b: Participant
   private roundResults: RoundRecord[] = []
   private currentRound = 0
-  private usedGames: GameId[] = []
-  private totalRounds = TOTAL_ROUNDS // 방 설정(rounds)에서 구성자에 결정
-  private games: GameId[] = ALL_GAME_IDS // 방 설정 체크박스(games)에서 구성자에 결정
+  private totalRounds = TOTAL_ROUNDS // 항상 9 (설정과 무관)
+  /** 슬롯머신 3릴 결과 — 라운드 r 게임 = slotGames[(r-1) % 3] */
+  private slotGames: [GameId, GameId, GameId]
   // 색(플레이어 종속, 매치당 고정) — 역할(roleOfA)과 독립. 렌더는 이 색으로 칠한다.
   private colorOfA: PlayerColor = 'blue'
   private colorOfB: PlayerColor = 'red'
@@ -70,6 +79,7 @@ export class MatchRunner implements MatchRuntime {
   private seq = 0
   private tickCount = 0 // 이 라운드의 시뮬 틱 수(BROADCAST_EVERY로 전송 주기 결정)
   private timer: NodeJS.Timeout | null = null
+  private introTimer: NodeJS.Timeout | null = null
   private elapsed = 0
   private stopped = false
 
@@ -90,14 +100,28 @@ export class MatchRunner implements MatchRuntime {
       this.colorOfA = 'red'
       this.colorOfB = 'blue'
     }
-    // 라운드 수 / 플레이 가능 게임은 방 설정에서 결정(없거나 이상하면 기본값으로).
-    this.totalRounds = Math.min(9, Math.max(1, Math.round(room.rounds) || TOTAL_ROUNDS))
-    const picked = (room.games ?? []).filter((g) => ALL_GAME_IDS.includes(g))
-    this.games = picked.length ? picked : ALL_GAME_IDS
+    // 슬롯머신 3릴 추첨 — 방 설정 체크박스가 후보 풀. 풀이 3개 이상이면 서로 다른 3개,
+    // 3개 미만이면(호스트가 1~2개만 체크) 그 안에서 중복 허용.
+    const pool = (room.games ?? []).filter((g) => ALL_GAME_IDS.includes(g))
+    const from = pool.length ? pool : [...ALL_GAME_IDS]
+    if (from.length >= 3) {
+      const shuffled = [...from]
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = randomInt(0, i + 1)
+        ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+      }
+      this.slotGames = [shuffled[0], shuffled[1], shuffled[2]]
+    } else {
+      this.slotGames = [
+        from[randomInt(0, from.length)],
+        from[randomInt(0, from.length)],
+        from[randomInt(0, from.length)],
+      ]
+    }
   }
 
   start(): void {
-    // 각 플레이어에게 개별 match:start (상대 정보)
+    // 각 플레이어에게 개별 match:start (상대 정보 + 슬롯 결과 + 베팅 공개)
     this.io.to(this.a.socketId).emit(EV.matchStart, {
       matchId: this.matchId,
       you: 'A',
@@ -105,6 +129,11 @@ export class MatchRunner implements MatchRuntime {
       opponent: { nickname: this.b.nickname, imageUrl: this.b.imageUrl },
       yourColor: this.colorOfA,
       oppColor: this.colorOfB,
+      slotGames: this.slotGames,
+      yourBet: this.a.bet,
+      oppBet: this.b.bet,
+      yourAllIn: this.a.allIn,
+      oppAllIn: this.b.allIn,
     })
     this.io.to(this.b.socketId).emit(EV.matchStart, {
       matchId: this.matchId,
@@ -113,22 +142,19 @@ export class MatchRunner implements MatchRuntime {
       opponent: { nickname: this.a.nickname, imageUrl: this.a.imageUrl },
       yourColor: this.colorOfB,
       oppColor: this.colorOfA,
+      slotGames: this.slotGames,
+      yourBet: this.b.bet,
+      oppBet: this.a.bet,
+      yourAllIn: this.b.allIn,
+      oppAllIn: this.a.allIn,
     })
-    this.beginRound()
-  }
-
-  private pickGame(): GameId {
-    // 아직 안 쓴 게임 우선(서로 다른 것), 다 썼으면 전체에서
-    const pool = this.games.filter((g) => !this.usedGames.includes(g))
-    const from = pool.length ? pool : this.games
-    const g = from[randomInt(0, from.length)]
-    this.usedGames.push(g)
-    return g
+    // 클라 인트로(슬롯 연출 → VS 베팅 공개 2초)가 끝날 때쯤 1라운드 시작
+    this.introTimer = setTimeout(() => this.beginRound(), INTRO_MS)
   }
 
   private beginRound(): void {
     if (this.stopped) return
-    this.gameId = this.pickGame()
+    this.gameId = this.slotGames[this.currentRound % 3]
     // roleOfA(색)는 매치 시작 때 고정됨 — 라운드마다 재배정하지 않는다.
     const roleOfB: Role = this.roleOfA === 'P1' ? 'P2' : 'P1'
     const round = this.currentRound + 1
@@ -241,28 +267,62 @@ export class MatchRunner implements MatchRuntime {
     //  무승부: 변동 없음
     let deltaA = 0
     let deltaB = 0
+    // 코드방 제로섬은 transfer로 정산해 승자 지급이 패자 실제 차감분을 넘지 않게 한다(리뷰 #4).
+    let transfer: { amount: number; winnerIsA: boolean } | undefined
     if (result === 'A_WIN') {
       deltaA = this.room.kind === 'quick' ? this.a.bet : this.b.bet
       deltaB = -this.b.bet
+      if (this.room.kind === 'code') transfer = { amount: this.b.bet, winnerIsA: true }
     } else if (result === 'B_WIN') {
       deltaB = this.room.kind === 'quick' ? this.b.bet : this.a.bet
       deltaA = -this.a.bet
+      if (this.room.kind === 'code') transfer = { amount: this.a.bet, winnerIsA: false }
     }
     let balanceA = 0
     let balanceB = 0
     try {
-      const balances = await settleCoins(this.a.dbId, deltaA, this.b.dbId, deltaB)
-      balanceA = balances.a
-      balanceB = balances.b
+      const settled = await settleCoins(this.a.dbId, deltaA, this.b.dbId, deltaB, transfer)
+      balanceA = settled.a
+      balanceB = settled.b
+      // 실제 반영된 증감으로 통지값 보정 (transfer/음수 클램프가 적용됐을 수 있음)
+      deltaA = settled.deltaA
+      deltaB = settled.deltaB
     } catch (err) {
       console.error('[match] 코인 정산 실패', err)
       deltaA = 0
       deltaB = 0
     }
 
+    // ── 리벤지 창구 기록 + 패자 신청 자격 (docs/ONLINE_MATCH.md) ──
+    //  · 자격: 무승부 아님 · 이 매치의 리벤지 신청자가 아님(연속 신청 금지) · 정산 후 보유 ≥ 1
+    //  · stake = min(직전 베팅 × 2, 정산 후 보유) — 2배가 안 되면 ALL-IN
+    const requesterOfThisMatch = this.room.revengeRequesterUserId ?? null
+    let revengeA: { stake: number; allIn: boolean } | null = null
+    let revengeB: { stake: number; allIn: boolean } | null = null
+    if (result !== 'DRAW') {
+      const winner = result === 'A_WIN' ? this.a : this.b
+      const loser = result === 'A_WIN' ? this.b : this.a
+      const loserBalance = result === 'A_WIN' ? balanceB : balanceA
+      this.room.postMatch = {
+        winnerUserId: winner.userId,
+        loserUserId: loser.userId,
+        bets: { [this.a.userId]: this.a.bet, [this.b.userId]: this.b.bet },
+        requesterUserId: requesterOfThisMatch,
+      }
+      if (loser.userId !== requesterOfThisMatch && loserBalance >= 1) {
+        const stake = Math.min(loser.bet * 2, loserBalance)
+        const rev = { stake, allIn: stake === loserBalance }
+        if (result === 'A_WIN') revengeB = rev
+        else revengeA = rev
+      }
+    } else {
+      this.room.postMatch = undefined // 무승부 — 리벤지 없음
+    }
+    this.room.revengeRequesterUserId = null
+
     const end = { matchId: this.matchId, result, recordedMatchId, playedAt }
-    this.io.to(this.a.socketId).emit(EV.matchEnd, { ...end, coinDelta: deltaA, coinBalance: balanceA })
-    this.io.to(this.b.socketId).emit(EV.matchEnd, { ...end, coinDelta: deltaB, coinBalance: balanceB })
+    this.io.to(this.a.socketId).emit(EV.matchEnd, { ...end, coinDelta: deltaA, coinBalance: balanceA, revenge: revengeA })
+    this.io.to(this.b.socketId).emit(EV.matchEnd, { ...end, coinDelta: deltaB, coinBalance: balanceB, revenge: revengeB })
 
     // 방 정리 (대기 상태로 복귀)
     this.stopped = true
@@ -285,6 +345,8 @@ export class MatchRunner implements MatchRuntime {
     this.stopped = true
     if (this.timer) clearInterval(this.timer)
     this.timer = null
+    if (this.introTimer) clearTimeout(this.introTimer)
+    this.introTimer = null
   }
 }
 

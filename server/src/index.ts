@@ -147,6 +147,12 @@ app.get('/api/me', async (req) => {
 app.post('/api/unlock', async (req, reply) => {
   const s = getSession(req.cookies[SESSION_COOKIE])
   if (!s) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: '로그인 필요' } })
+  // 온라인 매치/큐에 베팅 코인이 락돼 있으면 해금(코인 소비)을 막는다.
+  // 안 그러면 락된 베팅이 정산 시점에 보유를 초과해 settleCoins 클램프가 코인을 무에서 만든다(리뷰 #4).
+  const uid = s.userId.toString()
+  if (findRoomByUser(uid) || quickQueue.some((q) => q.userId === uid)) {
+    return reply.code(409).send({ error: { code: 'IN_MATCH', message: '매치 중에는 해금할 수 없어요' } })
+  }
   const u = await prisma.appUser.findFirst({ where: { id: s.userId, deletedAt: null } })
   if (!u) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: '로그인 필요' } })
 
@@ -314,19 +320,29 @@ function ackErr(code: string, message: string) {
   return { ok: false as const, code, message }
 }
 
-/** 베팅액 검증 — 1 이상 정수 & 보유 코인 이하. 유효하면 그 값, 아니면 null */
-async function validateBet(userId: bigint, raw: unknown): Promise<number | null> {
+/**
+ * 베팅액 검증 — 1 이상 정수 & 보유 코인 이하.
+ * @returns 유효하면 { bet, allIn: 보유 전액 베팅 여부(VS 화면 ALL-IN 표시용) }, 아니면 null
+ */
+async function validateBet(userId: bigint, raw: unknown): Promise<{ bet: number; allIn: boolean } | null> {
   const bet = Number(raw ?? 0)
   if (!Number.isInteger(bet) || bet < 1) return null
   const u = await prisma.appUser.findFirst({ where: { id: userId, deletedAt: null }, select: { coins: true } })
   if (!u || bet > u.coins) return null
-  return bet
+  return { bet, allIn: bet === u.coins }
 }
 
-function startMatchForRoom(room: Room) {
+/**
+ * @param revengeRequesterId 이 매치가 리벤지 매치라면 신청자 userId — 연속 신청 금지(e항) 판정용
+ */
+function startMatchForRoom(room: Room, revengeRequesterId: string | null = null) {
   if (room.members.length < 2) return
   // 멱등: 이미 매치 중이면 재시작 금지(호스트 auto-start가 room:state마다 중복 emit되는 것 방지).
   if (room.status === 'in_match' || room.match) return
+  // 이전 매치의 리벤지 창구 폐쇄 (대기 중 타이머 포함)
+  if (room.postMatch?.pending) clearTimeout(room.postMatch.pending.timer)
+  room.postMatch = undefined
+  room.revengeRequesterUserId = revengeRequesterId
   const [ma, mb] = room.members
   const a: Participant = {
     userId: ma.userId,
@@ -335,6 +351,7 @@ function startMatchForRoom(room: Room) {
     nickname: ma.nickname,
     imageUrl: ma.imageUrl,
     bet: ma.bet,
+    allIn: ma.allIn,
   }
   const b: Participant = {
     userId: mb.userId,
@@ -343,6 +360,7 @@ function startMatchForRoom(room: Room) {
     nickname: mb.nickname,
     imageUrl: mb.imageUrl,
     bet: mb.bet,
+    allIn: mb.allIn,
   }
   room.status = 'in_match'
   const runner = new MatchRunner(io, room, a, b)
@@ -350,16 +368,31 @@ function startMatchForRoom(room: Room) {
   runner.start()
 }
 
-// 설정값 검증: rounds는 1~9로 클램프, games는 유효 게임만(없으면 전체).
-function clampRounds(r?: number): number {
-  const n = Math.round(Number(r))
-  return Number.isFinite(n) ? Math.min(9, Math.max(1, n)) : 3
-}
+// 설정값 검증: games는 유효 게임만(없으면 전체). 라운드 수는 항상 9로 고정이라 설정받지 않는다.
 function sanitizeGames(games?: number[]): GameId[] {
   const valid = Array.isArray(games)
     ? (games.filter((g) => (ALL_GAME_IDS as number[]).includes(g)) as GameId[])
     : []
   return valid.length ? valid : [...ALL_GAME_IDS]
+}
+
+// ── 리벤지 매치 (docs/ONLINE_MATCH.md) ─────────────────────────
+const REVENGE_TIMEOUT_MS = Number(process.env.REVENGE_TIMEOUT_MS ?? 10_000)
+
+/** 진행 중 오퍼를 원자적으로 회수(타이머 정지 포함). 없으면 null — 이중 처리 방지의 단일 관문 */
+function takeRevengePending(room: Room): { requesterId: string } | null {
+  const pending = room.postMatch?.pending
+  if (!pending) return null
+  clearTimeout(pending.timer)
+  room.postMatch!.pending = undefined
+  return { requesterId: pending.requesterId }
+}
+
+/** 리벤지 무산 통지 — 방의 두 멤버 모두에게. 클라는 수신 시 메인으로 복귀한다 */
+function notifyRevengeClosed(room: Room, reason: 'DECLINED' | 'TIMEOUT' | 'CANCELLED' | 'UNAVAILABLE') {
+  for (const m of room.members) {
+    io.to(m.socketId).emit(EV.revengeResult, { accepted: false, reason })
+  }
 }
 
 process.on("uncaughtException", (e) => console.error("[uncaughtException]", e))
@@ -374,22 +407,22 @@ io.on('connection', (socket) => {
   })
 
   // ── 코드방 ──
-  socket.on(EV.roomCreate, async (payload: { rounds?: number; games?: number[] } & Partial<BetPayload>, ack: (r: unknown) => void) => {
+  socket.on(EV.roomCreate, async (payload: { games?: number[] } & Partial<BetPayload>, ack: (r: unknown) => void) => {
     if (typeof ack !== 'function') return
     if (findRoomByUser(userId)) return ack(ackErr('ALREADY_IN_ROOM', '이미 방에 있음'))
-    const bet = await validateBet(s.userId, payload?.bet)
-    if (bet === null) return ack(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (1 이상, 보유 코인 한도 내 정수)'))
+    const v = await validateBet(s.userId, payload?.bet)
+    if (v === null) return ack(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (1 이상, 보유 코인 한도 내 정수)'))
     if (findRoomByUser(userId)) return ack(ackErr('ALREADY_IN_ROOM', '이미 방에 있음')) // await 사이 재검사
     const code = genRoomCode()
     const room: Room = {
       code,
       hostUserId: userId,
       status: 'waiting',
-      rounds: clampRounds(payload?.rounds),
+      rounds: 9, // 온라인 매치는 항상 9라운드 (슬롯 3릴 × 3회전)
       games: sanitizeGames(payload?.games),
       kind: 'code',
       members: [
-        { userId, nickname: s.nickname, imageUrl: s.imageUrl, socketId: socket.id, role: 'P1', ready: false, bet },
+        { userId, nickname: s.nickname, imageUrl: s.imageUrl, socketId: socket.id, role: 'P1', ready: false, bet: v.bet, allIn: v.allIn },
       ],
     }
     rooms.set(code, room)
@@ -399,24 +432,23 @@ io.on('connection', (socket) => {
 
   socket.on(EV.roomJoin, async (payload: { code: string } & Partial<BetPayload>, ack: (r: unknown) => void) => {
     if (typeof ack !== 'function') return
-    const bet = await validateBet(s.userId, payload?.bet)
-    if (bet === null) return ack(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (1 이상, 보유 코인 한도 내 정수)'))
+    const v = await validateBet(s.userId, payload?.bet)
+    if (v === null) return ack(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (1 이상, 보유 코인 한도 내 정수)'))
     const room = rooms.get(payload?.code)
     if (!room) return ack(ackErr('NOT_FOUND', '방 없음'))
     if (room.members.length >= 2) return ack(ackErr('ROOM_FULL', '정원 초과'))
     if (findRoomByUser(userId)) return ack(ackErr('ALREADY_IN_ROOM', '이미 방에 있음'))
     room.members.push({
-      userId, nickname: s.nickname, imageUrl: s.imageUrl, socketId: socket.id, role: 'P2', ready: false, bet,
+      userId, nickname: s.nickname, imageUrl: s.imageUrl, socketId: socket.id, role: 'P2', ready: false, bet: v.bet, allIn: v.allIn,
     })
     socket.join(room.code)
     ack(ackOk<RoomSnapshot>(roomSnapshot(room)))
     io.to(room.code).emit(EV.roomState, roomSnapshot(room))
   })
 
-  socket.on(EV.roomConfigure, (payload: { rounds?: number; games?: number[] }) => {
+  socket.on(EV.roomConfigure, (payload: { games?: number[] }) => {
     const room = findRoomByUser(userId)
     if (!room || room.hostUserId !== userId) return
-    if (payload?.rounds) room.rounds = clampRounds(payload.rounds)
     if (payload?.games) room.games = sanitizeGames(payload.games)
     io.to(room.code).emit(EV.roomState, roomSnapshot(room))
   })
@@ -443,19 +475,19 @@ io.on('connection', (socket) => {
     if (findRoomByUser(userId) || quickQueue.some((q) => q.userId === userId)) {
       return ack?.(ackErr('ALREADY_IN_ROOM', '이미 방/큐에 있음'))
     }
-    const bet = await validateBet(s.userId, payload?.bet)
-    if (bet === null) return ack?.(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (1 이상, 보유 코인 한도 내 정수)'))
+    const v = await validateBet(s.userId, payload?.bet)
+    if (v === null) return ack?.(ackErr('INVALID_BET', '베팅액이 올바르지 않아요 (1 이상, 보유 코인 한도 내 정수)'))
     if (findRoomByUser(userId) || quickQueue.some((q) => q.userId === userId)) {
       return ack?.(ackErr('ALREADY_IN_ROOM', '이미 방/큐에 있음')) // await 사이 재검사
     }
-    quickQueue.push({ userId, nickname: s.nickname, imageUrl: s.imageUrl, socketId: socket.id, bet })
+    quickQueue.push({ userId, nickname: s.nickname, imageUrl: s.imageUrl, socketId: socket.id, bet: v.bet, allIn: v.allIn })
     ack?.(ackOk({ queued: true }))
     if (quickQueue.length >= 2) {
       const p1 = quickQueue.shift()!
       const p2 = quickQueue.shift()!
       const code = genRoomCode()
       const room: Room = {
-        code, hostUserId: p1.userId, status: 'waiting', rounds: 3, games: [...ALL_GAME_IDS], kind: 'quick',
+        code, hostUserId: p1.userId, status: 'waiting', rounds: 9, games: [...ALL_GAME_IDS], kind: 'quick',
         members: [
           { ...p1, role: 'P1', ready: true },
           { ...p2, role: 'P2', ready: true },
@@ -471,6 +503,100 @@ io.on('connection', (socket) => {
   })
 
   socket.on(EV.queueLeave, () => removeFromQueue(userId))
+
+  // ── 리벤지 매치 (docs/ONLINE_MATCH.md) ──
+  // 패자 → revenge:request → (검증) → 승자에게 revenge:offer → revenge:respond →
+  //   수락: 스테이크(min(직전 베팅×2, 보유)) 재계산 → 같은 방에서 새 매치(슬롯 재추첨)
+  //   거절/취소/10초 무응답/이탈: 양측에 revenge:result{accepted:false} → 클라는 메인 복귀
+  socket.on(EV.revengeRequest, async (_payload: unknown, ack?: (r: unknown) => void) => {
+    const room = findRoomByUser(userId)
+    const pm = room?.postMatch
+    if (!room || !pm || room.status !== 'waiting' || room.match) {
+      return ack?.(ackErr('UNAVAILABLE', '리벤지를 신청할 수 없어요'))
+    }
+    if (pm.loserUserId !== userId) return ack?.(ackErr('NOT_LOSER', '패자만 신청할 수 있어요'))
+    if (pm.requesterUserId === userId) {
+      return ack?.(ackErr('CONSECUTIVE', '연속으로 리벤지를 신청할 수 없어요'))
+    }
+    if (pm.pending) return ack?.(ackErr('PENDING', '이미 신청 대기 중이에요'))
+    const winner = room.members.find((m) => m.userId === pm.winnerUserId)
+    const loser = room.members.find((m) => m.userId === userId)
+    // 승자가 방을 떠났거나(=다른 매치를 잡으러 감) 접속이 끊겼으면 전달 불가 (2c)
+    if (!winner || !loser || !io.sockets.sockets.get(winner.socketId)) {
+      return ack?.(ackErr('UNAVAILABLE', '상대가 이미 자리를 떠났어요'))
+    }
+    // 스테이크 = min(직전 베팅 × 2, 현재 보유) — 2배가 안 되면 ALL-IN. 양쪽 모두 보유 ≥ 1 필요
+    const [loserU, winnerU] = await Promise.all([
+      prisma.appUser.findFirst({ where: { id: BigInt(userId) }, select: { coins: true } }),
+      prisma.appUser.findFirst({ where: { id: BigInt(pm.winnerUserId) }, select: { coins: true } }),
+    ])
+    if (!loserU || loserU.coins < 1) return ack?.(ackErr('NO_COINS', '베팅할 코인이 없어요'))
+    if (!winnerU || winnerU.coins < 1) return ack?.(ackErr('UNAVAILABLE', '상대가 베팅할 코인이 없어요'))
+    // await 사이 상태 변동 재검사 (다른 신청/매치 시작/이탈)
+    if (pm.pending || room.status !== 'waiting' || room.match || !room.members.includes(winner)) {
+      return ack?.(ackErr('UNAVAILABLE', '리벤지를 신청할 수 없어요'))
+    }
+    const loserStake = Math.min(pm.bets[userId] * 2, loserU.coins)
+    const winnerStake = Math.min(pm.bets[pm.winnerUserId] * 2, winnerU.coins)
+    pm.pending = {
+      requesterId: userId,
+      timer: setTimeout(() => {
+        if (takeRevengePending(room)) notifyRevengeClosed(room, 'TIMEOUT')
+      }, REVENGE_TIMEOUT_MS),
+    }
+    io.to(winner.socketId).emit(EV.revengeOffer, {
+      fromNickname: loser.nickname,
+      yourStake: winnerStake,
+      yourAllIn: winnerStake === winnerU.coins,
+      oppStake: loserStake,
+      oppAllIn: loserStake === loserU.coins,
+      timeoutMs: REVENGE_TIMEOUT_MS,
+    })
+    ack?.(ackOk({ waiting: true, stake: loserStake }))
+  })
+
+  socket.on(EV.revengeRespond, async (payload: { accept?: boolean }, ack?: (r: unknown) => void) => {
+    const room = findRoomByUser(userId)
+    const pm = room?.postMatch
+    if (!room || !pm?.pending || pm.winnerUserId !== userId) {
+      return ack?.(ackErr('UNAVAILABLE', '응답할 리벤지 신청이 없어요'))
+    }
+    const pending = takeRevengePending(room)! // 타이머 정지 + 오퍼 회수 (이중 처리 방지)
+    if (!payload?.accept) {
+      notifyRevengeClosed(room, 'DECLINED')
+      return ack?.(ackOk({ accepted: false }))
+    }
+    // 수락 — 응답 시점 보유로 스테이크 최종 확정
+    const loser = room.members.find((m) => m.userId === pending.requesterId)
+    const winner = room.members.find((m) => m.userId === userId)
+    const [loserU, winnerU] = await Promise.all([
+      loser ? prisma.appUser.findFirst({ where: { id: BigInt(loser.userId) }, select: { coins: true } }) : null,
+      prisma.appUser.findFirst({ where: { id: BigInt(userId) }, select: { coins: true } }),
+    ])
+    const valid =
+      loser && winner && loserU && winnerU && loserU.coins >= 1 && winnerU.coins >= 1 &&
+      room.status === 'waiting' && !room.match &&
+      room.members.includes(loser) && room.members.includes(winner) &&
+      io.sockets.sockets.has(loser.socketId)
+    if (!valid) {
+      notifyRevengeClosed(room, 'UNAVAILABLE')
+      return ack?.(ackErr('UNAVAILABLE', '리벤지를 시작할 수 없어요'))
+    }
+    loser.bet = Math.min(pm.bets[loser.userId] * 2, loserU.coins)
+    loser.allIn = loser.bet === loserU.coins
+    winner.bet = Math.min(pm.bets[winner.userId] * 2, winnerU.coins)
+    winner.allIn = winner.bet === winnerU.coins
+    for (const m of room.members) m.ready = true
+    for (const m of room.members) io.to(m.socketId).emit(EV.revengeResult, { accepted: true })
+    startMatchForRoom(room, pending.requesterId)
+    ack?.(ackOk({ accepted: true }))
+  })
+
+  socket.on(EV.revengeCancel, () => {
+    const room = findRoomByUser(userId)
+    if (!room || room.postMatch?.pending?.requesterId !== userId) return
+    if (takeRevengePending(room)) notifyRevengeClosed(room, 'CANCELLED')
+  })
 
   // ── 인게임 입력 ──
   socket.on(EV.gameInput, (msg: GameInputMsg) => {
@@ -493,6 +619,10 @@ io.on('connection', (socket) => {
       if (other) io.to(other.socketId).emit(EV.matchAborted, { matchId: room.match?.matchId ?? '', reason: 'OPPONENT_LEFT' })
       if (!isDisconnect) socket.leave(room.code)
       return
+    }
+    // 리벤지 오퍼 대기 중에 당사자가 떠나면 무산 처리 후 남은 쪽에 통지
+    if (room.postMatch?.pending && takeRevengePending(room)) {
+      notifyRevengeClosed(room, userId === room.postMatch.loserUserId ? 'CANCELLED' : 'UNAVAILABLE')
     }
     // 대기 중이면 방에서 제거
     room.members = room.members.filter((m) => m.userId !== userId)

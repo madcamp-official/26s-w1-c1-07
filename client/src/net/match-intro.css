@@ -1,0 +1,221 @@
+/* MatchIntro — 온라인 매치 슬롯머신 + VS 인트로 (MatchIntro.tsx) */
+
+.mi-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120; /* 모달(100)보다 위 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow: hidden; /* 좁은 뷰포트에서 릴이 넘쳐도 가로 스크롤 방지(#8) */
+  background: rgba(13, 2, 33, 0.92);
+}
+
+.mi-reels {
+  max-width: 100%;
+}
+
+.mi-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+}
+
+.mi-title {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 0.14em;
+}
+
+.mi-reels {
+  display: flex;
+  gap: 18px;
+}
+
+.mi-reel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.mi-reel__window {
+  width: 150px;
+  height: 150px;
+  overflow: hidden;
+  background: var(--surface-deep, #100c20);
+  border: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow:
+    0 0 10px -2px var(--accent),
+    inset 0 8px 14px -8px rgba(0, 0, 0, 0.9),
+    inset 0 -8px 14px -8px rgba(0, 0, 0, 0.9);
+}
+
+.mi-reel--stopped .mi-reel__window {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px -2px var(--accent);
+}
+
+.mi-reel__strip {
+  display: flex;
+  flex-direction: column;
+  animation: mi-spin 0.55s linear infinite;
+}
+
+.mi-reel__face {
+  width: 150px;
+  height: 150px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
+@keyframes mi-spin {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-1500px); /* 스트립 절반(10칸 × 150px) — 무한 순환 */
+  }
+}
+
+.mi-reel__rounds {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.mi-hint {
+  margin: 0;
+  font-size: 14px;
+}
+
+.mi-names {
+  margin: 0;
+  display: flex;
+  gap: 10px;
+}
+
+.mi-name-chip {
+  padding: 4px 10px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface-deep, #100c20);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* ── VS 화면 (베팅 공개 2초) ── */
+.mi-vs {
+  display: flex;
+  align-items: center;
+  gap: 34px;
+}
+
+.mi-vs__word {
+  font-size: 34px;
+  color: var(--accent);
+}
+
+.mi-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 200px;
+  padding: 22px 26px;
+  background: var(--surface, #17132b);
+  border: 2px solid var(--pcolor, var(--accent2));
+  box-shadow: 0 0 18px -4px var(--pcolor, var(--accent2));
+}
+
+.mi-player.is-p1 {
+  --pcolor: var(--p1);
+}
+
+.mi-player.is-p2 {
+  --pcolor: var(--p2);
+}
+
+.mi-player__you {
+  font-size: 10px;
+  color: var(--pcolor);
+  min-height: 12px;
+}
+
+.mi-player__name {
+  font-size: 22px;
+  color: var(--text);
+}
+
+.mi-player__bet {
+  font-size: 14px;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mi-allin {
+  font-style: normal;
+  font-size: 10px;
+  padding: 2px 6px;
+  color: #0b0616;
+  background: var(--error, #ff5470);
+  box-shadow: 0 0 10px -1px var(--error, #ff5470);
+  animation: mi-allin-blink 0.5s steps(2) infinite;
+}
+
+@keyframes mi-allin-blink {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mi-reel__strip {
+    animation: none;
+  }
+  .mi-allin {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .mi-reels {
+    gap: 12px;
+  }
+  .mi-reel__window,
+  .mi-reel__face {
+    width: 96px;
+    height: 96px;
+  }
+  @keyframes mi-spin {
+    to {
+      transform: translateY(-960px);
+    }
+  }
+  .mi-vs {
+    flex-direction: column;
+    gap: 14px;
+  }
+}
+
+/* 초협소(≤360px: iPhone SE1/Galaxy Fold 외부화면 등) — 3릴(3×76+2×8=244px)이 넘치지 않게 */
+@media (max-width: 360px) {
+  .mi-reels {
+    gap: 8px;
+  }
+  .mi-reel__window,
+  .mi-reel__face {
+    width: 76px;
+    height: 76px;
+  }
+  @keyframes mi-spin {
+    to {
+      transform: translateY(-760px);
+    }
+  }
+}

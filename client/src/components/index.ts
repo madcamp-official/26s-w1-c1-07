@@ -14,6 +14,7 @@ export { LeaderboardTable, ordinal, rankColor } from './LeaderboardTable';
 export type { LeaderboardTableProps, LeaderboardRow, MyRankRow } from './LeaderboardTable';
 export { PlayerBadge } from './PlayerBadge';
 export type { PlayerBadgeProps } from './PlayerBadge';
+export { GamePictogram } from './GamePictogram';
 export { KeyCap, useKeyLamp } from './KeyCap';
 export type { KeyCapProps } from './KeyCap';
 export { HudFrame } from './HudFrame';

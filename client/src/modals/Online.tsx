@@ -173,7 +173,7 @@ export default function OnlineModal() {
     setCopied(false);
     setBusy(true);
     await connectOnline();
-    const r = await createRoom(flow.roundConfig.roundCount, flow.enabledGames, bet); // 설정(라운드수·게임)+베팅
+    const r = await createRoom(flow.enabledGames, bet); // 설정(게임 체크박스)+베팅 — 라운드는 항상 9
     setBusy(false);
     if (!r.room) return setBetError(r.message ?? '코드 생성 실패');
     setCreatedCode(r.room.code); // 상대 입장 시 서버가 자동 시작 → 자동 이동
