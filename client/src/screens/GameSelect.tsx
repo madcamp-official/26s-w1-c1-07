@@ -19,6 +19,7 @@ import { Button } from '../components';
 import { useDebugScreen } from '../debug';
 import { startOfflineGame } from '../state/flow';
 import { restoreSession, unlockNextGame, useSession } from '../state/session';
+import { FINAL_PICTOS } from './pictograms';
 import './game-select.css';
 
 interface CabinetSpec {
@@ -87,20 +88,22 @@ const DINO = [
   '..#...#...',
 ];
 const CACTUS = ['..#..', '#.#..', '#.#.#', '###.#', '.#.##', '.#...', '.#...'];
-const INVADER = [
-  '..#.....#..',
-  '...#...#...',
-  '..#######..',
-  '.##.###.##.',
-  '###########',
-  '#.#######.#',
-  '#.#...#.#.#',
-  '...##.##...',
-];
-const CANNON = ['.#####.', '#######', '##.#.##'];
 
 /** 게임별 스크린 픽토그램 (순수 장식) */
 function Pictogram({ id }: { id: GameId }) {
+  // 게임5~10: 확정 시안 (pictograms.ts). 게임4는 아래 스프라이트 씬 유지.
+  const finalPicto = FINAL_PICTOS[id];
+  if (finalPicto) {
+    return (
+      <div className="s8-picto gpic" aria-hidden>
+        <svg
+          viewBox="0 0 120 108"
+          preserveAspectRatio="xMidYMid meet"
+          dangerouslySetInnerHTML={{ __html: finalPicto }}
+        />
+      </div>
+    );
+  }
   // 게임4: 공룡 달리기 — 시안 공룡이 핑크 선인장을 뛰어넘는 러너 씬
   if (id === 4) {
     return (
@@ -114,156 +117,6 @@ function Pictogram({ id }: { id: GameId }) {
         </g>
         <g className="gp-cyan gp-fill gp-glow">{pixels(DINO, 4, 30, 40, 'dino')}</g>
         <g className="gp-pink gp-fill gp-glow">{pixels(CACTUS, 4, 82, 66, 'cac')}</g>
-      </Scene>
-    );
-  }
-  // 게임5: 몬스터 포격전 — 시안 대포가 옐로 예광탄으로 핑크 몬스터 격추
-  if (id === 5) {
-    return (
-      <Scene>
-        <g className="gp-pink gp-fill gp-glow">{pixels(INVADER, 4, 38, 12, 'inv')}</g>
-        <g className="gp-cyan gp-fill gp-glow">{pixels(CANNON, 4, 40, 82, 'can')}</g>
-        <g className="gp-cyan gp-stroke gp-glow">
-          <line x1="54" y1="82" x2="64" y2="62" strokeWidth="5" strokeLinecap="round" />
-        </g>
-        <g className="gp-yellow gp-stroke gp-glow">
-          <line x1="66" y1="60" x2="82" y2="34" strokeWidth="3" strokeLinecap="round" strokeDasharray="2 6" />
-        </g>
-        <g className="gp-yellow gp-fill gp-glow">
-          <circle cx="84" cy="31" r="3.5" />
-        </g>
-      </Scene>
-    );
-  }
-  // 게임6: 펌프 — DDR식 노트 하이웨이(시안/핑크 레인)가 옐로 히트라인으로 수렴
-  if (id === 6) {
-    return (
-      <Scene>
-        <g className="gp-cyan gp-dim2 gp-stroke">
-          <line x1="30" y1="80" x2="50" y2="24" strokeWidth="2" />
-          <line x1="52" y1="80" x2="58" y2="24" strokeWidth="2" />
-        </g>
-        <g className="gp-pink gp-dim2 gp-stroke">
-          <line x1="90" y1="80" x2="70" y2="24" strokeWidth="2" />
-          <line x1="68" y1="80" x2="62" y2="24" strokeWidth="2" />
-        </g>
-        <g className="gp-cyan gp-dim2 gp-fill">
-          <path d="M50 40 l10 0 l-5 8 z" />
-        </g>
-        <g className="gp-pink gp-dim2 gp-fill">
-          <path d="M60 40 l10 0 l-5 8 z" />
-        </g>
-        <g className="gp-cyan gp-fill gp-glow">
-          <path d="M28 58 l18 0 l-9 14 z" />
-        </g>
-        <g className="gp-pink gp-fill gp-glow">
-          <path d="M74 58 l18 0 l-9 14 z" />
-        </g>
-        <g className="gp-yellow gp-stroke gp-glow">
-          <line x1="16" y1="80" x2="104" y2="80" strokeWidth="4" strokeLinecap="round" />
-        </g>
-      </Scene>
-    );
-  }
-  // 게임7: 스피드 오목 — 7목판에 시안 3목 승리라인 + 핑크 돌 + 옐로 스캐너 커서
-  if (id === 7) {
-    const cols = [24, 42, 60, 78, 96];
-    const rows = [18, 36, 54, 72, 90];
-    return (
-      <Scene>
-        <g className="gp-mag gp-dim2 gp-stroke">
-          {cols.map((x) => (
-            <line key={`c${x}`} x1={x} y1={rows[0]} x2={x} y2={rows[4]} strokeWidth="1" />
-          ))}
-          {rows.map((y) => (
-            <line key={`r${y}`} x1={cols[0]} y1={y} x2={cols[4]} y2={y} strokeWidth="1" />
-          ))}
-        </g>
-        <g className="gp-cyan gp-stroke gp-glow">
-          <line x1={cols[1]} y1={rows[1]} x2={cols[3]} y2={rows[3]} strokeWidth="4" strokeLinecap="round" />
-        </g>
-        <g className="gp-cyan gp-fill gp-glow">
-          <circle cx={cols[1]} cy={rows[1]} r="7" />
-          <circle cx={cols[2]} cy={rows[2]} r="7" />
-          <circle cx={cols[3]} cy={rows[3]} r="7" />
-        </g>
-        <g className="gp-pink gp-fill gp-glow">
-          <circle cx={cols[3]} cy={rows[0]} r="7" />
-          <circle cx={cols[1]} cy={rows[3]} r="7" />
-        </g>
-        <g className="gp-yellow gp-stroke gp-glow">
-          <rect x={cols[3] - 9} y={rows[4] - 9} width="18" height="18" strokeWidth="2" />
-        </g>
-      </Scene>
-    );
-  }
-  // 게임8: 마그마 총격 듀얼 — 상단 가시/하단 마그마 사이 시안·핑크 기체 대결 + 예광탄
-  if (id === 8) {
-    return (
-      <Scene>
-        <g className="gp-mag gp-dim2 gp-fill">
-          <path d="M10 8 l8 12 l8 -12 l8 12 l8 -12 l8 12 l8 -12 l8 12 l8 -12 l8 12 l8 -12 l8 12 l6 -12 z" />
-        </g>
-        <g className="gp-yellow gp-magma gp-fill">
-          <path d="M6 100 L114 100 L114 86 L104 80 L92 88 L80 80 L66 88 L54 80 L42 88 L30 80 L18 88 L6 82 Z" />
-        </g>
-        <g className="gp-yellow gp-stroke gp-glow">
-          <path d="M6 82 L18 88 L30 80 L42 88 L54 80 L66 88 L80 80 L92 88 L104 80 L114 86" strokeWidth="2.5" fill="none" />
-        </g>
-        <g className="gp-cyan gp-fill gp-glow">
-          <path d="M22 46 l16 8 l-16 8 l4 -8 z" />
-        </g>
-        <g className="gp-pink gp-fill gp-glow">
-          <path d="M98 46 l-16 8 l16 8 l-4 -8 z" />
-        </g>
-        <g className="gp-cyan gp-stroke gp-glow">
-          <line x1="42" y1="54" x2="70" y2="54" strokeWidth="3" strokeLinecap="round" strokeDasharray="2 5" />
-        </g>
-      </Scene>
-    );
-  }
-  // 게임9: 줄다리기 — 밧줄 + 중앙보다 P1쪽으로 당겨진 매듭, 좌 시안·우 핑크 당김
-  if (id === 9) {
-    return (
-      <Scene>
-        <g className="gp-dim gp-stroke">
-          <line x1="60" y1="34" x2="60" y2="82" strokeWidth="1" strokeDasharray="3 4" />
-        </g>
-        <g className="gp-dim gp-stroke">
-          <line x1="16" y1="58" x2="104" y2="58" strokeWidth="4" strokeLinecap="round" strokeDasharray="2 6" />
-        </g>
-        <g className="gp-yellow gp-fill gp-glow">
-          <path d="M50 58 l7 -9 l7 9 l-7 9 z" />
-        </g>
-        <g className="gp-cyan gp-stroke gp-glow">
-          <path d="M30 48 l-10 10 l10 10 M42 48 l-10 10 l10 10" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        </g>
-        <g className="gp-pink gp-stroke gp-glow">
-          <path d="M90 48 l10 10 l-10 10 M78 48 l10 10 l-10 10" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        </g>
-      </Scene>
-    );
-  }
-  // 게임10: 라이트 사이클 — 그리드 위 시안·핑크 궤적이 직각으로 꺾이며 교차
-  if (id === 10) {
-    const g = [];
-    for (let x = 12; x <= 108; x += 16) g.push(<line key={`gv${x}`} x1={x} y1="16" x2={x} y2="96" strokeWidth="0.75" />);
-    for (let y = 16; y <= 96; y += 16) g.push(<line key={`gh${y}`} x1="12" y1={y} x2="108" y2={y} strokeWidth="0.75" />);
-    return (
-      <Scene>
-        <g className="gp-mag gp-grid gp-stroke">{g}</g>
-        <g className="gp-cyan gp-stroke gp-glow">
-          <polyline points="12,64 46,64 46,30" strokeWidth="3" fill="none" strokeLinecap="square" strokeLinejoin="miter" />
-        </g>
-        <g className="gp-cyan gp-fill gp-glow">
-          <rect x="42" y="26" width="8" height="8" />
-        </g>
-        <g className="gp-pink gp-stroke gp-glow">
-          <polyline points="108,44 74,44 74,82" strokeWidth="3" fill="none" strokeLinecap="square" strokeLinejoin="miter" />
-        </g>
-        <g className="gp-pink gp-fill gp-glow">
-          <rect x="70" y="78" width="8" height="8" />
-        </g>
       </Scene>
     );
   }

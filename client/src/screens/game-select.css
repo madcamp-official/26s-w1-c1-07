@@ -240,6 +240,7 @@
 .gp-mag { color: var(--accent2); }
 .gp-green { color: var(--win); }
 .gp-dim { color: var(--text-muted); }
+.gp-white { color: var(--text); }
 
 .gp-fill { fill: currentColor; stroke: none; }
 .gp-stroke { fill: none; stroke: currentColor; }
@@ -251,6 +252,7 @@
 /* 발광 없는 보조선/원근 노트 — 눌러서 네온이 주인공 되게 (네온 절제 §1.1) */
 .gp-dim2 { opacity: 0.4; }
 .gp-grid { opacity: 0.28; }
+.gp-faint { opacity: 0.6; }
 .gp-magma { opacity: 0.22; } /* 마그마 바탕 채움은 dim, 상단 윤곽만 발광 */
 
 /* ── 10게임 대응: 캐비닛 줄바꿈 스크롤 + 게임4~10 번호 픽토그램 ── */
