@@ -45,6 +45,7 @@ import {
 import { setDebugGame, useDebugScreen } from '../../debug';
 import { useOnlineRender } from '../../net/useOnlineRender';
 import { sendInput as onlineSendInput } from '../../net/online';
+import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
 import './game6.css';
 
@@ -446,6 +447,7 @@ export default function Game6() {
   const p2ScrollRef = useRef(0);
   const fxRef = useRef<Fx[]>([]);
   const scoreFxRef = useRef<Record<PlayerRole, number>>({ P1: -1, P2: -1 });
+  const endRef = useRef<EndTracker>(createEndTracker());
   const prevRef = useRef({ p1Score: 0, p2Score: 0, p1Idx: 0, p2Idx: 0 });
   const reportedRef = useRef(false);
   const resultAtRef = useRef(0);
@@ -564,6 +566,8 @@ export default function Game6() {
           p1IsYou: displays.P1.isYou,
           p2IsYou: displays.P2.isYou,
         });
+        endRef.current.update(s.result, now);
+        drawEndFlash(ctx, CW, CH, endRef.current.age(now));
       };
       raf = requestAnimationFrame(loop);
       return () => cancelAnimationFrame(raf);
@@ -681,6 +685,8 @@ export default function Game6() {
           p1IsYou: displays.P1.isYou,
           p2IsYou: displays.P2.isYou,
         });
+        endRef.current.update(s.result, now);
+        drawEndFlash(ctx, CW, CH, endRef.current.age(now));
       }
     };
 

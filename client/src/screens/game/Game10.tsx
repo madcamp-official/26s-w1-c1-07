@@ -40,6 +40,7 @@ import {
 import { setDebugGame, useDebugScreen } from '../../debug';
 import { useOnlineRender } from '../../net/useOnlineRender';
 import { sendInput as onlineSendInput } from '../../net/online';
+import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
 import './game10.css';
 
@@ -368,6 +369,8 @@ export default function Game10() {
   const reportedRef = useRef(false);
   const resultAtRef = useRef(0);
   const botNextAtRef = useRef(0);
+  // 종료 연출: result 전환 추적(기본 플래시 전용 — 폭발 없음)
+  const endRef = useRef<EndTracker>(createEndTracker());
 
   /** HUD 남은 시간(초 단위 양자화 — 리렌더 절약) */
   const [hudMs, setHudMs] = useState(GAME_DURATION * 1000);
@@ -493,6 +496,8 @@ export default function Game10() {
             disp.P1.isYou,
             disp.P2.isYou,
           );
+          endRef.current.update(s.result, now); // 기본 종료 플래시
+          drawEndFlash(ctx, CW, CH, endRef.current.age(now));
         }
         raf = requestAnimationFrame(loop);
       };
@@ -645,6 +650,8 @@ export default function Game10() {
           disp.P1.isYou,
           disp.P2.isYou,
         );
+        endRef.current.update(s.result, now); // 기본 종료 플래시
+        drawEndFlash(ctx, CW, CH, endRef.current.age(now));
       }
 
       if (!stopped) raf = requestAnimationFrame(frame);

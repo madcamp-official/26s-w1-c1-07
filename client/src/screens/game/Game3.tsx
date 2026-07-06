@@ -37,6 +37,7 @@ import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { useOnlineRender } from '../../net/useOnlineRender';
 import { sendInput as onlineSendInput } from '../../net/online';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
+import { EndFlash } from '../../game/EndFlash';
 import ResultOverlay from './ResultOverlay';
 import './game3.css';
 
@@ -583,6 +584,9 @@ export default function Game3() {
               ROUND {Math.max(1, flow.currentRound)} — FIGHT!
             </div>
           </div>
+
+          {/* 기본 종료 플래시 — result 확정 순간 흰 섬광 (스테이지 relative 컨테이너 기준 오버레이) */}
+          <EndFlash active={game?.result != null} />
         </section>
 
         {/* 하단: 온스크린 키캡(실제 배정 키 표기 — SPEC Q2) + 스탠스 피드백 */}

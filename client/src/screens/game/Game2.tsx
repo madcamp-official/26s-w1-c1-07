@@ -33,6 +33,7 @@ import {
 } from '../../state/flow';
 import { setDebugGame, useDebugScreen } from '../../debug';
 import { onlineStore, sendInput as onlineSendInput } from '../../net/online';
+import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
 import './game2.css';
 
@@ -575,6 +576,8 @@ export default function Game2() {
   const botHeldRef = useRef<{ left: boolean; right: boolean }>({ left: false, right: false });
   const fxRef = useRef<Fx[]>([]);
   const trailRef = useRef<Trail[]>([]);
+  // 종료 연출: result가 null→승패로 바뀌는 순간을 추적해 기본 플래시를 그린다.
+  const endRef = useRef<EndTracker>(createEndTracker());
   const reportedRef = useRef(false);
   const resultAtRef = useRef(0);
   const lastCloseRef = useRef(0);
@@ -739,6 +742,8 @@ export default function Game2() {
           }
           lastFrameRef.current = now;
           drawScene(ctx, view, fxRef.current, trailRef.current, now, p1IsYou);
+          endRef.current.update(s.result, now);
+          drawEndFlash(ctx, CW, CH, endRef.current.age(now));
           drawPerfHud(ctx, now, view.rockets.length);
         }
       };
@@ -907,6 +912,8 @@ export default function Game2() {
         const p1IsYou = getPlayerDisplays(getFlow()).P1.isYou;
         fxRef.current = fxRef.current.filter((f) => now - f.t < 1200); // 만료 이펙트 정리
         drawScene(ctx, s, fxRef.current, trailRef.current, now, p1IsYou);
+        endRef.current.update(s.result, now);
+        drawEndFlash(ctx, CW, CH, endRef.current.age(now));
         drawPerfHud(ctx, now, s.rockets.length);
       }
     };

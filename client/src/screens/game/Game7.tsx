@@ -45,6 +45,7 @@ import {
 } from '../../state/flow';
 import { useOnlineRender } from '../../net/useOnlineRender';
 import { sendInput as onlineSendInput } from '../../net/online';
+import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import { setDebugGame, useDebugScreen } from '../../debug';
 import ResultOverlay from './ResultOverlay';
 import './game7.css';
@@ -539,6 +540,8 @@ export default function Game7() {
   const eventsRef = useRef<GameInputEvent[]>([]);
   const fxRef = useRef<Fx[]>([]);
   const winLineRef = useRef<WinLine | null>(null);
+  // 종료 연출: result 전환 추적(기본 플래시만 — 폭발 없음)
+  const endRef = useRef<EndTracker>(createEndTracker());
   const reportedRef = useRef(false);
   const resultAtRef = useRef(0);
   const prevPlacedRef = useRef(-1);
@@ -659,6 +662,8 @@ export default function Game7() {
           p2IsYou: disp.P2.isYou,
           reduced: reducedRef.current,
         });
+        endRef.current.update(s.result, now);
+        drawEndFlash(octx, CW, CH, endRef.current.age(now));
       };
       oraf = requestAnimationFrame(oloop);
       return () => cancelAnimationFrame(oraf);
@@ -766,6 +771,8 @@ export default function Game7() {
           p2IsYou: disp.P2.isYou,
           reduced: reducedRef.current,
         });
+        endRef.current.update(s.result, now);
+        drawEndFlash(ctx, CW, CH, endRef.current.age(now));
       }
     };
 

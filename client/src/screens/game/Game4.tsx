@@ -40,6 +40,7 @@ import {
   useFlow,
 } from '../../state/flow';
 import { setDebugGame, useDebugScreen } from '../../debug';
+import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
 import './game4.css';
 
@@ -575,6 +576,8 @@ export default function Game4() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const actionsRef = useRef<GameInputEvent[]>([]);
   const fxRef = useRef<Fx[]>([]);
+  // 종료 연출: result 전환 추적 → 기본 플래시(폭발 없음)
+  const endRef = useRef<EndTracker>(createEndTracker());
   const passedRef = useRef<WeakSet<Obstacle>>(new WeakSet());
   const reportedRef = useRef(false);
   const resultAtRef = useRef(0);
@@ -685,6 +688,8 @@ export default function Game4() {
           const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
           const view = extraDt > 0 && s.result === null ? extrapolate(s, extraDt) : s;
           drawScene(ctx, view, fxRef.current, now, disp.P1.isYou, disp.P2.isYou);
+          endRef.current.update(s.result, now);
+          drawEndFlash(ctx, CW, CH, endRef.current.age(now));
         }
       };
       raf = requestAnimationFrame(loop);
@@ -823,6 +828,8 @@ export default function Game4() {
         const disp = getPlayerDisplays(getFlow());
         fxRef.current = fxRef.current.filter((f) => now - f.t < 1200);
         drawScene(ctx, s, fxRef.current, now, disp.P1.isYou, disp.P2.isYou);
+        endRef.current.update(s.result, now);
+        drawEndFlash(ctx, CW, CH, endRef.current.age(now));
       }
     };
 

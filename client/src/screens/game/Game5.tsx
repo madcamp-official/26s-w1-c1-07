@@ -43,6 +43,14 @@ import {
 import { setDebugGame, useDebugScreen } from '../../debug';
 import { useOnlineRender } from '../../net/useOnlineRender';
 import { sendInput as onlineSendInput } from '../../net/online';
+import {
+  createEndTracker,
+  drawEndFlash,
+  drawExplosion,
+  makeExplosion,
+  type EndTracker,
+  type Particle,
+} from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
 import './game5.css';
 
@@ -511,6 +519,31 @@ function extrapolate(s: Game5State, dt: number): Game5State {
 // ---------------------------------------------------------------------------
 // 컴포넌트
 // ---------------------------------------------------------------------------
+/**
+ * 종료 연출 — result가 null→승패로 바뀌는 순간 '진 쪽 대포'에서 폭발을 스폰하고,
+ * 이후 매 프레임 폭발 파편 + 기본 플래시를 그린다. 온라인/오프라인 루프 공용.
+ */
+function runEndFx(
+  ctx: CanvasRenderingContext2D,
+  endRef: React.MutableRefObject<EndTracker>,
+  exRef: React.MutableRefObject<{ parts: Particle[]; cx: number; cy: number } | null>,
+  result: Game5State['result'],
+  now: number,
+): void {
+  const started = endRef.current.update(result, now);
+  if (started && result && result !== 'DRAW') {
+    // result='P1'이면 P2 패배 → P2 대포 폭발, 'P2'이면 P1 대포 폭발.
+    const loser = result === 'P1' ? P2 : P1;
+    exRef.current = { parts: makeExplosion(loser.x, loser.y), cx: loser.x, cy: loser.y };
+  }
+  if (!result) exRef.current = null; // 새 라운드 정리
+  const age = endRef.current.age(now);
+  if (exRef.current && age !== null) {
+    drawExplosion(ctx, exRef.current.parts, exRef.current.cx, exRef.current.cy, age);
+  }
+  drawEndFlash(ctx, CW, CH, age);
+}
+
 export default function Game5() {
   useDebugScreen('scr-game5');
   const flow = useFlow();
@@ -519,6 +552,9 @@ export default function Game5() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const actionsRef = useRef<GameInputEvent[]>([]);
   const fxRef = useRef<Fx[]>([]);
+  // 종료 연출: result 전환 추적 + 진 쪽 대포 폭발 파편 보관
+  const endRef = useRef<EndTracker>(createEndTracker());
+  const explosionRef = useRef<{ parts: Particle[]; cx: number; cy: number } | null>(null);
   const reportedRef = useRef(false);
   const resultAtRef = useRef(0);
   const botRef = useRef<BotMemory>({ lastToggleAt: 0, lastFireAt: 0 });
@@ -631,6 +667,7 @@ export default function Game5() {
           const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
           const view = extraDt > 0 && s.result === null ? extrapolate(s, extraDt) : s;
           drawScene(ctx, view, fxRef.current, now, disp.P1.isYou, disp.P2.isYou, reduceRef.current);
+          runEndFx(ctx, endRef, explosionRef, s.result, now); // 진 쪽 대포 폭발 + 플래시
         }
         raf = requestAnimationFrame(loop);
       };
@@ -780,6 +817,7 @@ export default function Game5() {
         fxRef.current = fxRef.current.filter((f) => now - f.t < 1400);
         const disp = getPlayerDisplays(getFlow());
         drawScene(ctx, s, fxRef.current, now, disp.P1.isYou, disp.P2.isYou, reduceRef.current);
+        runEndFx(ctx, endRef, explosionRef, s.result, now); // 진 쪽 대포 폭발 + 플래시
       }
     };
 

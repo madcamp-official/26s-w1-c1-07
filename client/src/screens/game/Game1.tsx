@@ -46,6 +46,7 @@ import { setDebugGame, useDebugScreen } from '../../debug';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { useOnlineRender } from '../../net/useOnlineRender';
 import { sendInput as onlineSendInput } from '../../net/online';
+import { EndFlash } from '../../game/EndFlash';
 import ResultOverlay from './ResultOverlay';
 import './game1.css';
 
@@ -417,6 +418,7 @@ export default function Game1() {
           </div>
           {renderPanel('P2')}
         </div>
+        <EndFlash active={game?.result != null} />
       </section>
 
       {/* 하단 조작키 안내 — 실제 배정 키 표기 (SPEC Q2) + 입력 순간 램프 점등 */}

@@ -43,6 +43,7 @@ import {
   useFlow,
 } from '../../state/flow';
 import { setDebugGame, useDebugScreen } from '../../debug';
+import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
 import './game8.css';
 
@@ -463,6 +464,7 @@ export default function Game8() {
   const actionsRef = useRef<GameInputEvent[]>([]);
   const botRef = useRef<BotRefs>({ jumpAt: 0, fireAt: 0 });
   const fxRef = useRef<Fx[]>([]);
+  const endRef = useRef<EndTracker>(createEndTracker());
   const reportedRef = useRef(false);
   const resultAtRef = useRef(0);
   const mountAtRef = useRef(0);
@@ -602,6 +604,8 @@ export default function Game8() {
           mountAt: mountAtRef.current,
           reduce: reduceRef.current,
         });
+        endRef.current.update(s.result, now);
+        drawEndFlash(ctx, CW, CH, endRef.current.age(now));
       };
       raf = requestAnimationFrame(loop);
       return () => cancelAnimationFrame(raf);
@@ -707,6 +711,8 @@ export default function Game8() {
           mountAt: mountAtRef.current,
           reduce: reduceRef.current,
         });
+        endRef.current.update(s.result, now);
+        drawEndFlash(ctx, CW, CH, endRef.current.age(now));
       }
     };
 

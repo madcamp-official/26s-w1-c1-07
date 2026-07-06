@@ -40,6 +40,7 @@ import {
   useFlow,
 } from '../../state/flow';
 import { setDebugGame, useDebugScreen } from '../../debug';
+import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
 import './game9.css';
 
@@ -489,6 +490,8 @@ export default function Game9() {
   const trailRef = useRef<Trail[]>([]);
   const reportedRef = useRef(false);
   const resultAtRef = useRef(0);
+  // 종료 연출: result 전환 추적 → 기본 플래시(폭발 없음)
+  const endRef = useRef<EndTracker>(createEndTracker());
 
   /** HUD 표시용 남은 시간 (초 단위 양자화 — 리렌더 절약) */
   const [hudMs, setHudMs] = useState(GAME_DURATION * 1000);
@@ -583,6 +586,8 @@ export default function Game9() {
           { p1IsYou: disp.P1.isYou, p2IsYou: disp.P2.isYou },
           reduce,
         );
+        endRef.current.update(s.result, now);
+        drawEndFlash(ctx, CW, CH, endRef.current.age(now));
       };
       raf = requestAnimationFrame(loop);
       return () => cancelAnimationFrame(raf);
@@ -670,6 +675,8 @@ export default function Game9() {
           { p1IsYou: disp.P1.isYou, p2IsYou: disp.P2.isYou },
           reduce,
         );
+        endRef.current.update(s.result, now);
+        drawEndFlash(ctx, CW, CH, endRef.current.age(now));
       }
     };
 
