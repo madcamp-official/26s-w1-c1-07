@@ -218,6 +218,10 @@ input {
   height: 34%;
   pointer-events: none;
   overflow: hidden;
+  /* 바닥이 소실점으로 천천히 물러나는 무한 스크롤 파라미터 (§1.3 확장) */
+  --vg-gap: 3.06vh;  /* 가로줄 1주기 간격 = 스크롤 1회 이동량 (원본 9% × 높이 34% ≈ 3.06vh) */
+  --vg-speed: 4.5s;  /* 1주기 소요 시간 — 느린 드리프트(기존 9s의 2배 속도) */
+  --vg-shimmer: 3.5s; /* 수평선 헤이즈가 밝아졌다 뿌옇게 흐려지는 주기 */
   /* 수평선(멀어지는 가로줄) — 아래로 갈수록 간격 확대 */
   background:
     linear-gradient(
@@ -226,6 +230,8 @@ input {
       transparent 2px
     )
     top / 100% 100% no-repeat;
+  /* 수평선 헤이즈: 위쪽(지평선) 안쪽 글로우가 천천히 밝아졌다 뿌옇게 흐려짐 */
+  animation: horizon-shimmer var(--vg-shimmer) ease-in-out infinite;
 }
 
 .vanish-grid::before {
@@ -254,14 +260,40 @@ input {
     repeating-linear-gradient(
       to bottom,
       color-mix(in srgb, var(--accent2) 50%, transparent) 0 1px,
-      transparent 1px 9%
+      transparent 1px var(--vg-gap)
     );
+  /* 글로우(1층)는 지평선에 고정, 가로줄(2층)만 위로 스크롤 → 바닥이 뒤로 물러나는 착시 */
+  background-position: 0 0, 0 0;
   mask-image: linear-gradient(to bottom, black, black 85%, transparent);
+  animation: vanish-recede var(--vg-speed) linear infinite;
 }
 
 .vanish-grid.dim {
   opacity: 0.2;
+  animation: none; /* 인게임: 수평선 헤이즈도 정지(가로줄은 .dim::after에서 정지) */
 }
+
+/* 지평선 헤이즈: 위쪽 안쪽 글로우(--p2 핑크)가 은은하게 밝아졌다 뿌옇게 흐려짐(살짝 반짝) */
+@keyframes horizon-shimmer {
+  0%, 100% { box-shadow: inset 0 7px 20px -8px color-mix(in srgb, var(--p2) 24%, transparent); }
+  50%      { box-shadow: inset 0 11px 34px -8px color-mix(in srgb, var(--p2) 55%, transparent); }
+}
+
+/* 가로줄(2층)만 소실점(위)으로 정확히 1주기 이동 → 무한 반복 시 이음매 없는 스크롤.
+   음수 background-position-y = 위로 이동 = 바닥이 관측자에게서 멀어짐(뒤로 물러남). */
+@keyframes vanish-recede {
+  from { background-position: 0 0, 0 0; }
+  to   { background-position: 0 0, 0 calc(var(--vg-gap) * -1); }
+}
+
+/* 인게임 배경(dim)은 정지 — 플레이 시야 방해 방지 (요청 범위: 메인 계열 화면) */
+.vanish-grid.dim::after {
+  animation: none;
+}
+
+/* NOTE: 이 스크롤은 사용자가 명시 요청한 핵심 연출이라 prefers-reduced-motion에서도
+   기본 재생한다(아주 느린 데코 드리프트). 접근성 우선이면 아래 gate 주석 해제:
+   @media (prefers-reduced-motion: reduce) { .vanish-grid::after { animation: none; } } */
 
 /* ---------------------------------------------------------------- 코너 브래킷 §1.3 */
 /* 히어로 패널 네 모서리의 12px L자 브래킷. --bracket-color로 색 지정 */
