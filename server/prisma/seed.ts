@@ -10,17 +10,18 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 // 게임 종류 사전 — 코드의 게임 번호(1~10)와 고정 매핑. 이 테이블은 "코드 미러".
+// (id = 화면 순서, shared/coins.ts GAME_ORDER 와 일치)
 const GAMES = [
   { id: 1, name: "숫자 맞추기" },
-  { id: 2, name: "로켓 피하기" },
-  { id: 3, name: "펜싱" },
-  { id: 4, name: "공룡 달리기" },
-  { id: 5, name: "몬스터 포격전" },
-  { id: 6, name: "펌프" },
-  { id: 7, name: "스피드 오목" },
-  { id: 8, name: "마그마 총격 듀얼" },
-  { id: 9, name: "줄다리기" },
-  { id: 10, name: "라이트 사이클" },
+  { id: 2, name: "펜싱" },
+  { id: 3, name: "펌프" },
+  { id: 4, name: "로켓 피하기" },
+  { id: 5, name: "라이트 사이클" },
+  { id: 6, name: "공룡 달리기" },
+  { id: 7, name: "마그마 총격 듀얼" },
+  { id: 8, name: "몬스터 포격전" },
+  { id: 9, name: "스피드 오목" },
+  { id: 10, name: "줄다리기" },
 ] as const;
 
 // 분반별 고정 멤버 로스터 — 로그인은 이 명단에서 선택 (docs/AUTH.md).

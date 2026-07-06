@@ -18,9 +18,10 @@ export const STARTING_COINS = 30
 
 /**
  * 오프라인 게임 선택 화면의 표시(=플레이) 순서.
- * 화면 라벨 "GAME 1..10" 은 게임 내부 id 가 아니라 이 배열의 위치(1-기반)를 따른다.
+ * 전면 재번호 이후 내부 id 자체가 화면 순서와 일치하므로 이 배열은 항등(1..10)이다.
+ * (화면 라벨 "GAME N" = 배열 위치 = 게임 id)
  */
-export const GAME_ORDER: readonly GameId[] = [1, 3, 6, 2, 10, 4, 8, 5, 7, 9]
+export const GAME_ORDER: readonly GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 /** 잠긴 게임 = 표시 순서의 마지막 두 개(코인으로 해금). 그 외는 처음부터 오픈. */
 export const LOCKABLE_GAME_IDS: readonly GameId[] = [GAME_ORDER[GAME_ORDER.length - 2], GAME_ORDER[GAME_ORDER.length - 1]]

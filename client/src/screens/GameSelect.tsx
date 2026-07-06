@@ -37,15 +37,15 @@ interface CabinetSpec {
 const CAB_COLORS = ['var(--accent)', 'var(--p1)', 'var(--p2)', 'var(--accent2)', 'var(--win)'];
 const CAB_NAMES: Record<GameId, string> = {
   1: '숫자 맞추기',
-  2: '로켓 피하기',
-  3: '펜싱',
-  4: '공룡 달리기',
-  5: '몬스터 포격전',
-  6: '펌프',
-  7: '스피드 오목',
-  8: '마그마 총격 듀얼',
-  9: '줄다리기',
-  10: '라이트 사이클',
+  2: '펜싱',
+  3: '펌프',
+  4: '로켓 피하기',
+  5: '라이트 사이클',
+  6: '공룡 달리기',
+  7: '마그마 총격 듀얼',
+  8: '몬스터 포격전',
+  9: '스피드 오목',
+  10: '줄다리기',
 };
 /** GAME_ORDER 순으로 캐비닛 구성 — 라벨/색은 위치, 정체성(id·이름·픽토)은 내부 id */
 const CABINETS: CabinetSpec[] = (GAME_ORDER as readonly GameId[]).map((id, i) => ({
@@ -56,7 +56,11 @@ const CABINETS: CabinetSpec[] = (GAME_ORDER as readonly GameId[]).map((id, i) =>
   colorVar: CAB_COLORS[i % CAB_COLORS.length],
 }));
 
-/** 게임별 스크린 픽토그램 (순수 장식). id 1~3 은 고유 아트, 그 외는 표시 번호. */
+/**
+ * 게임별 스크린 픽토그램 (순수 장식).
+ * 고유 아트: 숫자맞추기=1 / 펜싱=2 / 로켓=4. 그 외는 표시 번호.
+ * (s8-picto--g1/g2/g3 클래스는 아트 스타일 훅일 뿐 id 와 무관 — game-select.css)
+ */
 function Pictogram({ id, displayNo }: { id: GameId; displayNo: number }) {
   if (id === 1) {
     return (
@@ -67,7 +71,7 @@ function Pictogram({ id, displayNo }: { id: GameId; displayNo: number }) {
       </div>
     );
   }
-  if (id === 2) {
+  if (id === 4) {
     return (
       <div className="s8-picto s8-picto--g2" aria-hidden>
         <span className="s8-g2-trail" />
@@ -76,7 +80,7 @@ function Pictogram({ id, displayNo }: { id: GameId; displayNo: number }) {
       </div>
     );
   }
-  if (id === 3) {
+  if (id === 2) {
     return (
       <div className="s8-picto s8-picto--g3" aria-hidden>
         <span className="s8-g3-blades">

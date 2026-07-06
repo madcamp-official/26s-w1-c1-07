@@ -1,37 +1,35 @@
 /**
- * 게임8 · 마그마 총격 듀얼 (NEON COIN-OP). 담당: game8 에이전트.
+ * 게임5 — 몬스터 포격전 (NEON COIN-OP). 담당: game8 에이전트.
  * 컨테이너 testid: scr-game8 / 부품: game-stage(CRT 베젤), hud-*(HudFrame 내장), btn-exit
  *
- * ── 게임(코어 game8) 요약 ─────────────────────────────────────────────
- *  · P1(왼쪽 시안)·P2(오른쪽 핑크)가 마주 보고 먼저 상대를 맞히면 승리.
- *  · 두 기체는 위에서 스폰돼 중력으로 낙하 — Q/U 살짝 점프(플래피), W/I 수평 발사(쿨다운).
- *  · 바닥 마그마가 10초간 상승(H→H/2), 닿으면 즉사. 천장 가시(0~SPIKE_H)에 닿아도 즉사.
- *  · 총알은 0.5초에 상대에 도달 → 발사 후 상대가 높이를 바꿔 회피 가능.
- *  · 명중=쏜 쪽 승 / 마그마·가시=닿은 쪽 패 / 10초 생존=DRAW.
+ * ── 원칙 ────────────────────────────────────────────────────────────────
+ *  · 로직/판정은 100% @madpump/shared game8 코어(create/step). 재구현·복제 없음.
+ *  · 화면(캔버스 렌더·연출)은 neon-coinop 톤으로 새로 작성. game-lab/design-lab 미참조.
+ *  · 색·폰트는 theme.css 토큰 값(PLAN §1)만 hex로 복사해 캔버스에 사용.
  *
- * ── 화면(neon-coinop, 처음부터 새로) ─────────────────────────────────
- *  · 논리 800×450 캔버스(=G8.W/H, 좌표 1:1) + DPR 스케일, CSS 16:9 반응형.
- *  · 발광요소 절제: 마그마(옐로/열), P1(시안), P2(핑크) 3계열 글로우.
- *    천장 가시·그리드는 무발광 dim 라인. 순색 대면적 금지(dim 바탕 + 2px 보더).
- *  · 등장 sign-on 플리커(≈420ms), 승패 순간에만 크로마틱 글리치. reduced-motion 존중.
- *  · 스캔라인은 전역(App) — 여기서 중복 렌더 금지.
+ * ── 무엇을 그리나 (game8 상태 필드에서 파생) ─────────────────────────────
+ *  · 중앙 좌우 두 대포: P1=(CX-GAP,CY) 시안 / P2=(CX+GAP,CY) 핑크.
+ *      state.p1Angle/p2Angle = 포신 방향, p1Dir/p2Dir = 회전 방향(±1),
+ *      p1Cooldown/p2Cooldown = 장전(쿨다운 링), p1Score/p2Score = 격추 수.
+ *  · state.monsters[] : 가장자리→목표 대포 직선 침공. target(1|2)에 따라 코어 색.
+ *  · state.shots[]    : owner(1|2) 색 네온 트레이서.
+ *  · 승패 = 대포 피격(즉사) 또는 10초 생존 후 점수 판정 → state.result('P1'|'P2'|'DRAW').
  *
- * ── 배선(게임1·2와 동일 envelope) ────────────────────────────────────
- *  · game8.create(Math.random) / game8.step(state, events, dtSec)
- *  · attachLocalKeyboard: KeyQ/KeyW=P1, KeyU/KeyI=P2. 코어는 'down'만 처리(엣지 발사/점프).
- *  · step은 원본 mutate 후 동일 참조 반환 → 이전값 비교는 호출 전 스칼라 스냅샷.
- *  · result 확정 → 짧은 FX(RESULT_FX_MS) 후 reportRoundEnd 1회 → <ResultOverlay />
- *  · online 모드 → P2는 봇(생존 호버 + 정렬 시 발사 + 탄 회피 휴리스틱).
- *  · 매 틱 setDebugGame(state), 언마운트 setDebugGame(null).
+ * ── 배선 (게임1·2 패턴 동일) ─────────────────────────────────────────────
+ *   mount → idle/다른게임이면 startOfflineGame(8) (direct-URL 복구)
+ *   라운드마다 game8.create(Math.random)
+ *   rAF 루프(+백그라운드 워치독) → game8.step(state, events, dtSec) → setDebugGame 매 틱
+ *   입력 attachLocalKeyboard: KeyQ/KeyW=P1, KeyU/KeyI=P2 (코어가 엣지/쿨다운 처리)
+ *   result 확정 → 인게임 연출(RESULT_FX_MS) 후 reportRoundEnd(매핑) 1회 → <ResultOverlay />
+ *   online 모드 → P2 대포는 봇(가장 위협적인 몬스터로 조준·발사), 사람은 P1(q/w)
+ *   ★코어는 원본 mutate 후 동일 참조 반환 → 이전값 비교는 step 호출 전에 스칼라 스냅샷.
  */
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { game8, G8, GAME_DURATION, magmaSurfaceY } from '@madpump/shared';
-import type { Game8State, GameInputEvent } from '@madpump/shared';
+import { game8, G8, GAME_DURATION } from '@madpump/shared';
+import type { Game8State, Monster, GameInputEvent } from '@madpump/shared';
 import type { MatchResult } from '@/shell';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
-import { useOnlineRender } from '../../net/useOnlineRender';
-import { sendInput as onlineSendInput } from '../../net/online';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
 import {
   exitMatch,
@@ -43,442 +41,529 @@ import {
   useFlow,
 } from '../../state/flow';
 import { setDebugGame, useDebugScreen } from '../../debug';
-import { createEndTracker, drawEndFlash, type EndTracker } from '../../game/endFx';
+import { useOnlineRender } from '../../net/useOnlineRender';
+import { sendInput as onlineSendInput } from '../../net/online';
+import {
+  createEndTracker,
+  drawEndFlash,
+  drawExplosion,
+  makeExplosion,
+  type EndTracker,
+  type Particle,
+} from '../../game/endFx';
 import ResultOverlay from './ResultOverlay';
 import './game8.css';
 
 // ---------------------------------------------------------------------------
-// 캔버스 = 코어 논리 해상도(800×450) 그대로 → 좌표 변환 불필요(1:1).
+// 캔버스 논리 해상도 = 코어 필드(800×450). 좌표를 1:1로 그린다(스케일 없음).
+// 실제 픽셀은 DPR로 업스케일 → CSS aspect-ratio 16/9로 반응형.
 // ---------------------------------------------------------------------------
-const CW = G8.W;
-const CH = G8.H;
+const CW = G8.W; // 800
+const CH = G8.H; // 450
 
+const ARCADE = "'Press Start 2P', monospace";
+
+/** theme.css §1 팔레트(값만 복사 — import 금지) */
 const COL = {
   field: '#1a0b2e', // --bg-raised
   deep: '#160a33', // --surface-deep
-  bg: '#0d0221', // --bg
   p1: '#05d9e8',
   p1dim: '#0a3a4a',
   p2: '#ff2a6d',
   p2dim: '#4a0a26',
   accent: '#fdf500',
   accent2: '#d300c5',
-  error: '#ff3864',
-  win: '#39ff88',
   muted: '#9d8fbf',
+  error: '#ff3864',
 } as const;
 
-const ARCADE_FONT = '"Press Start 2P", monospace';
+/** 대포 고정 위치 (코어 규약과 동일) */
+const P1 = { x: G8.CX - G8.GAP, y: G8.CY };
+const P2 = { x: G8.CX + G8.GAP, y: G8.CY };
 
-/** 판정 → 결과 오버레이 사이 인게임 연출(피격 파편/글리치) 시간 */
-const RESULT_FX_MS = 620;
+/** 판정 → 결과 오버레이 전환 사이 인게임 연출 시간(폭발/생존 러쉬) */
+const RESULT_FX_MS = 650;
+
+/** 대포 위협 감지 반경(렌더 전용 경고 링) */
+const DANGER_R = 96;
 
 /** 코어 result → 셸 MatchResult */
 function toMatchResult(r: 'P1' | 'P2' | 'DRAW'): MatchResult {
   return r === 'P1' ? 'P1_WIN' : r === 'P2' ? 'P2_WIN' : 'DRAW';
 }
 
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-
-/** sign-on 플리커 off 창(등장 시 프레임 blank). f = age/420 ∈ [0,1) */
-function signOffWindow(f: number): boolean {
-  return f < 0.29 || (f >= 0.45 && f < 0.59) || (f >= 0.75 && f < 0.84);
+/** 각도를 (-π, π] 로 정규화 */
+function normAngle(a: number): number {
+  let x = a % (Math.PI * 2);
+  if (x > Math.PI) x -= Math.PI * 2;
+  if (x <= -Math.PI) x += Math.PI * 2;
+  return x;
 }
 
 // ---------------------------------------------------------------------------
-// 렌더 전용 이펙트 (state는 읽기만 — 로직 비침범)
+// 렌더 전용 이펙트 (로직 비침범)
 // ---------------------------------------------------------------------------
 type Fx =
-  | { kind: 'muzzle'; x: number; y: number; color: string; dir: 1 | -1; t: number }
+  | { kind: 'muzzle'; x: number; y: number; color: string; t: number }
   | { kind: 'shards'; x: number; y: number; color: string; t: number }
-  | { kind: 'caption'; text: string; color: string; x: number; y: number; t: number; life: number }
-  | { kind: 'chroma'; t: number };
+  | { kind: 'boom'; x: number; y: number; color: string; t: number }
+  | { kind: 'rush'; owner: 1 | 2; t: number }
+  | { kind: 'chroma'; t: number }
+  | { kind: 'caption'; text: string; color: string; x: number; y: number; t: number; life: number };
 
-interface DrawUi {
-  p1IsYou: boolean;
-  p2IsYou: boolean;
-  mountAt: number;
-  reduce: boolean;
+function nearestMonsterDist(monsters: readonly Monster[], p: { x: number; y: number }): number {
+  let d = Infinity;
+  for (const m of monsters) {
+    const dd = Math.hypot(m.x - p.x, m.y - p.y);
+    if (dd < d) d = dd;
+  }
+  return d;
 }
 
 // ---------------------------------------------------------------------------
-// 온라인 mock 봇 — P2(핑크) 조종. 코어는 'down' 이벤트만 반응하므로 down만 합성.
-//   ① 생존: 천장 가시 ↔ 상승 마그마 사이 안전대에서 플래피 호버.
-//   ② 회피: 접근 중인 P1 탄(owner 1)과 y가 겹치면 반대편으로 목표 이동.
-//   ③ 발사: 상대와 y 정렬 + 쿨다운 준비 시 발사.
-// 반환: 이번 프레임에 합성한 이벤트 배열.
+// 캔버스 렌더러 (순수 그리기 — state는 읽기만)
 // ---------------------------------------------------------------------------
-interface BotRefs {
-  jumpAt: number;
-  fireAt: number;
+function drawBaseRing(ctx: CanvasRenderingContext2D, p: { x: number; y: number }, col: string): void {
+  ctx.save();
+  ctx.globalAlpha = 0.22;
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, G8.CANNON_R + 20, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
 }
-function computeBotEvents(
-  s: Game8State,
+
+function drawMonster(ctx: CanvasRenderingContext2D, m: Monster, reduce: boolean): void {
+  const target = m.target === 1 ? P1 : P2;
+  const coreCol = m.target === 1 ? COL.p1 : COL.p2;
+
+  // 조준선 — 이 몬스터가 노리는 대포 색으로 희미하게 (위협 배정 즉독)
+  ctx.save();
+  ctx.strokeStyle = coreCol;
+  ctx.globalAlpha = 0.12;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 6]);
+  ctx.beginPath();
+  ctx.moveTo(m.x, m.y);
+  ctx.lineTo(target.x, target.y);
+  ctx.stroke();
+  ctx.restore();
+
+  // 몸통 — 퍼플 네온 스파이크(외계 침공체)
+  const pulse = reduce ? 1 : 1 + 0.1 * Math.sin(m.anim * 6);
+  const R = G8.MONSTER_R * pulse;
+  ctx.save();
+  ctx.translate(m.x, m.y);
+  ctx.rotate(reduce ? 0 : m.anim * 1.4);
+  ctx.beginPath();
+  const spikes = 8;
+  for (let i = 0; i < spikes * 2; i++) {
+    const rr = i % 2 === 0 ? R : R * 0.58;
+    const a = (Math.PI * i) / spikes;
+    const px = Math.cos(a) * rr;
+    const py = Math.sin(a) * rr;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = COL.deep;
+  ctx.fill();
+  ctx.strokeStyle = COL.accent2;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = COL.accent2;
+  ctx.shadowBlur = 10;
+  ctx.stroke();
+  ctx.restore();
+
+  // 코어(목표 색 눈알)
+  ctx.save();
+  ctx.fillStyle = coreCol;
+  ctx.shadowColor = coreCol;
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.arc(m.x, m.y, 3.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawShot(ctx: CanvasRenderingContext2D, x: number, y: number, vx: number, vy: number, owner: 1 | 2): void {
+  const col = owner === 1 ? COL.p1 : COL.p2;
+  const rgb = owner === 1 ? '5,217,232' : '255,42,109';
+  const tx = x - vx * 0.05;
+  const ty = y - vy * 0.05;
+  ctx.save();
+  const grad = ctx.createLinearGradient(tx, ty, x, y);
+  grad.addColorStop(0, `rgba(${rgb},0)`);
+  grad.addColorStop(1, `rgba(${rgb},0.85)`);
+  ctx.strokeStyle = grad;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(tx, ty);
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  ctx.fillStyle = col;
+  ctx.shadowColor = col;
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(x, y, G8.BULLET_R, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawCannon(
+  ctx: CanvasRenderingContext2D,
+  p: { x: number; y: number },
+  angle: number,
+  cooldown: number,
+  col: string,
+  dim: string,
+  nearestDist: number,
+  label: string,
+  isYou: boolean,
   now: number,
-  bot: BotRefs,
-  onJump: () => void,
-  onFire: () => void,
-): GameInputEvent[] {
-  const events: GameInputEvent[] = [];
-  const t = now / 1000;
-  const surf = magmaSurfaceY(s.elapsed);
-  const safeTop = G8.SPIKE_H + G8.PH / 2 + 6; // 최소 p2Y (천장 회피)
-  const safeBottom = surf - G8.PH / 2 - 8; // 최대 p2Y (마그마 회피)
-
-  // 기본 목표: 상대 높이에 맞춰 정렬(안전대 내 클램프)
-  let targetY = clamp(s.p1Y, safeTop + 8, safeBottom - 10);
-
-  // 회피: 접근 중인 P1 탄과 y가 겹치면 안전대 반대편으로
-  for (const b of s.bullets) {
-    if (b.owner !== 1) continue;
-    const dist = G8.P2_X - b.x;
-    if (dist > 4 && dist < 280 && Math.abs(b.y - s.p2Y) < 42) {
-      const mid = (safeTop + safeBottom) / 2;
-      targetY = b.y > mid ? safeTop + 10 : safeBottom - 12;
-    }
+  reduce: boolean,
+): void {
+  // 위협 경고 링 (몬스터 근접 시 — 긴장 피드백)
+  if (nearestDist < DANGER_R) {
+    const prox = 1 - nearestDist / DANGER_R;
+    const pulse = reduce ? 0.6 : 0.45 + 0.45 * Math.sin(now / 70);
+    ctx.save();
+    ctx.strokeStyle = COL.error;
+    ctx.globalAlpha = Math.min(0.85, prox * pulse + 0.15);
+    ctx.lineWidth = 2;
+    ctx.shadowColor = COL.error;
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, G8.CANNON_R + 9, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
-  // 플래피 호버: 목표보다 아래(y 큼)이고 상승 중이 아니면 점프(쓰로틀)
-  if (s.p2Y > targetY + 4 && s.p2Vy > -30 && now >= bot.jumpAt) {
-    events.push({ code: 'KeyU', type: 'down', t });
-    bot.jumpAt = now + 110 + Math.random() * 70;
-    onJump();
-  }
+  // 포신
+  const tipx = p.x + Math.cos(angle) * G8.BARREL_LEN;
+  const tipy = p.y + Math.sin(angle) * G8.BARREL_LEN;
+  ctx.save();
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = col;
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(tipx, tipy);
+  ctx.stroke();
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.arc(tipx, tipy, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 
-  // 발사: y 정렬 + 쿨다운 준비
-  if (Math.abs(s.p1Y - s.p2Y) < 22 && s.p2Cd === 0 && now >= bot.fireAt) {
-    events.push({ code: 'KeyI', type: 'down', t });
-    bot.fireAt = now + 240 + Math.random() * 240;
-    onFire();
+  // 몸통(dim 바탕 + 2px 플레이어색 보더 + 글로우)
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, G8.CANNON_R, 0, Math.PI * 2);
+  ctx.fillStyle = dim;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = col;
+  ctx.shadowColor = col;
+  ctx.shadowBlur = 10;
+  ctx.stroke();
+  ctx.restore();
+
+  // 장전 링(쿨다운 회복 = 원호 채움, 준비 완료면 글로우)
+  const ready = 1 - Math.min(1, Math.max(0, cooldown / G8.FIRE_COOLDOWN));
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, G8.CANNON_R + 4, -Math.PI / 2, -Math.PI / 2 + ready * Math.PI * 2);
+  ctx.strokeStyle = col;
+  ctx.globalAlpha = ready >= 1 ? 0.9 : 0.5;
+  ctx.lineWidth = 2;
+  if (ready >= 1) {
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 6;
   }
-  return events;
+  ctx.stroke();
+  ctx.restore();
+
+  // 라벨 + YOU
+  ctx.save();
+  ctx.font = `10px ${ARCADE}`;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = col;
+  ctx.shadowColor = col;
+  ctx.shadowBlur = 6;
+  ctx.fillText(label, p.x, p.y + G8.CANNON_R + 18);
+  if (isYou && (reduce || Math.floor(now / 500) % 2 === 0)) {
+    ctx.fillStyle = COL.accent;
+    ctx.shadowColor = COL.accent;
+    ctx.fillText('YOU', p.x, p.y - G8.CANNON_R - 12);
+  }
+  ctx.restore();
 }
 
-// ---------------------------------------------------------------------------
-// 캔버스 렌더러 (순수 그리기)
-// ---------------------------------------------------------------------------
-function drawScene(ctx: CanvasRenderingContext2D, s: Game8State, fx: readonly Fx[], now: number, ui: DrawUi): void {
-  const surf = magmaSurfaceY(s.elapsed);
+function drawFx(ctx: CanvasRenderingContext2D, f: Fx, now: number, reduce: boolean): void {
+  const age = now - f.t;
+  if (f.kind === 'muzzle') {
+    if (age >= 110) return;
+    ctx.save();
+    ctx.strokeStyle = f.color;
+    ctx.shadowColor = f.color;
+    ctx.shadowBlur = 12;
+    ctx.lineWidth = 2;
+    const r = 6 + age * 0.06;
+    ctx.beginPath();
+    ctx.moveTo(f.x - r, f.y);
+    ctx.lineTo(f.x + r, f.y);
+    ctx.moveTo(f.x, f.y - r);
+    ctx.lineTo(f.x, f.y + r);
+    ctx.stroke();
+    ctx.restore();
+  } else if (f.kind === 'shards') {
+    if (age >= 520) return;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, 1 - age / 520);
+    ctx.fillStyle = f.color;
+    ctx.shadowColor = f.color;
+    ctx.shadowBlur = 6;
+    for (let i = 0; i < 7; i++) {
+      const a = (Math.PI * 2 * i) / 7 + 0.4;
+      const dist = 6 + age * 0.12;
+      ctx.fillRect(f.x + Math.cos(a) * dist - 2.5, f.y + Math.sin(a) * dist - 2.5, 5, 5);
+    }
+    ctx.restore();
+  } else if (f.kind === 'boom') {
+    if (age >= RESULT_FX_MS + 200) return;
+    ctx.save();
+    const t = age / (RESULT_FX_MS + 200);
+    ctx.globalAlpha = Math.max(0, 1 - t);
+    ctx.strokeStyle = f.color;
+    ctx.shadowColor = f.color;
+    ctx.shadowBlur = 18;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, 10 + age * 0.16, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = f.color;
+    for (let i = 0; i < 10; i++) {
+      const a = (Math.PI * 2 * i) / 10;
+      const dist = 8 + age * 0.14;
+      ctx.fillRect(f.x + Math.cos(a) * dist - 3, f.y + Math.sin(a) * dist - 3, 6, 6);
+    }
+    ctx.restore();
+  } else if (f.kind === 'rush') {
+    if (age >= RESULT_FX_MS + 200) return;
+    const pos = f.owner === 1 ? P1 : P2;
+    const col = f.owner === 1 ? COL.p1 : COL.p2;
+    const pulse = reduce ? 0.6 : 0.4 + 0.4 * Math.sin(age / 60);
+    ctx.save();
+    ctx.globalAlpha = 0.5 * pulse + 0.3;
+    ctx.strokeStyle = col;
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 20;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, G8.CANNON_R + 14, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  } else if (f.kind === 'caption') {
+    if (age >= f.life) return;
+    const blinkOn = reduce || Math.floor(age / 120) % 2 === 0 || age > 300;
+    if (!blinkOn) return;
+    ctx.save();
+    ctx.font = `14px ${ARCADE}`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = f.color;
+    ctx.shadowColor = f.color;
+    ctx.shadowBlur = 12;
+    ctx.fillText(f.text, Math.min(CW - 60, Math.max(60, f.x)), f.y);
+    ctx.restore();
+  }
+}
+
+function drawScene(
+  ctx: CanvasRenderingContext2D,
+  s: Game8State,
+  fx: readonly Fx[],
+  now: number,
+  p1IsYou: boolean,
+  p2IsYou: boolean,
+  reduce: boolean,
+): void {
   const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
   const urgent = remainingMs <= 5000 && s.result === null;
-  const step120 = Math.floor(now / 120); // 아케이드 스텝 위상
 
-  // ---- 배경 필드 ----
+  // 필드
   ctx.clearRect(0, 0, CW, CH);
   ctx.fillStyle = COL.field;
   ctx.fillRect(0, 0, CW, CH);
 
-  // 무발광 세로 그리드 + 중앙 분리선 (P1 | P2)
+  // 옅은 네온 그리드 (임박 시 핑크 톤)
   ctx.save();
-  ctx.strokeStyle = urgent ? 'rgba(255,42,109,0.10)' : 'rgba(211,0,197,0.08)';
+  ctx.strokeStyle = urgent ? 'rgba(255,42,109,0.10)' : 'rgba(211,0,197,0.07)';
   ctx.lineWidth = 1;
-  for (let gx = 100; gx < CW; gx += 100) {
+  for (let gx = 40; gx < CW; gx += 40) {
     ctx.beginPath();
-    ctx.moveTo(gx, G8.SPIKE_H + 6);
-    ctx.lineTo(gx, surf - 4);
+    ctx.moveTo(gx, 0);
+    ctx.lineTo(gx, CH);
     ctx.stroke();
   }
-  ctx.strokeStyle = 'rgba(211,0,197,0.14)';
-  ctx.beginPath();
-  ctx.moveTo(CW / 2, G8.SPIKE_H + 6);
-  ctx.lineTo(CW / 2, surf - 4);
-  ctx.stroke();
-  ctx.restore();
-
-  // 배경 워터마크 "VS" (퍼플, 무발광 아웃라인 — 발광요소 아님)
-  ctx.save();
-  ctx.font = `bold 150px ${ARCADE_FONT}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = 'rgba(211,0,197,0.05)';
-  ctx.strokeText('VS', CW / 2, CH / 2 - 20);
-  ctx.restore();
-
-  // ---- 천장 가시(무발광 dim) ----
-  ctx.save();
-  ctx.fillStyle = COL.deep;
-  ctx.fillRect(0, 0, CW, G8.SPIKE_H);
-  ctx.fillStyle = 'rgba(255,56,100,0.35)';
-  ctx.strokeStyle = 'rgba(255,56,100,0.6)';
-  ctx.lineWidth = 1;
-  const sw = 20;
-  for (let x = 0; x < CW; x += sw) {
+  for (let gy = 40; gy < CH; gy += 40) {
     ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x + sw / 2, G8.SPIKE_H);
-    ctx.lineTo(x + sw, 0);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(0, gy);
+    ctx.lineTo(CW, gy);
     ctx.stroke();
   }
   ctx.restore();
 
-  // ---- 마그마(상승 위협, 옐로/열 글로우 = 발광요소 1) ----
-  ctx.save();
-  const mg = ctx.createLinearGradient(0, surf - 4, 0, CH);
-  mg.addColorStop(0, 'rgba(253,245,0,0.85)');
-  mg.addColorStop(0.14, 'rgba(255,56,100,0.85)');
-  mg.addColorStop(1, 'rgba(74,10,38,0.96)');
-  ctx.fillStyle = mg;
-  ctx.fillRect(0, surf, CW, CH - surf);
-  // 표면 라인(스텝 웨이브 + 글로우)
-  ctx.shadowColor = COL.accent;
-  ctx.shadowBlur = urgent ? 22 : 15;
-  ctx.strokeStyle = COL.accent;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (let x = 0; x <= CW; x += 16) {
-    const wob = ui.reduce ? 0 : Math.sin(x * 0.05 + step120) * 3;
-    const y = surf + wob;
-    if (x === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.stroke();
-  ctx.restore();
+  // 대포 베이스 링
+  drawBaseRing(ctx, P1, COL.p1);
+  drawBaseRing(ctx, P2, COL.p2);
 
-  // ---- 총알(트레일 + 코어 도트, owner 색 = P1/P2 글로우에 포함) ----
-  for (const b of s.bullets) {
-    const col = b.owner === 1 ? COL.p1 : COL.p2;
-    const tx = b.x - b.vx * 0.1;
-    ctx.save();
-    const g = ctx.createLinearGradient(tx, b.y, b.x, b.y);
-    g.addColorStop(0, 'rgba(0,0,0,0)');
-    g.addColorStop(1, col);
-    ctx.strokeStyle = g;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(tx, b.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-    ctx.shadowColor = col;
-    ctx.shadowBlur = 12;
-    ctx.fillStyle = col;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, G8.BULLET_R, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
+  // 몬스터
+  for (const m of s.monsters) drawMonster(ctx, m, reduce);
 
-  // ---- 플레이어 기체 ----
-  const drawShip = (
-    cx: number,
-    cy: number,
-    color: string,
-    dim: string,
-    dir: 1 | -1,
-    vy: number,
-    cdReady: boolean,
-    isYou: boolean,
-    label: string,
-    hidden: boolean,
-  ) => {
-    if (hidden) return;
-    const halfW = G8.PW / 2;
-    const halfH = G8.PH / 2;
-    const inDanger = cy + halfH > surf - 22 || cy - halfH < G8.SPIKE_H + 16;
-    ctx.save();
-    // 점프 분사 화염(플래피 상승 중)
-    if (!ui.reduce && vy < -30) {
-      ctx.save();
-      ctx.globalAlpha = 0.6;
-      ctx.fillStyle = color;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
-      const fh = 6 + (step120 % 2) * 4;
-      ctx.beginPath();
-      ctx.moveTo(cx - 5, cy + halfH);
-      ctx.lineTo(cx + 5, cy + halfH);
-      ctx.lineTo(cx, cy + halfH + fh);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-    }
-    ctx.translate(cx, cy);
-    ctx.fillStyle = dim;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 10;
-    ctx.fillRect(-halfW, -halfH, G8.PW, G8.PH);
-    ctx.strokeRect(-halfW, -halfH, G8.PW, G8.PH);
-    // 포신(상대 방향)
-    const bx = dir > 0 ? halfW : -halfW - 8;
-    ctx.fillRect(bx, -3, 8, 6);
-    ctx.strokeRect(bx, -3, 8, 6);
-    // 콕핏 도트
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(dir * 4, -2, 3, 0, Math.PI * 2);
-    ctx.fill();
-    // 장전 완료 표시(총구 광점)
-    if (cdReady) {
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
-      ctx.arc(dir > 0 ? halfW + 10 : -halfW - 10, 0, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-    // 위험 경고 테(마그마/가시 근접 시 스텝 점멸)
-    if (inDanger && (ui.reduce || step120 % 2 === 0)) {
-      ctx.strokeStyle = COL.error;
-      ctx.lineWidth = 2;
-      ctx.shadowColor = COL.error;
-      ctx.shadowBlur = 10;
-      ctx.strokeRect(-halfW - 3, -halfH - 3, G8.PW + 6, G8.PH + 6);
-      ctx.shadowBlur = 0;
-    }
-    // 라벨
-    ctx.font = `10px ${ARCADE_FONT}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = color;
-    ctx.shadowBlur = 0;
-    ctx.fillText(label, 0, -halfH - 8);
-    if (isYou && (ui.reduce || Math.floor(now / 500) % 2 === 0)) {
-      ctx.fillStyle = COL.accent;
-      ctx.fillText('YOU', 0, -halfH - 22);
-    }
-    ctx.restore();
-  };
+  // 총알
+  for (const sh of s.shots) drawShot(ctx, sh.x, sh.y, sh.vx, sh.vy, sh.owner);
 
-  const loserHidden = (owner: 1 | 2) => {
-    // 피격/사망 연출 중엔 해당 기체를 파편으로 대체
-    const chroma = fx.find((f) => f.kind === 'chroma');
-    if (!chroma) return false;
-    if (s.result === 'P1' && owner === 2) return now - chroma.t > 60;
-    if (s.result === 'P2' && owner === 1) return now - chroma.t > 60;
-    return false;
-  };
+  // 대포
+  const near1 = nearestMonsterDist(s.monsters, P1);
+  const near2 = nearestMonsterDist(s.monsters, P2);
+  drawCannon(ctx, P1, s.p1Angle, s.p1Cooldown, COL.p1, COL.p1dim, near1, 'P1', p1IsYou, now, reduce);
+  drawCannon(ctx, P2, s.p2Angle, s.p2Cooldown, COL.p2, COL.p2dim, near2, 'P2', p2IsYou, now, reduce);
 
-  drawShip(G8.P1_X, s.p1Y, COL.p1, COL.p1dim, 1, s.p1Vy, s.p1Cd === 0, ui.p1IsYou, 'P1', loserHidden(1));
-  drawShip(G8.P2_X, s.p2Y, COL.p2, COL.p2dim, -1, s.p2Vy, s.p2Cd === 0, ui.p2IsYou, 'P2', loserHidden(2));
+  // 이펙트
+  for (const f of fx) drawFx(ctx, f, now, reduce);
 
-  // ---- 이펙트(머즐/파편/캡션) ----
-  for (const f of fx) {
-    const age = now - f.t;
-    if (f.kind === 'muzzle' && age < 90) {
-      ctx.save();
-      ctx.strokeStyle = f.color;
-      ctx.shadowColor = f.color;
-      ctx.shadowBlur = 12;
-      ctx.lineWidth = 2;
-      const mx = f.x;
-      const my = f.y;
-      ctx.beginPath();
-      ctx.moveTo(mx - 8, my);
-      ctx.lineTo(mx + 8, my);
-      ctx.moveTo(mx, my - 8);
-      ctx.lineTo(mx, my + 8);
-      ctx.stroke();
-      ctx.restore();
-    } else if (f.kind === 'shards' && age < 640) {
-      ctx.save();
-      ctx.fillStyle = f.color;
-      ctx.globalAlpha = Math.max(0, 1 - age / 640);
-      ctx.shadowColor = f.color;
-      ctx.shadowBlur = 8;
-      for (let i = 0; i < 7; i++) {
-        const ang = (Math.PI * 2 * i) / 7 + 0.4;
-        const d = 8 + age * 0.14;
-        ctx.fillRect(f.x + Math.cos(ang) * d - 3, f.y + Math.sin(ang) * d - 3, 6, 6);
-      }
-      ctx.restore();
-    } else if (f.kind === 'caption' && age < f.life) {
-      const on = ui.reduce || Math.floor(age / 110) % 2 === 0 || age > 240;
-      if (on) {
-        ctx.save();
-        ctx.font = `16px ${ARCADE_FONT}`;
-        ctx.textAlign = 'center';
-        ctx.fillStyle = f.color;
-        ctx.shadowColor = f.color;
-        ctx.shadowBlur = 12;
-        ctx.fillText(f.text, clamp(f.x, 80, CW - 80), f.y);
-        ctx.restore();
-      }
-    }
-  }
-
-  // ---- 승패 크로마틱 글리치(승패 순간에만) ----
+  // 승패 순간 크로마틱 어버레이션 1프레임
   const chroma = fx.find((f) => f.kind === 'chroma');
-  if (chroma && !ui.reduce && now - chroma.t < 90) {
+  if (chroma && now - chroma.t < 110) {
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
     ctx.globalAlpha = 0.3;
-    ctx.drawImage(ctx.canvas, -5, 0, CW, CH);
+    ctx.drawImage(ctx.canvas, -4, 0, CW, CH);
     ctx.globalAlpha = 0.22;
-    ctx.drawImage(ctx.canvas, 5, 0, CW, CH);
+    ctx.drawImage(ctx.canvas, 4, 0, CW, CH);
     ctx.restore();
-  }
-
-  // ---- 등장 sign-on 플리커(프레임 blank) ----
-  if (!ui.reduce) {
-    const age = now - ui.mountAt;
-    if (age < 420 && signOffWindow(age / 420)) {
-      ctx.fillStyle = COL.bg;
-      ctx.fillRect(0, 0, CW, CH);
-    }
   }
 }
 
 // ---------------------------------------------------------------------------
-// 스냅샷 사이 외삽(보간) — 서버 스냅샷을 dt초만큼 각 오브젝트 '자기 물리'로 전진시킨 표시용 복사본.
-//  · 탄: 수평 등속(x += vx·dt). 기체: 중력 적분(vy += G·dt, y += vy·dt) — 코어 step과 동일 공식.
-//  · vx/vy가 스냅샷에 이미 있어 ID 매칭 불필요·추가지연 0. 점프/반전 순간만 미세오차이며
-//    다음 스냅샷이 즉시 교정. 30/60Hz 스냅샷을 60fps로 부드럽게 잇는다(탄·기체 순간이동 제거).
-//  · result 확정 시엔 호출하지 않는다(승패 위치는 서버값 그대로).
+// 온라인 mock 봇 — P2 대포. 판정은 여전히 코어(game8.step).
+// 가장 위협적인(자신을 노리는·가까운) 몬스터로 조준하고, 정렬되면 발사.
+// 반환: 이번 프레임 합성 입력 이벤트 (KeyU=방향전환 / KeyI=발사)
+// ---------------------------------------------------------------------------
+interface BotMemory {
+  lastToggleAt: number;
+  lastFireAt: number;
+}
+
+function botEvents(s: Game8State, now: number, mem: BotMemory): GameInputEvent[] {
+  const out: GameInputEvent[] = [];
+  // 1) 표적 선정 — P2를 노리는 몬스터 우선(위협), 없으면 아무 몬스터(득점)
+  let target: Monster | null = null;
+  let best = Infinity;
+  for (const m of s.monsters) {
+    const threat = m.target === 2 ? 0 : 100000; // 위협 몬스터에 강한 가산점
+    const d = Math.hypot(m.x - P2.x, m.y - P2.y) + threat;
+    if (d < best) {
+      best = d;
+      target = m;
+    }
+  }
+  if (!target) return out;
+
+  const desired = Math.atan2(target.y - P2.y, target.x - P2.x);
+  const diff = normAngle(desired - s.p2Angle);
+  const tSec = now / 1000;
+
+  // 2) 회전 방향 정렬 — angle += ROT_SPEED*dir*dt 이므로 diff>0 이면 dir=+1 이 최단
+  const wantDir: 1 | -1 = diff >= 0 ? 1 : -1;
+  if (Math.abs(diff) > 0.25 && s.p2Dir !== wantDir && now - mem.lastToggleAt > 150) {
+    out.push({ code: 'KeyU', type: 'down', t: tSec });
+    mem.lastToggleAt = now;
+  }
+
+  // 3) 발사 — 대략 정렬 + 쿨다운 준비 (코어가 쿨다운 재확인하므로 안전)
+  if (Math.abs(diff) < 0.16 && s.p2Cooldown === 0 && now - mem.lastFireAt > G8.FIRE_COOLDOWN * 1000 * 0.85) {
+    out.push({ code: 'KeyI', type: 'down', t: tSec });
+    mem.lastFireAt = now;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// 스냅샷 사이 보간(외삽) — 서버 스냅샷을 dt초만큼 각 오브젝트 '자기 속도'로 전진시킨
+// 표시용 상태를 만든다. 총알·몬스터는 vx/vy로, 대포는 ROT_SPEED·dir로 회전 전진.
+// 스냅샷에 속도/방향이 이미 있어 ID 매칭 불필요하고 추가 지연 0. 방향전환(토글) 순간만
+// 미세 오차이며 다음 스냅샷이 즉시 교정한다. 30/60Hz 스냅샷을 60fps 렌더로 부드럽게 잇는 게 목적.
+// (표시용 얕은 복사 — 원본 state는 읽기만, 판정 비침범)
 // ---------------------------------------------------------------------------
 function extrapolate(s: Game8State, dt: number): Game8State {
-  const p1Vy = Math.min(G8.MAX_FALL, s.p1Vy + G8.GRAVITY * dt);
-  const p2Vy = Math.min(G8.MAX_FALL, s.p2Vy + G8.GRAVITY * dt);
   return {
     ...s,
-    p1Vy,
-    p1Y: s.p1Y + p1Vy * dt,
-    p2Vy,
-    p2Y: s.p2Y + p2Vy * dt,
-    bullets: s.bullets.map((b) => ({ ...b, x: b.x + b.vx * dt })),
+    p1Angle: s.p1Angle + G8.ROT_SPEED * s.p1Dir * dt,
+    p2Angle: s.p2Angle + G8.ROT_SPEED * s.p2Dir * dt,
+    shots: s.shots.map((sh) => ({ ...sh, x: sh.x + sh.vx * dt, y: sh.y + sh.vy * dt })),
+    monsters: s.monsters.map((m) => ({
+      ...m,
+      x: m.x + m.vx * dt,
+      y: m.y + m.vy * dt,
+      anim: m.anim + dt,
+    })),
   };
 }
 
 // ---------------------------------------------------------------------------
 // 컴포넌트
 // ---------------------------------------------------------------------------
+/**
+ * 종료 연출 — result가 null→승패로 바뀌는 순간 '진 쪽 대포'에서 폭발을 스폰하고,
+ * 이후 매 프레임 폭발 파편 + 기본 플래시를 그린다. 온라인/오프라인 루프 공용.
+ */
+function runEndFx(
+  ctx: CanvasRenderingContext2D,
+  endRef: React.MutableRefObject<EndTracker>,
+  exRef: React.MutableRefObject<{ parts: Particle[]; cx: number; cy: number } | null>,
+  result: Game8State['result'],
+  now: number,
+): void {
+  const started = endRef.current.update(result, now);
+  if (started && result && result !== 'DRAW') {
+    // result='P1'이면 P2 패배 → P2 대포 폭발, 'P2'이면 P1 대포 폭발.
+    const loser = result === 'P1' ? P2 : P1;
+    exRef.current = { parts: makeExplosion(loser.x, loser.y), cx: loser.x, cy: loser.y };
+  }
+  if (!result) exRef.current = null; // 새 라운드 정리
+  const age = endRef.current.age(now);
+  if (exRef.current && age !== null) {
+    drawExplosion(ctx, exRef.current.parts, exRef.current.cx, exRef.current.cy, age);
+  }
+  drawEndFlash(ctx, CW, CH, age);
+}
+
 export default function Game8() {
   useDebugScreen('scr-game8');
   const flow = useFlow();
   const navigate = useNavigate();
 
-  // ── 온라인 렌더 훅(성능 표준): 활성/역할만 선택 구독 → 값이 바뀌는 라운드 경계에서만 리렌더.
-  //   스냅샷은 stateRef/snapAtRef로 미러(리렌더 유발 안 함), per-snapshot 작업은 onSnapshot에 위임.
-  const { isOnline, myRole, stateRef, snapAtRef } = useOnlineRender<Game8State>(8, (s) => {
-    setDebugGame(s); // 디버그 브리지 — 스냅샷마다 갱신(기존 미러 effect 본문)
-  });
-  // 입력 핸들러(장수 리스너)가 항상 최신 '온라인 활성 여부'를 보게 하는 stale-closure 방지 ref
-  const isOnlineRef = useRef(isOnline);
-  isOnlineRef.current = isOnline;
-
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const actionsRef = useRef<GameInputEvent[]>([]);
-  const botRef = useRef<BotRefs>({ jumpAt: 0, fireAt: 0 });
   const fxRef = useRef<Fx[]>([]);
+  // 종료 연출: result 전환 추적 + 진 쪽 대포 폭발 파편 보관
   const endRef = useRef<EndTracker>(createEndTracker());
+  const explosionRef = useRef<{ parts: Particle[]; cx: number; cy: number } | null>(null);
   const reportedRef = useRef(false);
   const resultAtRef = useRef(0);
-  const mountAtRef = useRef(0);
+  const botRef = useRef<BotMemory>({ lastToggleAt: 0, lastFireAt: 0 });
   const reduceRef = useRef(false);
-  /** 온라인 로컬 예측: 내 기체의 점프 입력 대기 플래그(KeyU down에서 set, 루프에서 소비) */
-  const jumpPendingRef = useRef(false);
-  /** 온라인 로컬 예측된 내 기체 y (null=아직 스냅샷 전/스냅 필요) */
-  const predYRef = useRef<number | null>(null);
-  /** 온라인 로컬 예측된 내 기체 vy(중력 적분 상태) */
-  const predVyRef = useRef(0);
-  /** 예측 적분용 직전 렌더 프레임 시각(performance.now) */
-  const lastFrameRef = useRef(0);
 
+  /** HUD 남은 시간(초 단위 양자화 — 리렌더 절약) */
   const [hudMs, setHudMs] = useState(GAME_DURATION * 1000);
+  /** 격추 점수(새 메커니즘 — neon 스코어 셀) */
+  const [scores, setScores] = useState<{ p1: number; p2: number }>({ p1: 0, p2: 0 });
 
   const [qLit, flashQ] = useKeyLamp();
   const [wLit, flashW] = useKeyLamp();
@@ -487,15 +572,31 @@ export default function Game8() {
   const lampRef = useRef({ flashU, flashI });
   lampRef.current = { flashU, flashI };
 
-  // direct-URL 복구 + 디버그 브리지 정리
+  // ── 온라인 렌더 훅(성능 표준): 활성/역할만 선택 구독 → 라운드 경계에서만 리렌더.
+  //    서버 스냅샷은 stateRef/snapAtRef에 직접 미러(리렌더 없음), per-snapshot HUD 반영은 onSnapshot.
+  //    isOnline=false면 오프라인(로컬 2인/봇) 100% 기존 동작.
+  const { isOnline, myRole, stateRef, snapAtRef } = useOnlineRender<Game8State>(8, (s) => {
+    setDebugGame(s);
+    // 오프라인 루프의 setHudMs/setScores를 서버 상태로 대체(HUD 라이브 유지) — 값 바뀔 때만 리렌더.
+    const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
+    setHudMs(Math.ceil(remainingMs / 1000) * 1000);
+    setScores({ p1: s.p1Score, p2: s.p2Score });
+  });
+  // 키보드 핸들러(안정 클로저)가 최신 '온라인 활성 여부'를 보게 하는 ref.
+  const isOnlineRef = useRef(isOnline);
+  isOnlineRef.current = isOnline;
+
+  // direct-URL 복구 + prefers-reduced-motion 기록 + 디버그 브리지 정리
   useEffect(() => {
     const f = getFlow();
     if (f.phase === 'idle' || f.gameId !== 8) startOfflineGame(8);
-    reduceRef.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    reduceRef.current =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
     return () => setDebugGame(null);
   }, []);
 
-  // 캔버스 해상도 초기화(DPR 스케일)
+  // 캔버스 해상도(dpr 스케일) — 좌표는 800×450 논리계 그대로 사용
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
@@ -505,42 +606,38 @@ export default function Game8() {
     c.getContext('2d')?.scale(dpr, dpr);
   }, []);
 
-  // 키보드 — 로컬 어댑터. GameInputEvent 큐 적재 + 램프 점등.
-  // (P1 Q/W, P2 U/I. online이면 P2 키는 봇이 대행하므로 흡수하지 않음)
+  // 키보드 — GameInputEvent 큐 수집 + 램프 점등.
+  // P1 q/w, P2 u/i. 온라인이면 P2 키는 봇 대행이므로 흡수하지 않는다.
   useEffect(() => {
     const detach = attachLocalKeyboard(
       () => performance.now() / 1000,
       (e) => {
-        // 진짜 서버 온라인: 로컬 큐/봇 안 씀 → 서버로만 전송. 내 역할은 서버가 role로 재기입하므로
-        // 4키(Q/W/U/I) 아무거나 눌러도 내 슬롯으로 간다(A=주키 Q·U / B=보조키 W·I).
+        // ── 서버 온라인: 로컬 큐/봇 없이 서버로만 전송 ──
+        // 내가 어느 role이든 서버가 role로 재기입하므로 4키 아무거나 내 슬롯으로 감.
         if (isOnlineRef.current) {
-          // 온라인은 U/I 두 키만(요구사항). U=주키(slotA=점프), I=보조키(slotB=발사). Q/W는 무시.
+          // 온라인은 U/I 두 키만(요구사항). U=주키(slotA), I=보조키(slotB). Q/W는 무시.
           if (e.code !== 'KeyU' && e.code !== 'KeyI') return;
-          if (e.code === 'KeyU') {
-            // U=내 기체 점프. down 엣지를 로컬 예측(즉시 상승)에도 반영 — 어느 역할이든 U=내 점프.
-            if (e.type === 'down') {
-              jumpPendingRef.current = true;
-              flashU();
-            }
-          } else if (e.type === 'down') {
-            flashI();
+          if (e.type === 'down') {
+            if (e.code === 'KeyU') flashU();
+            else flashI();
           }
           const slot: 'A' | 'B' = e.code === 'KeyU' ? 'A' : 'B';
           onlineSendInput(slot, e.type, e.t ?? performance.now() / 1000);
           return;
         }
-        // ── 오프라인 경로(그대로) — f.mode==='online'은 로컬 봇 대전(P2 키 흡수) ──
+
+        // ── 오프라인(로컬 2인 + 봇) 기존 처리 그대로 ──
         const f = getFlow();
-        const online = f.mode === 'online';
+        const botMode = f.mode === 'online'; // 옛 online = P2 mock 봇 모드
         if (e.code === 'KeyQ') {
           if (e.type === 'down') flashQ();
         } else if (e.code === 'KeyW') {
           if (e.type === 'down') flashW();
         } else if (e.code === 'KeyU') {
-          if (online) return;
+          if (botMode) return; // 온라인(봇) P2 = 봇 대행
           if (e.type === 'down') flashU();
         } else if (e.code === 'KeyI') {
-          if (online) return;
+          if (botMode) return;
           if (e.type === 'down') flashI();
         }
         if (f.phase === 'playing') actionsRef.current.push(e);
@@ -549,66 +646,36 @@ export default function Game8() {
     return detach;
   }, [flashQ, flashW, flashU, flashI]);
 
-  // 라운드 수명주기: state 생성 → rAF 루프(step+draw) → 결과 보고.
-  // 탭 백그라운드로 rAF가 멈춰도 워치독 interval이 타이머(10초→DRAW)를 진행시킨다.
+  // 라운드 수명주기: state 생성 → rAF 루프(step+draw) → 결과 보고
   useEffect(() => {
+    // ── 온라인: 서버 상태만 그리는 draw-only 루프 (step·봇·result보고 없음) ──
     if (isOnline) {
-      // 온라인: 서버 권위 상태만 그린다(step·봇·판정보고 없음).
-      // 첫 스냅샷 전(state=null)에는 초기 create 상태를 그려 빈 캔버스를 피한다.
+      // 첫 스냅샷 전엔 빈 캔버스 대신 정적 create 상태를 렌더(절대 step하지 않음)
       if (!stateRef.current) stateRef.current = game8.create(Math.random);
-      mountAtRef.current = performance.now();
-      predYRef.current = null; // 입장/재진입 경계 — 다음 스냅샷에서 내 기체 예측을 다시 스냅
-      jumpPendingRef.current = false;
       let raf = 0;
-      const loop = (now: number) => {
-        raf = requestAnimationFrame(loop);
+      let stopped = false;
+      const loop = () => {
+        if (stopped) return;
         const ctx = canvasRef.current?.getContext('2d');
         const s = stateRef.current;
-        if (!ctx || !s) return;
-        fxRef.current = fxRef.current.filter((f) => now - f.t < 1200);
-        const players = getPlayerDisplays(getFlow());
-
-        // (남의 것) 스냅샷 사이 외삽: 마지막 스냅샷을 경과 dt만큼 각 오브젝트 물리로 전진(최대 50ms 캡).
-        //  탄=수평 등속(vx), 기체=중력 적분. 종료(result) 시엔 외삽하지 않는다(서버 위치 그대로).
-        const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
-        let view = extraDt > 0 && s.result === null ? extrapolate(s, extraDt) : s;
-
-        // (내 캐릭터) 내 기체는 live 입력으로 로컬 예측 → 점프 즉각 반응·롤백 제거.
-        //  화해: 매 프레임 서버값으로 약하게 수렴 + 큰 어긋남(라운드리셋/사망)만 스냅.
-        if (myRole && s.result === null) {
-          const frameDt = lastFrameRef.current ? Math.min(0.05, (now - lastFrameRef.current) / 1000) : 0;
-          const myY = myRole === 'P1' ? s.p1Y : s.p2Y;
-          const myVy = myRole === 'P1' ? s.p1Vy : s.p2Vy;
-          let py = predYRef.current;
-          let pvy = predVyRef.current;
-          if (py === null || Math.abs(myY - py) > 80) {
-            py = myY; // 초기/라운드리셋/큰 desync 스냅
-            pvy = myVy;
-          }
-          if (jumpPendingRef.current) {
-            pvy = -G8.JUMP_V; // 점프 즉시 반영(코어와 동일한 임펄스)
-            jumpPendingRef.current = false;
-          }
-          pvy = Math.min(G8.MAX_FALL, pvy + G8.GRAVITY * frameDt); // 중력 적분(서버와 동일 공식)
-          py = py + pvy * frameDt;
-          py += (myY - py) * 0.08; // 서버로 약하게 수렴(지연·적분 드리프트 보정)
-          predYRef.current = py;
-          predVyRef.current = pvy;
-          view = myRole === 'P1' ? { ...view, p1Y: py, p1Vy: pvy } : { ...view, p2Y: py, p2Vy: pvy };
+        if (ctx && s) {
+          const now = performance.now();
+          fxRef.current = fxRef.current.filter((f) => now - f.t < 1400);
+          const disp = getPlayerDisplays(getFlow());
+          // 스냅샷 사이 외삽: 마지막 스냅샷을 경과 dt만큼 각 오브젝트 자기 속도로 전진(최대 50ms 캡).
+          // 종료(result) 후엔 외삽하지 않는다(총알/몬스터가 판정 위치를 지나쳐 보이지 않게).
+          const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
+          const view = extraDt > 0 && s.result === null ? extrapolate(s, extraDt) : s;
+          drawScene(ctx, view, fxRef.current, now, disp.P1.isYou, disp.P2.isYou, reduceRef.current);
+          runEndFx(ctx, endRef, explosionRef, s.result, now); // 진 쪽 대포 폭발 + 플래시
         }
-        lastFrameRef.current = now;
-
-        drawScene(ctx, view, fxRef.current, now, {
-          p1IsYou: players.P1.isYou,
-          p2IsYou: players.P2.isYou,
-          mountAt: mountAtRef.current,
-          reduce: reduceRef.current,
-        });
-        endRef.current.update(s.result, now);
-        drawEndFlash(ctx, CW, CH, endRef.current.age(now));
+        raf = requestAnimationFrame(loop);
       };
       raf = requestAnimationFrame(loop);
-      return () => cancelAnimationFrame(raf);
+      return () => {
+        stopped = true;
+        cancelAnimationFrame(raf);
+      };
     }
 
     if (flow.gameId !== 8 || flow.phase !== 'playing') return;
@@ -616,19 +683,21 @@ export default function Game8() {
     const st = game8.create(Math.random);
     stateRef.current = st;
     actionsRef.current = [];
-    botRef.current = { jumpAt: 0, fireAt: 0 };
     fxRef.current = [];
     reportedRef.current = false;
     resultAtRef.current = 0;
-    mountAtRef.current = performance.now();
+    botRef.current = { lastToggleAt: 0, lastFireAt: 0 };
     setDebugGame(st);
     setHudMs(GAME_DURATION * 1000);
+    setScores({ p1: 0, p2: 0 });
 
     let raf = 0;
+    let stopped = false;
     let last = performance.now();
 
-    const frame = (now: number) => {
-      const dt = Math.min(0.1, (now - last) / 1000); // 초 단위, 100ms 클램프(중력 폭주 방지)
+    const step = (now: number) => {
+      if (stopped) return;
+      const dt = Math.min(0.5, (now - last) / 1000);
       if (dt <= 0) return;
       last = now;
       let s = stateRef.current;
@@ -637,100 +706,139 @@ export default function Game8() {
       if (s.result === null) {
         const events = actionsRef.current;
         actionsRef.current = [];
+
+        // 온라인 봇(P2) 합성 입력
         if (getFlow().mode === 'online') {
-          const botEvents = computeBotEvents(
-            s,
-            now,
-            botRef.current,
-            () => lampRef.current.flashU(),
-            () => lampRef.current.flashI(),
-          );
-          for (const e of botEvents) events.push(e);
+          const bev = botEvents(s, now, botRef.current);
+          for (const e of bev) {
+            events.push(e);
+            if (e.code === 'KeyU') lampRef.current.flashU();
+            else if (e.code === 'KeyI') lampRef.current.flashI();
+          }
         }
 
-        // step은 원본을 in-place mutate 후 동일 참조 반환 → 이전값은 호출 전 스냅샷
-        const prevP1Cd = s.p1Cd;
-        const prevP2Cd = s.p2Cd;
-        const prevP1Y = s.p1Y;
-        const prevP2Y = s.p2Y;
+        // ★step은 원본 mutate 후 동일 참조 반환 → 이전값은 호출 전에 값/참조로 스냅샷
+        const prevP1Cd = s.p1Cooldown;
+        const prevP2Cd = s.p2Cooldown;
+        const prevP1Score = s.p1Score;
+        const prevP2Score = s.p2Score;
+        const prevMonsters = s.monsters; // 격추 감지용(참조 diff)
+
         s = game8.step(s, events, dt);
         stateRef.current = s;
         setDebugGame(s);
+
         const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
         setHudMs(Math.ceil(remainingMs / 1000) * 1000);
-
-        // 발사 순간(쿨다운 0→FIRE_COOLDOWN 상승) → 머즐 스파크
-        if (s.p1Cd > prevP1Cd) {
-          fxRef.current.push({ kind: 'muzzle', x: G8.P1_X + G8.PW / 2 + 8, y: prevP1Y, color: COL.p1, dir: 1, t: now });
-        }
-        if (s.p2Cd > prevP2Cd) {
-          fxRef.current.push({ kind: 'muzzle', x: G8.P2_X - G8.PW / 2 - 8, y: prevP2Y, color: COL.p2, dir: -1, t: now });
+        if (s.p1Score !== prevP1Score || s.p2Score !== prevP2Score) {
+          setScores({ p1: s.p1Score, p2: s.p2Score });
         }
 
-        // 판정 순간 이펙트(글리치는 승패 순간에만)
+        // ── 렌더 전용 이펙트 파생 (로직 비침범) ──
+        // 발사: 쿨다운이 0→FIRE_COOLDOWN 으로 오른 순간(포신 끝에 머즐 스파크)
+        if (s.p1Cooldown > prevP1Cd) {
+          fxRef.current.push({
+            kind: 'muzzle',
+            x: P1.x + Math.cos(s.p1Angle) * G8.BARREL_LEN,
+            y: P1.y + Math.sin(s.p1Angle) * G8.BARREL_LEN,
+            color: COL.p1,
+            t: now,
+          });
+        }
+        if (s.p2Cooldown > prevP2Cd) {
+          fxRef.current.push({
+            kind: 'muzzle',
+            x: P2.x + Math.cos(s.p2Angle) * G8.BARREL_LEN,
+            y: P2.y + Math.sin(s.p2Angle) * G8.BARREL_LEN,
+            color: COL.p2,
+            t: now,
+          });
+        }
+
+        // 격추: 이번 step 전 배열엔 있으나 후 배열엔 없는 몬스터 = 총알에 맞아 소멸
+        if (prevMonsters !== s.monsters) {
+          for (const m of prevMonsters) {
+            if (!s.monsters.includes(m)) {
+              fxRef.current.push({ kind: 'shards', x: m.x, y: m.y, color: COL.accent2, t: now });
+            }
+          }
+        }
+
+        // 판정 순간(1회) — 대포 피격(즉사) vs 시간초과(점수) 구분
         if (s.result !== null && resultAtRef.current === 0) {
           resultAtRef.current = now;
-          fxRef.current.push({ kind: 'chroma', t: now });
-          if (s.result === 'P1') {
+          const touchR = G8.MONSTER_R + G8.CANNON_R + 0.5;
+          let loser: 1 | 2 | null = null;
+          for (const m of s.monsters) {
+            if (Math.hypot(m.x - P1.x, m.y - P1.y) <= touchR) loser = 1;
+            else if (Math.hypot(m.x - P2.x, m.y - P2.y) <= touchR) loser = 2;
+          }
+          if (loser !== null) {
+            // 대포 파괴 — 폭발 + 글리치
+            const pos = loser === 1 ? P1 : P2;
+            const col = loser === 1 ? COL.p1 : COL.p2;
             fxRef.current.push(
-              { kind: 'shards', x: G8.P2_X, y: s.p2Y, color: COL.p2, t: now },
-              { kind: 'caption', text: 'K.O!', color: COL.p1, x: G8.P2_X, y: s.p2Y - 26, t: now, life: RESULT_FX_MS },
+              { kind: 'chroma', t: now },
+              { kind: 'boom', x: pos.x, y: pos.y, color: col, t: now },
+              { kind: 'caption', text: 'CANNON DOWN', color: col, x: pos.x, y: pos.y - 34, t: now, life: RESULT_FX_MS },
             );
-          } else if (s.result === 'P2') {
-            fxRef.current.push(
-              { kind: 'shards', x: G8.P1_X, y: s.p1Y, color: COL.p1, t: now },
-              { kind: 'caption', text: 'K.O!', color: COL.p2, x: G8.P1_X, y: s.p1Y - 26, t: now, life: RESULT_FX_MS },
-            );
-          } else {
+          } else if (s.result === 'DRAW') {
             fxRef.current.push({
               kind: 'caption',
-              text: 'TIME UP',
+              text: 'DRAW',
               color: COL.accent2,
-              x: CW / 2,
-              y: CH / 2 - 40,
+              x: G8.CX,
+              y: G8.CY - 40,
               t: now,
               life: RESULT_FX_MS,
             });
+          } else {
+            // 시간초과 생존 — 점수 높은 대포가 방어 성공
+            const owner: 1 | 2 = s.result === 'P1' ? 1 : 2;
+            const pos = owner === 1 ? P1 : P2;
+            const col = owner === 1 ? COL.p1 : COL.p2;
+            fxRef.current.push(
+              { kind: 'rush', owner, t: now },
+              { kind: 'caption', text: 'DEFENDED!', color: col, x: pos.x, y: pos.y - 34, t: now, life: RESULT_FX_MS },
+            );
           }
         }
       } else if (!reportedRef.current && now - resultAtRef.current >= RESULT_FX_MS) {
-        // 온라인은 서버가 round:end를 구동 → 화면은 결과 보고에 관여하지 않는다.
+        // 온라인은 서버가 round:end를 구동하므로 화면은 보고하지 않는다
         if (isOnline) return;
-        // 피격/사망 연출을 짧게 보여준 뒤 1회 보고 → ResultOverlay(phase 전환 → 이 effect cleanup)
+        // 폭발/생존 연출을 짧게 보여준 뒤 라운드 종료 1회 보고 → ResultOverlay
         reportedRef.current = true;
         if (s.result) reportRoundEnd(toMatchResult(s.result));
       }
 
+      // 렌더
       const ctx = canvasRef.current?.getContext('2d');
       if (ctx) {
-        fxRef.current = fxRef.current.filter((f) => now - f.t < 1200);
-        const players = getPlayerDisplays(getFlow());
-        drawScene(ctx, s, fxRef.current, now, {
-          p1IsYou: players.P1.isYou,
-          p2IsYou: players.P2.isYou,
-          mountAt: mountAtRef.current,
-          reduce: reduceRef.current,
-        });
-        endRef.current.update(s.result, now);
-        drawEndFlash(ctx, CW, CH, endRef.current.age(now));
+        fxRef.current = fxRef.current.filter((f) => now - f.t < 1400);
+        const disp = getPlayerDisplays(getFlow());
+        drawScene(ctx, s, fxRef.current, now, disp.P1.isYou, disp.P2.isYou, reduceRef.current);
+        runEndFx(ctx, endRef, explosionRef, s.result, now); // 진 쪽 대포 폭발 + 플래시
       }
     };
 
     const loop = (now: number) => {
-      raf = requestAnimationFrame(loop);
-      frame(now);
+      step(now);
+      if (!stopped) raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
-    // rAF가 스로틀되면(백그라운드 탭) interval이 타이머를 진행시킨다 — rAF 생존 시 개입 안 함
+
+    // 백그라운드 탭에서 rAF가 멈추면 인터벌 워치독이 대신 스텝(QA 자동화 대응)
     const watchdog = setInterval(() => {
       const now = performance.now();
-      if (now - last > 280) frame(now);
+      if (!stopped && now - last > 280) step(now);
     }, 250);
 
     return () => {
+      stopped = true;
       cancelAnimationFrame(raf);
       clearInterval(watchdog);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline, myRole, flow.gameId, flow.phase, flow.currentRound]);
 
   const players = getPlayerDisplays(flow);
@@ -752,7 +860,7 @@ export default function Game8() {
         >
           ◀ 나가기
         </Button>
-        <span className="g8-title font-arcade c-muted">게임8 · 마그마 총격 듀얼</span>
+        <span className="g8-title font-arcade c-muted">게임5 · 몬스터 포격전</span>
       </div>
 
       <div className="g8-hudwrap">
@@ -767,44 +875,56 @@ export default function Game8() {
       </div>
 
       <div data-testid="game-stage" className={`crt-bezel g8-stage ${urgent ? 'urgent' : ''}`}>
-        <canvas ref={canvasRef} className="g8-canvas" aria-label="게임8 스테이지 — 마그마 총격 듀얼" />
+        <canvas ref={canvasRef} className="g8-canvas" aria-label="게임5 스테이지 — 몬스터 포격전" />
 
-        {/* 위험 안내 배지 — 마그마 상승/천장 가시 (좌상단, 무발광 캡션) */}
-        <div className="g8-hazard" aria-hidden>
-          <span className="g8-hazard__row g8-hazard__row--spike font-arcade">▲ SPIKES</span>
-          <span className="g8-hazard__row g8-hazard__row--magma font-arcade">MAGMA ▲</span>
+        {/* 새 메커니즘: 격추 점수 — neon 스코어 셀 (P1 좌상 / P2 우상) */}
+        <div className="g8-score g8-score--p1" aria-label={`P1 격추 ${scores.p1}`}>
+          <span className="g8-score__label font-arcade">P1 KILLS</span>
+          <span key={scores.p1} className="g8-score__num font-arcade">
+            {scores.p1}
+          </span>
+        </div>
+        <div className="g8-score g8-score--p2" aria-label={`P2 격추 ${scores.p2}`}>
+          <span className="g8-score__label font-arcade">P2 KILLS</span>
+          <span key={scores.p2} className="g8-score__num font-arcade">
+            {scores.p2}
+          </span>
         </div>
 
         {flow.phase === 'playing' && flow.currentRound > 0 && (
           <div key={flow.currentRound} className="g8-round-intro" aria-hidden>
-            <span className="font-arcade c-accent glow-text g8-round-intro__big">ROUND {flow.currentRound}</span>
-            <span className="font-arcade c-muted g8-round-intro__sub">HOVER · AIM · FIRE</span>
+            <span className="font-arcade c-accent glow-text g8-round-intro__big">
+              ROUND {flow.currentRound}
+            </span>
+            <span className="font-arcade c-muted g8-round-intro__sub">DEFEND YOUR CANNON</span>
           </div>
         )}
       </div>
 
-      {/* 온스크린 키캡 — 실제 배정 키(SPEC Q2), 입력 순간 램프 점등 */}
+      {/* 온스크린 키캡 — 실제 배정 키(SPEC Q2) + 입력 순간 램프 점등 */}
       {isOnline ? (
-        // 온라인: 로컬 플레이어 컨트롤만(U=점프 / I=발사), 내 색으로 표기
+        // 온라인: 로컬 플레이어(U/I)만, 내 색으로. U=방향전환(slotA) / I=발사(slotB).
         <div className="g8-keys g8-keys--online">
           <div className="g8-keys__group">
             <span className={`g8-keys__tag font-arcade ${myRole === 'P1' ? 'c-p1' : 'c-p2'}`}>
-              YOU · {myRole === 'P1' ? '파랑' : '빨강'} · HOVER · FIRE
+              YOU · {myRole === 'P1' ? '파랑' : '빨강'}
             </span>
-            <KeyCap role={myRole ?? 'P2'} keyChar="U" icon="▲" lit={uLit} label="점프" />
+            <KeyCap role={myRole ?? 'P2'} keyChar="U" icon="⇄" lit={uLit} label="방향전환" />
             <KeyCap role={myRole ?? 'P2'} keyChar="I" icon="◉" lit={iLit} label="발사" />
           </div>
+          <span className="g8-keys__hint font-arcade">SHOOT THE INVADERS</span>
         </div>
       ) : (
         <div className="g8-keys">
           <div className="g8-keys__group">
-            <KeyCap role="P1" keyChar="Q" icon="▲" lit={qLit} label="점프" />
+            <KeyCap role="P1" keyChar="Q" icon="⇄" lit={qLit} label="방향전환" />
             <KeyCap role="P1" keyChar="W" icon="◉" lit={wLit} label="발사" />
-            <span className="g8-keys__tag font-arcade c-p1">P1 · CYAN</span>
+            <span className="g8-keys__tag font-arcade c-p1">P1</span>
           </div>
+          <span className="g8-keys__hint font-arcade">SHOOT THE INVADERS</span>
           <div className="g8-keys__group">
-            <span className="g8-keys__tag font-arcade c-p2">P2 · PINK</span>
-            <KeyCap role="P2" keyChar="U" icon="▲" lit={uLit} label="점프" />
+            <span className="g8-keys__tag font-arcade c-p2">P2</span>
+            <KeyCap role="P2" keyChar="U" icon="⇄" lit={uLit} label="방향전환" />
             <KeyCap role="P2" keyChar="I" icon="◉" lit={iLit} label="발사" />
           </div>
         </div>

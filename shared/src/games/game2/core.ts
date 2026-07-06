@@ -24,7 +24,7 @@ import { GAME_DURATION } from '../types'
  *  · STARTUP_MIN/MAX  — 공격 버튼~판정 시작 사이의 랜덤 시동 딜레이 범위
  *  · HALF_GAP, EDGE   — 두 선수 간격 절반 / 링 가장자리 위치
  */
-export interface Game3Config {
+export interface Game2Config {
   /** 버전 식별 라벨(렌더 표기·디버깅용) */
   readonly label: string
   readonly ATTACK_DURATION: number
@@ -98,7 +98,7 @@ export interface FencerState {
   combo: number
 }
 
-export interface Game3State {
+export interface Game2State {
   elapsed: number
   result: GameResult
   c: number
@@ -110,13 +110,13 @@ export interface Game3State {
   waterLevel: number
 }
 
-export interface Game3Core {
-  create(rand: () => number): Game3State
+export interface Game2Core {
+  create(rand: () => number): Game2State
   step(
-    state: Game3State,
+    state: Game2State,
     events: GameInputEvent[],
     dt: number,
-  ): Game3State
+  ): Game2State
 }
 
 const newFencer = (): FencerState => ({
@@ -136,9 +136,9 @@ function nextRand(seed: number): { u: number; seed: number } {
 const overlaps = (a: { start: number; end: number }, b: { start: number; end: number }) =>
   a.start < b.end && a.end > b.start
 
-/** config 하나로 game3 파생 버전의 { create, step } 코어를 만든다. */
-export function makeGame3(cfg: Game3Config): Game3Core {
-  function create(rand: () => number): Game3State {
+/** config 하나로 game2 파생 버전의 { create, step } 코어를 만든다. */
+export function makeGame3(cfg: Game2Config): Game2Core {
+  function create(rand: () => number): Game2State {
     return {
       elapsed: 0,
       result: null,
@@ -152,10 +152,10 @@ export function makeGame3(cfg: Game3Config): Game3Core {
   }
 
   function step(
-    state: Game3State,
+    state: Game2State,
     events: GameInputEvent[],
     dt: number,
-  ): Game3State {
+  ): Game2State {
     if (state.result) return state
     const t0 = state.elapsed
     state.elapsed += dt

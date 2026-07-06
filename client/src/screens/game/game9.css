@@ -1,7 +1,7 @@
 /**
- * 게임9 · 줄다리기 전용 스타일 — game9 에이전트 소유 (NEON COIN-OP).
- * 공용 theme.css 유틸(.crt-bezel/.vanish-grid/.font-arcade/.glow-text/토큰) 위에
- * 레이아웃/연출만 얹는다. 색·글로우 공식은 PLAN §1 준수 — 새 발광값 임의 도입 금지.
+ * 게임7 — 스피드 오목 전용 스타일 (game9 에이전트 소유).
+ * 공용 theme.css 유틸(.crt-bezel .vanish-grid .font-arcade .font-display .glow-text 등) 위에
+ * 레이아웃/연출만 얹는다. 토큰·글로우 공식은 PLAN §1 준수. design-lab 참조 0.
  */
 
 .g9-screen {
@@ -20,26 +20,22 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  z-index: 1;
 }
 
 .g9-title {
-  font-size: 11px;
-  letter-spacing: 0.12em;
+  font-size: 15px;
+  letter-spacing: 0.1em;
 }
 
 .g9-hudwrap {
   width: min(1020px, 100%);
-  z-index: 1;
 }
 
 /* CRT 스테이지 — 베젤은 theme.css .crt-bezel, 여기서는 크기만.
-   세 번째 항: 뷰포트 높이 기반 캡(하단 키캡 잘림 방지).
-   상하 고정 크롬(topbar+HUD+키캡+gap+padding) + 베젤 테두리 28px,
+   세로 뷰포트 기반 캡으로 하단 키캡 잘림 방지(상하 고정 크롬 ≈ 310px, 베젤 테두리 28px).
    캔버스 16:9 → 스테이지 폭 ≤ (100vh − 크롬) × 16/9 + 28px */
 .g9-stage {
   width: min(1020px, 100%, calc((100vh - 310px) * 16 / 9 + 28px));
-  z-index: 1;
 }
 
 .g9-canvas {
@@ -56,7 +52,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 14px;
   pointer-events: none;
   opacity: 0;
   animation: g9-intro 1500ms steps(1, end) both;
@@ -67,8 +63,9 @@
 }
 
 .g9-round-intro__sub {
-  font-size: 11px;
-  letter-spacing: 0.14em;
+  font-size: 20px;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
 }
 
 @keyframes g9-intro {
@@ -94,10 +91,9 @@
 .g9-keys {
   width: min(1020px, 100%);
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  z-index: 1;
 }
 
 .g9-keys__group {
@@ -114,8 +110,14 @@
 }
 
 .g9-keys__hint {
-  align-self: center;
   font-size: 10px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-align: center;
+  opacity: 0.9;
+}
+
+@media (max-width: 720px) {
+  .g9-keys__hint {
+    display: none;
+  }
 }

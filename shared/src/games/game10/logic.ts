@@ -2,135 +2,97 @@ import type { GameInputEvent, GameResult } from '../types'
 import { GAME_DURATION } from '../types'
 
 /**
- * 게임11 = 라이트 사이클(Tron).
- *  · 두 바이크가 일정 속도로 전진하며 지나온 칸에 궤적(벽)을 남긴다.
- *  · 각 플레이어는 두 키로 좌/우 회전만 한다.
- *      P1: Q=좌회전 / W=우회전,  P2: U=좌회전 / I=우회전.
- *  · 벽(외곽)·자신/상대 궤적에 부딪히면 그 바이크는 죽는다. 마지막 생존자 승.
- *  · 정면충돌(같은 칸)·동시 사망은 DRAW. 10초까지 둘 다 생존해도 DRAW.
+ * 게임10 = 줄다리기(Tug of War) · 교대 연타.
+ *  · 밧줄 중앙 마커 pos ∈ [-1, 1]. -1=P1 완승선(왼쪽), +1=P2 완승선(오른쪽).
+ *  · 각 플레이어는 자기 두 키를 '교대로' 눌러야 당긴다.
+ *      P1: Q↔W 번갈아,  P2: U↔I 번갈아. 같은 키 연타는 무효(직전과 다른 키만 인정).
+ *  · 유효 당김 1회 = PULL 만큼 자기 쪽으로. 아무도 안 당기면 SPRING으로 서서히 중앙 복귀.
+ *  · 마커가 완승선(±1)에 닿으면 즉시 승리. 10초 종료 시 마커가 있는 쪽이 승(정중앙 DRAW).
  */
 export const G10 = {
   W: 800,
   H: 450,
-  GX: 64,
-  GY: 36,
-  /** 한 칸 전진에 걸리는 시간(초) → 속도 */
-  STEP: 0.05,
+  /** 유효 교대 입력 1회당 당기는 정규화 거리 */
+  PULL: 0.045,
+  /** 중앙 복귀 스프링 계수(초당) */
+  SPRING: 0.55,
+  /** 완승 경계 */
+  WIN_AT: 1,
+  /** 당김 피드백 플래시 시간 */
+  FLASH: 0.12,
 } as const
-
-// 방향: 0=우 1=하 2=좌 3=상
-const DX = [1, 0, -1, 0]
-const DY = [0, 1, 0, -1]
 
 export interface Game10State {
   elapsed: number
   result: GameResult
-  gx1: number
-  gy1: number
-  dir1: number
-  /** 대기 회전: 0=없음 1=좌 2=우 */
-  pend1: number
-  gx2: number
-  gy2: number
-  dir2: number
-  pend2: number
-  accum: number
-  /** 렌더 보간용 진행률(0~1) */
-  frac: number
-  /** 길이 GX*GY, 0=빈칸 1=P1궤적 2=P2궤적 */
-  occ: number[]
+  /** [-1,1], 음수=P1 우세 */
+  pos: number
+  p1LastKey: 'KeyQ' | 'KeyW' | null
+  p2LastKey: 'KeyU' | 'KeyI' | null
+  p1Pulls: number
+  p2Pulls: number
+  p1Flash: number
+  p2Flash: number
 }
 
-const idx = (x: number, y: number) => y * G10.GX + x
-const inBounds = (x: number, y: number) => x >= 0 && x < G10.GX && y >= 0 && y < G10.GY
-const turn = (dir: number, pend: number) =>
-  pend === 1 ? (dir + 3) % 4 : pend === 2 ? (dir + 1) % 4 : dir
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
 export function create(_rand: () => number): Game10State {
-  const occ = new Array(G10.GX * G10.GY).fill(0)
-  const gx1 = 10
-  const gy1 = 15
-  const gx2 = G10.GX - 11
-  const gy2 = 21
-  occ[idx(gx1, gy1)] = 1
-  occ[idx(gx2, gy2)] = 2
   return {
     elapsed: 0,
     result: null,
-    gx1,
-    gy1,
-    dir1: 0, // 우
-    pend1: 0,
-    gx2,
-    gy2,
-    dir2: 2, // 좌
-    pend2: 0,
-    accum: 0,
-    frac: 0,
-    occ,
+    pos: 0,
+    p1LastKey: null,
+    p2LastKey: null,
+    p1Pulls: 0,
+    p2Pulls: 0,
+    p1Flash: 0,
+    p2Flash: 0,
   }
 }
 
 export function step(state: Game10State, events: GameInputEvent[], dt: number): Game10State {
   if (state.result) return state
   state.elapsed += dt
-  state.accum += dt
+  state.p1Flash = Math.max(0, state.p1Flash - dt)
+  state.p2Flash = Math.max(0, state.p2Flash - dt)
 
-  // 회전 입력(가장 마지막 입력이 다음 스텝에 반영)
   for (const e of events) {
     if (e.type !== 'down') continue
-    switch (e.code) {
-      case 'KeyQ':
-        state.pend1 = 1
-        break
-      case 'KeyW':
-        state.pend1 = 2
-        break
-      case 'KeyU':
-        state.pend2 = 1
-        break
-      case 'KeyI':
-        state.pend2 = 2
-        break
+    if (e.code === 'KeyQ' || e.code === 'KeyW') {
+      // 직전과 다른 키일 때만 유효(교대 강제)
+      if (e.code !== state.p1LastKey) {
+        state.p1LastKey = e.code
+        state.pos -= G10.PULL
+        state.p1Pulls += 1
+        state.p1Flash = G10.FLASH
+      }
+    } else if (e.code === 'KeyU' || e.code === 'KeyI') {
+      if (e.code !== state.p2LastKey) {
+        state.p2LastKey = e.code
+        state.pos += G10.PULL
+        state.p2Pulls += 1
+        state.p2Flash = G10.FLASH
+      }
     }
   }
 
-  while (state.accum >= G10.STEP && !state.result) {
-    state.accum -= G10.STEP
+  // 중앙 복귀 스프링
+  state.pos += -state.pos * G10.SPRING * dt
+  state.pos = clamp(state.pos, -1.2, 1.2)
 
-    state.dir1 = turn(state.dir1, state.pend1)
-    state.dir2 = turn(state.dir2, state.pend2)
-    state.pend1 = 0
-    state.pend2 = 0
-
-    const n1x = state.gx1 + DX[state.dir1]
-    const n1y = state.gy1 + DY[state.dir1]
-    const n2x = state.gx2 + DX[state.dir2]
-    const n2y = state.gy2 + DY[state.dir2]
-
-    let dead1 = !inBounds(n1x, n1y) || state.occ[idx(n1x, n1y)] !== 0
-    let dead2 = !inBounds(n2x, n2y) || state.occ[idx(n2x, n2y)] !== 0
-    // 같은 칸으로 진입 = 정면충돌
-    if (n1x === n2x && n1y === n2y) {
-      dead1 = true
-      dead2 = true
-    }
-
-    if (dead1 || dead2) {
-      state.result = dead1 && dead2 ? 'DRAW' : dead1 ? 'P2' : 'P1'
-      return state
-    }
-
-    state.gx1 = n1x
-    state.gy1 = n1y
-    state.occ[idx(n1x, n1y)] = 1
-    state.gx2 = n2x
-    state.gy2 = n2y
-    state.occ[idx(n2x, n2y)] = 2
+  // 완승 판정
+  if (state.pos <= -G10.WIN_AT) {
+    state.result = 'P1'
+    return state
+  }
+  if (state.pos >= G10.WIN_AT) {
+    state.result = 'P2'
+    return state
   }
 
-  state.frac = state.accum / G10.STEP
-
-  if (state.elapsed >= GAME_DURATION) state.result = 'DRAW'
+  if (state.elapsed >= GAME_DURATION) {
+    state.result = state.pos < 0 ? 'P1' : state.pos > 0 ? 'P2' : 'DRAW'
+  }
   return state
 }
