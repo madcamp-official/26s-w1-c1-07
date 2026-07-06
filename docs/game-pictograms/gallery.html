@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>MADPUMP · 게임 4–10 컨셉 시안 (70종)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Gugi&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0d0221; --bg-raised:#1a0b2e; --surface:#241640; --surface-deep:#160a33;
+    --text:#f4f0ff; --muted:#9d8fbf;
+    --accent:#fdf500; --accent2:#d300c5; --p1:#05d9e8; --p2:#ff2a6d; --win:#39ff88;
+    --hairline:rgba(211,0,197,.35);
+    --arcade:'Press Start 2P',monospace; --gugi:'Gugi',sans-serif;
+    --sans:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.5;
+    -webkit-font-smoothing:antialiased;overflow-x:hidden}
+
+  /* 전역 CRT 스캔라인 오버레이 (theme.css .crt-overlay 동일) */
+  .crt{position:fixed;inset:0;z-index:9999;pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 1px,transparent 1px 3px)}
+  .crt::after{content:"";position:absolute;inset:0;
+    background:radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.42) 100%)}
+  /* 소실점 그리드 (배경 하단) */
+  .grid-fx{position:fixed;left:-25%;right:-25%;bottom:0;height:38%;z-index:0;pointer-events:none;
+    background:repeating-conic-gradient(from 89deg at 50% 0,color-mix(in srgb,var(--accent2) 42%,transparent) 0deg .28deg,transparent .28deg 6deg);
+    -webkit-mask-image:linear-gradient(to bottom,black,transparent 88%);mask-image:linear-gradient(to bottom,black,transparent 88%)}
+  .grid-fx::after{content:"";position:absolute;inset:0;
+    background:repeating-linear-gradient(to bottom,color-mix(in srgb,var(--accent2) 46%,transparent) 0 1px,transparent 1px 9%);
+    -webkit-mask-image:linear-gradient(to bottom,black,transparent 82%);mask-image:linear-gradient(to bottom,black,transparent 82%)}
+
+  .wrap{position:relative;z-index:1;max-width:1400px;margin:0 auto;padding:44px 24px 120px}
+
+  header.top{text-align:center;margin-bottom:10px}
+  .eyebrow{font-family:var(--arcade);font-size:10px;letter-spacing:.3em;color:var(--accent2)}
+  h1{font-family:var(--arcade);font-size:clamp(15px,2.4vw,22px);line-height:1.5;margin:16px 0 12px}
+  h1 .m{color:var(--p2);text-shadow:0 0 4px currentColor,0 0 18px currentColor}
+  h1 .p{color:var(--p1);text-shadow:0 0 4px currentColor,0 0 18px currentColor}
+  .lede{max-width:66ch;margin:0 auto;color:var(--muted);font-size:14px}
+  .lede b{color:var(--text)}
+
+  .controls{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:22px 0 6px}
+  .controls button{font-family:var(--arcade);font-size:9px;letter-spacing:.08em;color:var(--muted);
+    background:var(--surface-deep);border:1px solid var(--hairline);padding:9px 12px;cursor:pointer;transition:.15s}
+  .controls button:hover{color:var(--text);border-color:var(--accent2)}
+  .controls button[aria-pressed=true]{color:var(--accent);border-color:var(--accent);
+    box-shadow:0 0 8px -2px var(--accent)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:center;margin:14px auto 0;
+    font-family:var(--arcade);font-size:9px;letter-spacing:.05em;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:8px;height:8px;border-radius:50%;box-shadow:0 0 6px currentColor}
+  .l1{color:var(--p1);background:var(--p1)} .l2{color:var(--p2);background:var(--p2)}
+  .ly{color:var(--accent);background:var(--accent)} .lm{color:var(--accent2);background:var(--accent2)}
+
+  /* 게임 섹션 */
+  .game-sec{margin-top:52px}
+  .game-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px;flex-wrap:wrap}
+  .game-head .gtag{font-family:var(--arcade);font-size:13px;letter-spacing:.1em;color:var(--gc,var(--accent))}
+  .game-head .gname{font-family:var(--gugi);font-size:22px;color:var(--text)}
+  .game-head .grule{color:var(--muted);font-size:12.5px;flex:1;min-width:200px}
+  .game-rule-line{height:1px;background:linear-gradient(90deg,var(--gc,var(--hairline)),transparent);opacity:.5;margin-bottom:22px}
+
+  .cab-grid{display:grid;gap:clamp(14px,1.8vw,22px);
+    grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+
+  /* 아케이드 캐비닛 카드 (game-select.css 충실 재현) */
+  .cab{--gc:var(--accent2);display:flex;flex-direction:column;background:var(--surface);
+    border:1px solid var(--hairline);transition:box-shadow .18s,border-color .18s;padding-bottom:14px}
+  .cab:hover{border-color:var(--gc);box-shadow:0 0 6px var(--gc),0 0 22px color-mix(in srgb,var(--gc) 40%,transparent)}
+  .marquee{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;
+    background:var(--surface-deep);border-bottom:1px solid var(--hairline)}
+  .lamp{width:8px;height:8px;border-radius:50%;background:var(--surface);border:1px solid var(--hairline);flex:none}
+  .cab:hover .lamp{background:var(--gc);border-color:var(--gc);box-shadow:0 0 6px var(--gc)}
+  .mt{font-family:var(--arcade);font-size:10px;letter-spacing:.06em;color:color-mix(in srgb,var(--gc) 62%,var(--muted))}
+  .cab:hover .mt{color:var(--gc);text-shadow:0 0 4px currentColor,0 0 14px currentColor}
+
+  /* 스크린 — 검은 베젤 + 스캔라인 + 비네트 (실제 인게임 화면) */
+  .screen{position:relative;height:150px;margin:12px;background:var(--bg-raised);
+    border:6px solid #000;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .screen::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.30) 0 1px,transparent 1px 3px),
+      radial-gradient(ellipse at center,transparent 58%,rgba(0,0,0,.5) 100%)}
+  .gpic{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+  .gpic svg{width:88%;height:88%;overflow:visible}
+
+  .cname{font-family:var(--gugi);font-size:15px;text-align:center;color:var(--text);padding:2px 10px 0}
+  .cmeta{font-size:11px;color:var(--muted);text-align:center;padding:3px 12px 0;min-height:2.6em;line-height:1.35}
+  .cmeta .strat{color:var(--accent2);font-family:var(--arcade);font-size:8px;letter-spacing:.04em;display:block;margin-bottom:3px}
+  .cid{font-family:var(--arcade);font-size:8px;color:var(--muted);text-align:center;margin-top:6px;letter-spacing:.1em}
+
+  /* QA 로그 */
+  details.qa{margin:8px 12px 0;font-size:11.5px}
+  details.qa>summary{cursor:pointer;font-family:var(--arcade);font-size:8px;letter-spacing:.06em;color:var(--muted);
+    list-style:none;padding:5px 0;border-top:1px solid var(--hairline)}
+  details.qa>summary::-webkit-details-marker{display:none}
+  details.qa[open]>summary{color:var(--accent)}
+  .qa-iter{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;padding:6px 0;border-bottom:1px dashed color-mix(in srgb,var(--hairline) 60%,transparent)}
+  .qa-iter .n{font-family:var(--arcade);font-size:8px;color:var(--muted)}
+  .qa-iter .sim{font-family:var(--arcade);font-size:8px}
+  .qa-iter .txt{grid-column:1/-1;color:var(--muted);line-height:1.4}
+  .qa-iter .chg{grid-column:1/-1;color:color-mix(in srgb,var(--text) 80%,var(--muted))}
+  .scores{display:flex;flex-wrap:wrap;gap:4px 10px;margin:6px 0;font-family:var(--arcade);font-size:8px;color:var(--muted)}
+  .scores b{color:var(--accent)}
+  .sim-good{color:var(--win)} .sim-mid{color:var(--accent)} .sim-bad{color:var(--error,#ff3864)}
+
+  /* 초안/최종 비교 모드 */
+  body:not(.compare) .draft-wrap{display:none}
+  body.compare .screen-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .draft-wrap .tinylabel,.final-wrap .tinylabel{font-family:var(--arcade);font-size:7px;color:var(--muted);text-align:center;margin-top:2px}
+  body:not(.compare) .final-wrap .tinylabel{display:none}
+  body:not(.qaopen) details.qa{}
+
+  /* gp-* 픽토그램 (인게임 컴포넌트와 동일) */
+  .gp-cyan{color:var(--p1)} .gp-pink{color:var(--p2)} .gp-yellow{color:var(--accent)}
+  .gp-mag{color:var(--accent2)} .gp-green{color:var(--win)} .gp-dim{color:var(--muted)} .gp-white{color:var(--text)}
+  .gp-fill{fill:currentColor;stroke:none} .gp-stroke{fill:none;stroke:currentColor}
+  .gp-glow{filter:drop-shadow(0 0 1.5px currentColor) drop-shadow(0 0 5px currentColor)}
+  .gp-dim2{opacity:.4} .gp-grid{opacity:.28} .gp-faint{opacity:.6} .gp-magma{opacity:.22}
+  /* 폰트 크기는 각 <text>의 font-size 속성으로 제어 — CSS로 고정하면 속성을 덮어써 텍스트가 폭발함.
+     속성이 없는 경우의 안전 기본값만 지정(작게). */
+  .seg{font-family:var(--arcade);fill:currentColor}
+  text.seg:not([font-size]){font-size:13px}
+
+  .status{text-align:center;color:var(--muted);font-family:var(--arcade);font-size:11px;
+    letter-spacing:.1em;padding:80px 0}
+  .status .blink{animation:bl 1s steps(1,end) infinite;color:var(--accent)}
+  @keyframes bl{0%,49%{opacity:1}50%,100%{opacity:0}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body class="qaopen">
+  <div class="grid-fx" aria-hidden="true"></div>
+  <div class="wrap">
+    <header class="top">
+      <p class="eyebrow">MADPUMP · OFFLINE GAME SELECT</p>
+      <h1><span class="m">게임 4–10</span> 대표 디자인 <span class="p">컨셉 70종</span></h1>
+      <p class="lede">게임마다 <b>서로 다른 전략의 컨셉 10개</b>. 각 시안은 <b>작업→QA→개선 5회 루프</b>를 거쳤고,
+        QA 루브릭에 <b>이전 디자인들과의 유사도</b> 항목이 있어 유사도가 높으면 새로 기획하도록 강제했습니다.
+        실제 인게임처럼 <b>아케이드 폰트 + CRT 스캔라인</b>으로 렌더합니다.</p>
+      <div class="controls">
+        <button id="btn-compare" aria-pressed="false">초안↔최종 비교</button>
+        <button id="btn-qa" aria-pressed="true">QA 5루프 로그</button>
+        <button id="btn-collapse" aria-pressed="false">QA 접기</button>
+      </div>
+      <div class="legend">
+        <span><i class="l1"></i>P1 시안</span><span><i class="l2"></i>P2 핑크</span>
+        <span><i class="ly"></i>강조 옐로</span><span><i class="lm"></i>보조 마젠타</span>
+      </div>
+    </header>
+    <div id="root"><div class="status">디자인 생성 중… <span class="blink">▮</span><br><br>워크플로 완료 시 이 페이지에 70종이 채워집니다. (새로고침)</div></div>
+  </div>
+  <div class="crt" aria-hidden="true"></div>
+
+<script src="data.js" onerror="window.__NODATA=true"></script>
+<script>
+  const GC = { 4:'var(--accent2)',5:'var(--win)',6:'var(--accent)',7:'var(--p1)',8:'var(--p2)',9:'var(--accent2)',10:'var(--win)' };
+  const RULE = {
+    4:'사이드뷰 러너 대전 — 점프·숙이기로 장애물 회피',
+    5:'중앙 포탑 2대가 침공 몬스터를 예광탄으로 요격',
+    6:'DDR식 리듬 연타 — 노트를 히트라인에 맞춰 타격',
+    7:'7×7 스캐너 오목 — 먼저 3목 완성',
+    8:'천장 가시·상승 마그마 사이 기체 총격 듀얼',
+    9:'매듭을 두고 좌우로 당기는 줄다리기',
+    10:'트론 라이트 사이클 — 궤적 벽 피해 생존',
+  };
+  const simClass = s => s<=40?'sim-good':s<=60?'sim-mid':'sim-bad';
+  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+  function cardHTML(gn, d){
+    const b = d.brief||{};
+    const qa = (d.qaLog||[]).map(q=>`
+      <div class="qa-iter">
+        <span class="n">iter ${q.iter}</span>
+        <span class="sim ${simClass(q.similarityScore)}">유사도 ${q.similarityScore} · ${esc(q.similarTo)}</span>
+        <span class="txt">${esc(q.critique)}</span>
+        <span class="chg">→ ${esc(q.change)}</span>
+      </div>`).join('');
+    const sc = d.selfScores||{};
+    const scores = `<div class="scores">
+      <span>명확 <b>${sc.conceptClarity??'-'}</b></span><span>팔레트 <b>${sc.paletteAdherence??'-'}</b></span>
+      <span>글로우 <b>${sc.glowRestraint??'-'}</b></span><span>가독 <b>${sc.readability??'-'}</b></span>
+      <span>독창 <b>${sc.distinctiveness??'-'}</b></span></div>`;
+    const idnum = String(d.conceptId).padStart(2,'0');
+    return `<div class="cab" style="--gc:${GC[gn]}">
+      <div class="marquee"><span class="lamp"></span><span class="mt">GAME ${gn} · ${idnum}</span><span class="lamp"></span></div>
+      <div class="screen-pair">
+        <div class="final-wrap"><div class="screen"><div class="gpic"><svg viewBox="0 0 120 108">${d.finalSvg||''}</svg></div></div><div class="tinylabel">FINAL</div></div>
+        <div class="draft-wrap"><div class="screen"><div class="gpic"><svg viewBox="0 0 120 108">${d.firstDraftSvg||''}</svg></div></div><div class="tinylabel">iter1 초안</div></div>
+      </div>
+      <div class="cname">${esc(d.title||b.title)}</div>
+      <div class="cmeta"><span class="strat">${esc(d.strategy||b.strategy)}</span>${esc(b.oneLiner)}</div>
+      <div class="cid">G${gn}-${idnum}</div>
+      <details class="qa"><summary>QA 5루프 · 자가점수</summary>${scores}${qa}</details>
+    </div>`;
+  }
+
+  function render(){
+    const data = window.__DATA;
+    const root = document.getElementById('root');
+    if(!data || !data.results){ return; }
+    const byGame = {}; data.results.forEach(r=>byGame[r.game]=r);
+    let html='';
+    [4,5,6,7,8,9,10].forEach(gn=>{
+      const r = byGame[gn]; if(!r) return;
+      const designs = (r.designs||[]).slice().sort((a,b)=>a.conceptId-b.conceptId);
+      html += `<section class="game-sec" style="--gc:${GC[gn]}">
+        <div class="game-head"><span class="gtag">GAME ${gn}</span><span class="gname">${esc(r.name)}</span><span class="grule">${esc(RULE[gn])} · 컨셉 ${designs.length}종</span></div>
+        <div class="game-rule-line"></div>
+        <div class="cab-grid">${designs.map(d=>cardHTML(gn,d)).join('')}</div>
+      </section>`;
+    });
+    root.innerHTML = html || '<div class="status">데이터가 비어 있습니다.</div>';
+  }
+
+  // 컨트롤
+  const bC=document.getElementById('btn-compare'), bQ=document.getElementById('btn-qa'), bX=document.getElementById('btn-collapse');
+  bC.onclick=()=>{const on=bC.getAttribute('aria-pressed')!=='true';bC.setAttribute('aria-pressed',on);document.body.classList.toggle('compare',on)};
+  bX.onclick=()=>{const on=bX.getAttribute('aria-pressed')!=='true';bX.setAttribute('aria-pressed',on);
+    document.querySelectorAll('details.qa').forEach(d=>d.open=!on)};
+  bQ.onclick=()=>{const on=bQ.getAttribute('aria-pressed')!=='true';bQ.setAttribute('aria-pressed',on);
+    document.querySelectorAll('details.qa').forEach(d=>d.open=on)};
+
+  render();
+  // 데이터 로드 후 기본으로 QA 로그 펼침
+  if(window.__DATA) document.querySelectorAll('details.qa').forEach(d=>d.open=true);
+</script>
+</body>
+</html>
