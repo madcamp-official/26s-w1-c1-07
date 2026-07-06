@@ -93,11 +93,6 @@ function toMatchResult(r: 'P1' | 'P2' | 'DRAW'): MatchResult {
   return r === 'P1' ? 'P1_WIN' : r === 'P2' ? 'P2_WIN' : 'DRAW';
 }
 
-/** 키 값(0/1) → 화면 글자. P1=Q/W, P2=U/I */
-function letterFor(side: PlayerRole, v: number): string {
-  if (side === 'P1') return v === 0 ? 'Q' : 'W';
-  return v === 0 ? 'U' : 'I';
-}
 /** 키 값(0/1) → 방향 아이콘(좌/우 펌프 패드) */
 function arrowFor(v: number): string {
   return v === 0 ? '◀' : '▶'; // ◀ / ▶
@@ -315,20 +310,15 @@ function drawLane(ctx: CanvasRenderingContext2D, side: PlayerRole, s: Game6State
     }
     ctx.strokeRect(-sz / 2, -sz / 2, sz, sz);
 
-    // 방향 아이콘 + 글자
-    ctx.shadowBlur = isNow ? 8 : 0;
-    ctx.fillStyle = isNow ? COL.text : color;
+    // 방향 아이콘 — Q/W/U/I 글자 대신 ◀/▶(왼쪽/오른쪽)를 크게 표시
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `${Math.max(9, Math.round(11 * scale))}px ${ARCADE}`;
-    ctx.globalAlpha = alpha * 0.85;
-    ctx.fillText(arrowFor(v), 0, -sz * 0.26);
     ctx.globalAlpha = alpha;
     ctx.fillStyle = isNow ? (wrong > 0 ? COL.error : color) : color;
     ctx.shadowColor = isNow ? (wrong > 0 ? COL.error : color) : color;
     ctx.shadowBlur = isNow ? 12 : 0;
-    ctx.font = `${Math.max(12, Math.round(30 * scale))}px ${ARCADE}`;
-    ctx.fillText(letterFor(side, v), 0, sz * 0.12);
+    ctx.font = `${Math.max(14, Math.round(32 * scale))}px ${ARCADE}`;
+    ctx.fillText(arrowFor(v), 0, 0);
     ctx.restore();
   }
 
