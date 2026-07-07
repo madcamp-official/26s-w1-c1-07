@@ -96,9 +96,10 @@ export default function RoundIntro() {
     o.role != null &&
     (o.phase === 'countdown' || o.phase === 'playing' || o.phase === 'round-result');
   const onlineIntro = onlineActive && o.phase === 'countdown';
+  // Any LOCAL sim game (offline 2-player OR solo-vs-bot). Real server online is excluded by !onlineActive
+  // (bot mode sets flow.mode='online' but never activates the online store, so it belongs here, not there).
   const offlineActive =
     !onlineActive &&
-    flow.mode === 'offline' &&
     flow.phase === 'playing' &&
     flow.currentRound > 0 &&
     flow.gameId != null;

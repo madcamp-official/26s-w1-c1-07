@@ -199,6 +199,21 @@ export function startOfflineGame(gameId: GameId): void {
   });
 }
 
+/**
+ * Single-player vs the built-in bot. Sets mode='online' (the per-game bot trigger — each GameN drives
+ * P2 with its own AI when flow.mode==='online') but does NOT touch the real-online store (net/online.ts),
+ * so the screen runs its LOCAL sim with the bot as P2. The human plays P1 (Q/W). Caller navigates(`/game/${gameId}`).
+ */
+export function startBotGame(gameId: GameId): void {
+  flowStore.set({
+    mode: 'online',
+    gameId,
+    modal: null,
+    opponent: { nickname: 'CADE BOT', avatarColorIndex: 5, isBot: true },
+    ...freshMatchFields(),
+  });
+}
+
 function freshMatchFields(): Pick<
   FlowState,
   'phase' | 'currentRound' | 'roundResults' | 'matchResult'
