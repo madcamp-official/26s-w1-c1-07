@@ -41,10 +41,16 @@ ssh -o BatchMode=yes "${DEPLOY_HOST}" bash -s <<REMOTE
 set -e
 cd "${DEPLOY_PATH}"
 npm install            # tsx (the server runtime) is a devDependency, so no --omit=dev
+npm --prefix server run prisma:generate   # regen Prisma client (schema may have changed)
 tmux kill-session -t madpump 2>/dev/null || true
 sleep 1
 tmux new-session -d -s madpump \
-  "cd ${DEPLOY_PATH} && PORT=${PORT} NODE_ENV=production CLIENT_ORIGIN=${CLIENT_ORIGIN} COOKIE_SECURE=${COOKIE_SECURE} npm --prefix server run start 2>&1 | tee ${DEPLOY_PATH}/server.log"
+  "cd ${DEPLOY_PATH} && PORT=${PORT} NODE_ENV=production CLIENT_ORIGIN=${CLIENT_ORIGIN} COOKIE_SECURE=${COOKIE_SECURE} GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID} npm --prefix server run start 2>&1 | tee ${DEPLOY_PATH}/server.log"
+# Internal :80 → :${PORT} redirect. KCLOUD allows inbound 80 only and blocks 8080, so the app lives on
+# 8080 (for the tunnel) and the kernel redirects :80 → :8080 to keep http://172.10.8.242 working.
+# Lost on reboot/redeploy, so re-applied here every deploy (idempotent: delete then add).
+iptables -t nat -D PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports ${PORT} 2>/dev/null || true
+iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports ${PORT}
 sleep 4
 echo '--- health ---'
 curl -s --max-time 8 "http://localhost:${PORT}/api/health" || echo '(no health response — check server.log)'
