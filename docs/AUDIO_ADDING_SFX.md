@@ -1,6 +1,6 @@
 # Adding SFX to a new game — Playbook
 
-MADPUMP audio is synthesized in real time with browser Web Audio, **without external files/network** (sfxr-style SFX + chiptune-loop BGM).
+MADPUMP **SFX** are synthesized in real time with browser Web Audio (sfxr-style); **BGM** streams from mp3 files (Suno) as lobby / in-game zones (volume drops sharply on game entry = focus).
 The code source of truth is `client/src/audio/` (overview in [`client/src/audio/README.md`](../client/src/audio/README.md)). This document covers only **how to wire up sound when you add a new game**.
 
 ---
@@ -27,7 +27,7 @@ The code source of truth is `client/src/audio/` (overview in [`client/src/audio/
 | Coin gain(+)/loss(−) / bet confirm | online `match-end` `coinDelta` / entering `queue` |
 | Matchmaking success / opponent connect·leave | online `opponent`·`room.members` change |
 | Login success | `sessionStore.loggedIn` false→true |
-| Lobby ↔ battle **BGM** auto switch | based on flow/online phase |
+| Lobby/in-game **BGM (mp3)** auto switch + focus volume drop on game entry | based on flow/online phase |
 
 > In short, if a new game calls `reportRoundEnd(result)` like the existing games and adds `<ResultOverlay/>`, then **start·win-loss·coins·BGM attach on their own.** All you touch is the game-specific action sounds.
 

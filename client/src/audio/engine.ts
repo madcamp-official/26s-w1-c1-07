@@ -1,10 +1,13 @@
 /**
- * Audio engine — AudioContext lifecycle management + playback + mute/volume (local storage) + gesture unlock.
- * SFX renders once per id, then caches the buffer (only playback repeats). BGM is a gapless loop.
+ * Audio engine — AudioContext lifecycle + playback + mute/volume (local storage) + gesture unlock.
+ * SFX: rendered once per id, then buffer-cached (only playback repeats; sfxr-style synthesis).
+ * BGM: mp3 files (Suno) streamed on a loop via HTMLAudioElement (low memory). Zone-based track
+ *      crossfade + in-game focus volume (much lower than lobby). Policy (which track/volume) lives
+ *      in the controller; the engine only exposes setBgm.
  * Owner: audio agent. Never throws an exception into the game even on failure (all try/catch · no-op).
  */
-import { renderSFX, renderSeq, renderVamp, mulberry32, hashStr, SR } from './synth';
-import { PRESETS, SEQS, SPEC, BGM, type BgmKey } from './registry';
+import { renderSFX, renderSeq, mulberry32, hashStr, SR } from './synth';
+import { PRESETS, SEQS, SPEC } from './registry';
 
 interface Persist {
   muted: boolean;
@@ -35,17 +38,10 @@ let persist = loadPersist();
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let unlocked = false;
-let pendingBgm: BgmKey | null = null;
 
 const sfxCache = new Map<string, Float32Array>();
-const bgmFloatCache = new Map<BgmKey, Float32Array>();
-const bgmBufCache = new Map<BgmKey, AudioBuffer>();
 const lastPlayed = new Map<string, number>();
 const warned = new Set<string>();
-
-let curBgmKey: BgmKey | null = null;
-let curBgmSrc: AudioBufferSourceNode | null = null;
-let curBgmGain: GainNode | null = null;
 
 function getCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -92,7 +88,7 @@ function renderCue(id: string): Float32Array | null {
   return buf;
 }
 
-/** Play a one-shot SFX. Silently no-ops if muted / context not ready / not unlocked (before unlock). */
+/** Play a one-shot SFX. Silently no-ops if muted / context not ready / not unlocked. */
 export function sfx(id: string): void {
   try {
     if (persist.muted) return;
@@ -114,82 +110,120 @@ export function sfx(id: string): void {
   }
 }
 
-function bgmBuffer(c: AudioContext, key: BgmKey): AudioBuffer {
-  let b = bgmBufCache.get(key);
-  if (b) return b;
-  let f = bgmFloatCache.get(key);
-  if (!f) {
-    f = renderVamp(BGM[key]);
-    bgmFloatCache.set(key, f);
+// ───────────────────────── BGM (mp3 streaming + zone crossfade) ─────────────────────────
+const FADE = 0.6; // crossfade / volume ramp (seconds)
+
+interface Track {
+  el: HTMLAudioElement;
+  gain: GainNode;
+}
+const tracks = new Map<string, Track>();
+let curUrl: string | null = null;
+let desired: { url: string; vol: number } | null = null;
+
+function ensureTrack(c: AudioContext, url: string): Track | null {
+  let t = tracks.get(url);
+  if (t) return t;
+  if (!master) return null;
+  try {
+    const el = new Audio(url);
+    el.loop = true;
+    el.preload = 'auto';
+    el.crossOrigin = 'anonymous';
+    const srcNode = c.createMediaElementSource(el);
+    const gain = c.createGain();
+    gain.gain.value = 0;
+    srcNode.connect(gain);
+    gain.connect(master);
+    t = { el, gain };
+    tracks.set(url, t);
+    return t;
+  } catch {
+    return null;
   }
-  b = toBuffer(c, f);
-  bgmBufCache.set(key, b);
-  return b;
 }
 
-/** BGM switch — no-op if it's the same track. Schedules if before unlock (starts on unlock). */
-export function playBgm(key: BgmKey): void {
+function ramp(g: GainNode, c: AudioContext, to: number, time: number): void {
+  const t = c.currentTime;
+  g.gain.cancelScheduledValues(t);
+  g.gain.setValueAtTime(g.gain.value, t);
+  g.gain.linearRampToValueAtTime(to, t + time);
+}
+
+/**
+ * Set BGM — play the given track at `vol` (crossfade if different); pass null to stop.
+ * No-ops and schedules into `desired` if before unlock / muted. The controller calls this
+ * based on zone (lobby / in-game).
+ */
+export function setBgm(url: string | null, vol: number): void {
   try {
-    if (curBgmKey === key && curBgmSrc) return;
-    if (!unlocked || persist.muted) {
-      pendingBgm = key;
-      curBgmKey = key; // Record the desired track (avoid duplicate scheduling)
+    if (url === null) {
+      stopBgm();
       return;
     }
+    desired = { url, vol };
+    if (!unlocked || persist.muted) return;
     const c = getCtx();
     if (!c || !master) return;
-    stopBgm();
-    curBgmKey = key;
-    const g = c.createGain();
-    g.gain.value = 0;
-    g.connect(master);
-    const src = c.createBufferSource();
-    src.buffer = bgmBuffer(c, key);
-    src.loop = true;
-    src.connect(g);
-    src.start();
-    // Short fade-in (prevent switch click)
-    const t = c.currentTime;
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.9, t + 0.25);
-    curBgmSrc = src;
-    curBgmGain = g;
-    pendingBgm = null;
+
+    // Same track → just ramp the volume smoothly (e.g. lobby↔in-game focus level change)
+    if (curUrl === url) {
+      const cur = tracks.get(url);
+      if (cur) ramp(cur.gain, c, vol, 0.5);
+      return;
+    }
+
+    // Different track → crossfade
+    const prevUrl = curUrl;
+    const nt = ensureTrack(c, url);
+    if (!nt) return;
+    curUrl = url;
+    void nt.el.play().catch(() => {});
+    ramp(nt.gain, c, vol, FADE);
+
+    if (prevUrl) {
+      const old = tracks.get(prevUrl);
+      if (old) {
+        ramp(old.gain, c, 0, FADE);
+        window.setTimeout(() => {
+          // If the fade-out finished and it wasn't re-selected meanwhile, pause it (save resources)
+          if (curUrl !== prevUrl) {
+            try {
+              old.el.pause();
+            } catch {
+              /* ignore */
+            }
+          }
+        }, FADE * 1000 + 80);
+      }
+    }
   } catch {
     /* ignore */
   }
 }
 
 export function stopBgm(): void {
+  desired = null;
   try {
-    if (curBgmSrc) {
-      const src = curBgmSrc;
-      const g = curBgmGain;
-      const c = getCtx();
-      if (c && g) {
-        const t = c.currentTime;
-        g.gain.cancelScheduledValues(t);
-        g.gain.setValueAtTime(g.gain.value, t);
-        g.gain.linearRampToValueAtTime(0, t + 0.12);
-        try {
-          src.stop(t + 0.14);
-        } catch {
-          /* ignore */
-        }
-      } else {
-        try {
-          src.stop();
-        } catch {
-          /* ignore */
-        }
+    const c = getCtx();
+    if (curUrl) {
+      const cur = tracks.get(curUrl);
+      if (cur) {
+        if (c) ramp(cur.gain, c, 0, 0.2);
+        const el = cur.el;
+        window.setTimeout(() => {
+          try {
+            el.pause();
+          } catch {
+            /* ignore */
+          }
+        }, 240);
       }
     }
   } catch {
     /* ignore */
   }
-  curBgmSrc = null;
-  curBgmGain = null;
-  curBgmKey = null;
+  curUrl = null;
 }
 
 /** Called on the first user gesture — AudioContext resume + start any scheduled BGM. */
@@ -198,11 +232,10 @@ export function unlockAudio(): void {
   if (!c) return;
   const finish = (): void => {
     unlocked = true;
-    if (pendingBgm && !persist.muted) {
-      const k = pendingBgm;
-      pendingBgm = null;
-      curBgmKey = null; // Force restart
-      playBgm(k);
+    if (desired && !persist.muted) {
+      const d = desired;
+      curUrl = null; // force start
+      setBgm(d.url, d.vol);
     }
   };
   if (c.state === 'suspended') {
@@ -221,7 +254,16 @@ export function setMuted(m: boolean): void {
   persist = { ...persist, muted: m };
   savePersist(persist);
   if (master && ctx) master.gain.value = m ? 0 : persist.volume;
-  if (m) stopBgm();
+  if (m) {
+    // Pause tracks (save resources) — keep `desired` so unmute can restore
+    const keep = desired;
+    stopBgm();
+    desired = keep;
+  } else if (desired) {
+    const d = desired;
+    curUrl = null;
+    setBgm(d.url, d.vol);
+  }
 }
 export function toggleMuted(): boolean {
   setMuted(!persist.muted);
