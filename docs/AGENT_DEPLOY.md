@@ -55,7 +55,13 @@ Host: KAIST VM, SSH alias **`kaistvm`** → `172.10.8.242` (user `root`), deploy
    ```
    `CLIENT_ORIGIN` is comma-separated; the server splits it into an array for CORS + Socket.IO (public HTTPS domain **and** internal HTTP IP served at once). `COOKIE_SECURE` is **empty** so internal HTTP login still works (the public side is HTTPS and works without Secure). **`GOOGLE_CLIENT_ID` is required** — `deploy.sh` passes it to the server to verify Google ID tokens; leaving it empty breaks "Sign in with Google". It is a **public** identifier (also embedded in the client bundle), not a secret, so it is safe to keep in `deploy.env` / the example.
 
-3. **Node 20+** locally (for the client build) and on the VM (already installed).
+3. **`client/.env`** in the repo (git-ignored — not committed). The client bundle inlines `VITE_*` vars **at build time**, so this must exist *before* `scripts/deploy.sh` builds the client, or the "Sign in with Google" button ships broken:
+   ```bash
+   cp client/.env.example client/.env   # already contains the public VITE_GOOGLE_CLIENT_ID
+   ```
+   `VITE_GOOGLE_CLIENT_ID` is a **public** OAuth client id (served in the bundle to every browser), not a secret. This is separate from the server-side `GOOGLE_CLIENT_ID` in `deploy.env` (§2.2) — you need **both**: the client one to render the button, the server one to verify the token.
+
+4. **Node 20+** locally (for the client build) and on the VM (already installed).
 
 ### Secrets — never commit these
 | Secret | Location |
@@ -113,6 +119,8 @@ The seed is idempotent (upsert). After that, ship updates only via `scripts/depl
 | `http://172.10.8.242` times out but the tunnel works | iptables redirect missing — re-run `scripts/deploy.sh` (it re-adds it), or on the VM: `iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports 8080`. |
 | CORS / socket errors from one origin | make sure that origin is in `CLIENT_ORIGIN` (comma-separated) in `deploy.env`, then redeploy. |
 | Login works on HTTPS but not internal HTTP | `COOKIE_SECURE` must be empty (Secure cookies are dropped over plain HTTP). |
+| "Sign in with Google" button shows "VITE_GOOGLE_CLIENT_ID not set" | `client/.env` was missing at build time — `cp client/.env.example client/.env`, then redeploy (rebuilds the bundle). |
+| Google login button renders but sign-in is rejected | server-side `GOOGLE_CLIENT_ID` missing/mismatched in `deploy.env` — must equal `VITE_GOOGLE_CLIENT_ID`; redeploy. |
 | Need server logs | `ssh kaistvm 'tail -n 100 /root/madpump/server.log'` or `ssh kaistvm 'tmux attach -t madpump'`. |
 
 ---
