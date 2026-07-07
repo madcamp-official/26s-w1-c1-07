@@ -277,8 +277,9 @@ export interface PlayerDisplay {
 
 /**
  * P1/P2 names·avatars to show on the HUD/canvas + "my side (isYou)" distinction.
- * - Real-server online: isYou is decided by the actual role the server assigned this round (online.role).
- *     Roles are random each round, so without this you can't tell "am I blue (P1) or red (P2)".
+ * - Real-server online: P1 = the blue player, P2 = the red player (fixed for the whole match by player color).
+ *     isYou marks my color's side. Keeps the HUD sides matching the in-game character colors even as the
+ *     attack/defense role swaps each round (requirement: one color per player for the whole match).
  * - (legacy) offline mock bot mode: P1 is always me.
  * - offline local 2-player: "PLAYER 1" / "PLAYER 2" (no isYou).
  */
@@ -294,10 +295,12 @@ export function getPlayerDisplays(flow: FlowState): Record<PlayerRole, PlayerDis
   if (onlineActive) {
     const myName = session.nickname ?? 'YOU';
     const oppName = online.opponent?.nickname ?? 'Opponent';
-    const iAmP1 = online.role === 'P1';
+    // Fixed identity for the whole match: P1 = the BLUE player, P2 = the RED player (independent of the per-round role).
+    // This keeps the top HUD sides consistent with the in-game character colors (blue→--p1 cyan / red→--p2 pink).
+    const iAmBlue = online.myColor ? online.myColor === 'blue' : online.role === 'P1';
     return {
-      P1: { name: iAmP1 ? myName : oppName, avatarColorIndex: 0, isYou: iAmP1 },
-      P2: { name: iAmP1 ? oppName : myName, avatarColorIndex: 1, isYou: !iAmP1 },
+      P1: { name: iAmBlue ? myName : oppName, avatarColorIndex: 0, isYou: iAmBlue },
+      P2: { name: iAmBlue ? oppName : myName, avatarColorIndex: 1, isYou: !iAmBlue },
     };
   }
 

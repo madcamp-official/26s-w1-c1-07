@@ -175,11 +175,42 @@
   100% { transform: scale(1.4); opacity: 0.85; }
 }
 
+/* ── "ROUND n" banner (BANNER_MS at the start of each online round) ── */
+.ri--round {
+  background: rgba(13, 2, 33, 0.72);
+}
+.ri-round__box {
+  --ri-color: var(--accent);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 26px clamp(32px, 8vw, 60px);
+  background: var(--surface);
+  border: 3px solid var(--ri-color);
+  box-shadow:
+    0 0 8px var(--ri-color),
+    0 0 30px color-mix(in srgb, var(--ri-color) 45%, transparent),
+    inset 0 0 18px -8px var(--ri-color);
+}
+.ri-round__num {
+  font-size: clamp(40px, 9vw, 76px);
+  color: var(--ri-color);
+  text-shadow: var(--text-glow);
+  letter-spacing: 0.06em;
+}
+.ri-round__you {
+  font-size: clamp(14px, 2.4vw, 20px);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
 /* The info lives in the HUD/game rather than this overlay, so remove all animation when reduced motion is preferred (static display) */
 
 @media (prefers-reduced-motion: reduce) {
   .ri,
   .ri__name,
+  .ri-round__box,
   .ri-count__num,
   .ri-count__go {
     animation: none;

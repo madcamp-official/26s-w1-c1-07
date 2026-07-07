@@ -17,11 +17,50 @@ import type { CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components';
 import { exitMatch, getPlayerDisplays, getRoundWins, nextRound, useFlow } from '../../state/flow';
+import { useOnline } from '../../net/online';
 import './resultoverlay.css';
 
 export default function ResultOverlay() {
   const flow = useFlow();
+  const o = useOnline();
   const navigate = useNavigate();
+
+  // ── Online round result — server-driven; shows the winner + running score for ROUND_GAP_MS, then
+  //    auto-advances to the next round (no button). Match-end is handled by OnlineController. ──
+  if (o.matchId != null && o.phase === 'round-result') {
+    const wc = o.lastRoundWinnerColor; // 'blue'(P1) / 'red'(P2) / null(draw)
+    const text = wc === 'blue' ? 'P1 WIN' : wc === 'red' ? 'P2 WIN' : 'DRAW';
+    const color = wc === 'blue' ? 'var(--p1)' : wc === 'red' ? 'var(--p2)' : 'var(--accent2)';
+    const displays = getPlayerDisplays(flow); // online → P1 = blue player, P2 = red player
+    const winnerName = wc === 'blue' ? displays.P1.name : wc === 'red' ? displays.P2.name : null;
+    return (
+      <div data-testid="result-overlay" className="rov">
+        <div
+          className="rov__panel corner-brackets anim-sign-on"
+          style={{ '--rov-color': color } as CSSProperties}
+        >
+          <i className="cb2" />
+          <span className="rov__stage-cap font-arcade">
+            ROUND {o.round}/{o.totalRounds}
+          </span>
+          <div data-testid="result-text" className="rov__text font-arcade rov__text--glitch">
+            {text}
+          </div>
+          {winnerName && (
+            <span className="rov__winner-name font-display">{winnerName} wins the round!</span>
+          )}
+          {wc === null && <span className="rov__winner-name font-display">Draw</span>}
+          <div className="rov__score font-arcade">
+            <span className="c-p1">P1 {o.roundWins.blue}</span>
+            <span className="rov__score-sep">:</span>
+            <span className="c-p2">{o.roundWins.red} P2</span>
+          </div>
+          <span className="rov__continue font-arcade c-accent anim-blink">NEXT ROUND ▶</span>
+        </div>
+      </div>
+    );
+  }
+
   if (flow.phase !== 'round-result' && flow.phase !== 'match-result') return null;
 
   const isMatchEnd = flow.phase === 'match-result';

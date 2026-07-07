@@ -8,19 +8,16 @@
   align-items: center;
   justify-content: center;
   padding: 16px;
-  overflow: hidden; /* prevent horizontal scroll even if reels overflow on a narrow viewport (#8) */
+  overflow: hidden; /* prevent horizontal scroll on the body even if reels overflow on a narrow viewport */
   background: rgba(13, 2, 33, 0.92);
-}
-
-.mi-reels {
-  max-width: 100%;
 }
 
 .mi-slot {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 22px;
+  gap: 20px;
+  max-width: 100%;
 }
 
 .mi-title {
@@ -29,21 +26,28 @@
   letter-spacing: 0.14em;
 }
 
+/* 9 reels in a single row (spec 1-iv). Scroll horizontally within the strip if the viewport is too narrow. */
 .mi-reels {
+  --reel: 82px;
   display: flex;
-  gap: 18px;
+  gap: 8px;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 2px 2px 6px;
+  scrollbar-width: thin;
 }
 
 .mi-reel {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex: none;
 }
 
 .mi-reel__window {
-  width: 150px;
-  height: 150px;
+  width: var(--reel);
+  height: var(--reel);
   overflow: hidden;
   background: var(--surface-deep, #100c20);
   border: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
@@ -58,6 +62,13 @@
   box-shadow: 0 0 20px -2px var(--accent);
 }
 
+/* A concealed ("?") reel — dashed accent2 frame to read as "unknown" */
+.mi-reel--hidden.mi-reel--stopped .mi-reel__window {
+  border-style: dashed;
+  border-color: var(--accent2);
+  box-shadow: 0 0 18px -3px var(--accent2);
+}
+
 .mi-reel__strip {
   display: flex;
   flex-direction: column;
@@ -65,13 +76,21 @@
 }
 
 .mi-reel__face {
-  width: 150px;
-  height: 150px;
+  width: var(--reel);
+  height: var(--reel);
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px;
+  padding: 8px;
+}
+
+.mi-reel__face--hidden {
+  font-family: var(--font-arcade, monospace);
+  font-size: calc(var(--reel) * 0.5);
+  font-weight: 800;
+  color: var(--accent2);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--accent2) 70%, transparent);
 }
 
 @keyframes mi-spin {
@@ -79,35 +98,47 @@
     transform: translateY(0);
   }
   to {
-    transform: translateY(-1500px); /* half the strip (10 slots × 150px) — infinite loop */
+    /* one full cycle = the 13-game strip (each face = --reel tall) → seamless loop */
+    transform: translateY(calc(var(--reel) * -13));
   }
 }
 
 .mi-reel__rounds {
   font-size: 9px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
 }
 
 .mi-hint {
   margin: 0;
   font-size: 14px;
+  text-align: center;
+  max-width: 92vw;
 }
 
 .mi-names {
   margin: 0;
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: min(760px, 92vw);
 }
 
 .mi-name-chip {
   padding: 4px 10px;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text);
   background: var(--surface-deep, #100c20);
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
-/* ── VS screen (bet reveal, 2s) ── */
+.mi-name-chip--hidden {
+  color: var(--accent2);
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--accent2) 55%, transparent);
+}
+
+/* ── VS screen (bet reveal, ~2s) ── */
 .mi-vs {
   display: flex;
   align-items: center;
@@ -183,19 +214,19 @@
   }
 }
 
+/* Shrink the 9 reels progressively so they stay in one row on smaller screens */
+@media (max-width: 900px) {
+  .mi-reels {
+    --reel: 64px;
+  }
+  .mi-vs {
+    gap: 20px;
+  }
+}
+
 @media (max-width: 640px) {
   .mi-reels {
-    gap: 12px;
-  }
-  .mi-reel__window,
-  .mi-reel__face {
-    width: 96px;
-    height: 96px;
-  }
-  @keyframes mi-spin {
-    to {
-      transform: translateY(-960px);
-    }
+    --reel: 52px;
   }
   .mi-vs {
     flex-direction: column;
@@ -203,19 +234,9 @@
   }
 }
 
-/* ultra-narrow (≤360px: iPhone SE1/Galaxy Fold outer screen, etc.) — keep 3 reels (3×76+2×8=244px) from overflowing */
-@media (max-width: 360px) {
+@media (max-width: 380px) {
   .mi-reels {
-    gap: 8px;
-  }
-  .mi-reel__window,
-  .mi-reel__face {
-    width: 76px;
-    height: 76px;
-  }
-  @keyframes mi-spin {
-    to {
-      transform: translateY(-760px);
-    }
+    --reel: 40px;
+    gap: 6px;
   }
 }

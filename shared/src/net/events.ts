@@ -62,11 +62,13 @@ export interface MatchStartMsg {
   /** Opponent color (match-fixed) */
   oppColor: PlayerColor
   /**
-   * Slot-machine 3-reel result (server draw) — game of round r (1-based) = slotGames[(r-1) % 3].
-   * (reel1 → rounds 1·4·7, reel2 → 2·5·8, reel3 → 3·6·9)
-   * The client only uses this for the slot animation (sequential stop at 0.3s intervals).
+   * Slot-machine result (server draw) — **one reel per round**, so length = totalRounds (9).
+   * Game of round r (1-based) = slotGames[r-1]. A single game appears in at most 3 of the 9 rounds.
+   * `null` = a **hidden ("?") round** — 3 of rounds 5~9 are concealed on the slot screen and only
+   * revealed by round:start when that round begins (the server never leaks the hidden games here).
+   * The client uses this for the slot animation (9 reels in a row, sequential stop at 0.2s intervals).
    */
-  slotGames: GameId[]
+  slotGames: (GameId | null)[]
   /** Coins I bet on this match */
   yourBet: number
   /** Coins the opponent bet */
@@ -83,7 +85,13 @@ export interface RoundStartMsg {
   round: number // 1-based
   gameId: GameId
   role: Role // my role in this round (P1/P2)
-  countdownMs: number // countdown before the round starts
+  /**
+   * Pre-play window (ms) the client fills with: "ROUND n" banner → (guide) → "2·1·START" countdown.
+   * Variable: longer when the guide shows. The server starts the sim exactly after this window.
+   */
+  countdownMs: number
+  /** true if this game type appears for the **first time in the match** → show the how-to-play guide (repeat games skip it). */
+  showGuide: boolean
 }
 
 /** [C→S] game:input — unified input envelope */
@@ -108,8 +116,14 @@ export interface GameStateMsg {
 export interface RoundEndMsg {
   matchId: string
   round: number
-  result: GameResult // winner of that round's role
-  wins: { P1: number; P2: number } // cumulative (for display by round role)
+  result: GameResult // winner of that round's role (kept for reference; role is random each round)
+  /**
+   * Winner in the **match-fixed identity** = player color (blue/red), null on a draw.
+   * Display maps color → side: blue = P1 (cyan/left), red = P2 (pink/right). Stable across the whole match.
+   */
+  winnerColor: PlayerColor | null
+  /** Cumulative round wins by player color (for the round-result overlay + HUD lamps). */
+  wins: { blue: number; red: number }
 }
 
 /** [C→S] Bet amount carried on queue:join / room:create / room:join (integer within the held-coin limit) */

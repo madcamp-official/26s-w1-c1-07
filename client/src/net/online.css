@@ -83,6 +83,16 @@
   .onl-youbanner__card { animation: none; }
 }
 
+/* Plain scrim during the round countdown — covers the 1-frame gap while the game screen (and its
+   RoundIntro "ROUND n" banner) mounts. z below RoundIntro(.ri, 89) so the banner draws on top. */
+.onl-countdown-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+  background: rgba(13, 2, 33, 0.9);
+}
+
 /* match-end overlay — shows Coin settlement */
 .onl-coins {
   font-size: 16px;

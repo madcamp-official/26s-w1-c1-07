@@ -108,22 +108,11 @@ export default function OnlineController() {
     )
   }
 
-  // Round countdown: prominently announce my 'color' (player-bound, fixed for the match).
-  // Color is unrelated to role — attack/defense roles are random each match, so color doesn't reveal role (that's intended).
-  if (o.phase === 'countdown' && o.role) {
-    // If there's no color info (old versions, etc.), fall back to the role color.
-    const iAmBlue = o.myColor ? o.myColor === 'blue' : o.role === 'P1'
-    return (
-      <div className="onl-youbanner" data-testid="online-you-banner" aria-live="polite">
-        <div className={`onl-youbanner__card ${iAmBlue ? 'is-p1' : 'is-p2'}`}>
-          <span className="onl-youbanner__label font-arcade">YOU ARE</span>
-          <span className="onl-youbanner__color font-arcade glow-text">
-            {iAmBlue ? 'BLUE' : 'RED'}
-          </span>
-          <span className="onl-youbanner__hint font-display">Control with U · I</span>
-        </div>
-      </div>
-    )
+  // The round countdown UI ("ROUND n" banner → guide → 2·1·START, with my color announced) is owned by
+  // RoundIntro on the game screen. The controller only lays down a plain scrim to cover the brief gap
+  // between navigating to the round's game screen and RoundIntro mounting the banner on top of it.
+  if (o.phase === 'countdown') {
+    return <div className="onl-countdown-scrim" aria-hidden />
   }
 
   if (o.phase === 'match-end') {

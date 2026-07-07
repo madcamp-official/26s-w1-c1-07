@@ -23,6 +23,9 @@ import Game7 from '../screens/game/Game7';
 import Game8 from '../screens/game/Game8';
 import Game9 from '../screens/game/Game9';
 import Game10 from '../screens/game/Game10';
+import Game11 from '../screens/game/Game11';
+import Game12 from '../screens/game/Game12';
+import Game13 from '../screens/game/Game13';
 
 const GAMES: Record<number, ComponentType> = {
   1: Game1,
@@ -35,6 +38,9 @@ const GAMES: Record<number, ComponentType> = {
   8: Game8,
   9: Game9,
   10: Game10,
+  11: Game11,
+  12: Game12,
+  13: Game13,
 };
 
 export default function OnlineGame() {

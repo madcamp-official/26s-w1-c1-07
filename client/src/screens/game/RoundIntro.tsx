@@ -7,12 +7,13 @@
  *  · Offline (local 2-player): plays a ready sequence when a round starts (flow.currentRound changes) —
  *    Round 1: guide (GUIDE_MS 3s) → "2" → "1" → "START!" → game starts.
  *    From round 2 on: skip the guide, just the "2" → "1" → "START!" countdown.
- *    Throughout this whole span roundIntroGate halts the sim (the game loop checks the gate),
- *    and step() only runs once the countdown ends (after START!). → guaranteed wait, then start, with no overlap.
+ *    Throughout this whole span roundIntroGate halts the sim (the game loop checks the gate).
  *    The guide shows both roles (P1 Q/W · P2 U/I).
- *  · Online: show the guide during the server countdown (online.phase==='countdown', 3s).
- *    Here serverState=null so the game is already naturally halted → no gate needed.
- *    → show only the role I was assigned, in my player color (myColor).
+ *  · Online (server): every round runs "ROUND n" banner (BANNER_MS) → guide (only the game's FIRST appearance
+ *    in the match, GUIDE_MS) → "2" → "1" → "START!" countdown, then the round starts. The server sizes its
+ *    pre-play window (round:start countdownMs) to match, so START! lands right as the first game:state arrives.
+ *    serverState is null during this span so the game is already halted → no gate needed.
+ *    → the guide shows only the role I was assigned, in my player color (myColor).
  *  · Only the asymmetric games (rocket=4 / dino=6) split the guide per role. The rest are shared.
  *  · Copy is in English. Color follows the 'player color', not the role (color ≠ role, matching the render model).
  */
@@ -24,16 +25,17 @@ import { useOnline } from '../../net/online';
 import { closeGate, openGate } from '../../state/roundIntroGate';
 import './roundintro.css';
 
-/** Offline ready sequence: (round 1 only) show the guide for GUIDE_MS → "2"·"1"·"START!" countdown → game starts.
- *  From round 2 on, skip the guide and just run the countdown. Throughout this whole span roundIntroGate halts the sim. */
+/** "ROUND n" banner duration at the very start of each round (online only) */
+const BANNER_MS = 1000;
+/** Guide duration — offline round 1, or a game's first appearance online */
 const GUIDE_MS = 3000;
 /** Duration of each countdown "2"/"1" step (ms) */
 const COUNT_STEP_MS = 700;
 /** From showing "START!" until the game starts (ms) */
 const START_MS = 600;
-/** Time for the countdown alone (2 → 1 → START) — gate duration from round 2 on */
+/** Time for the countdown alone (2 → 1 → START) */
 const COUNTDOWN_MS = 2 * COUNT_STEP_MS + START_MS;
-/** Total round-1 gate duration = guide + countdown */
+/** Total round-1 gate duration = guide + countdown (offline) */
 const ROUND1_TOTAL_MS = GUIDE_MS + COUNTDOWN_MS;
 
 type Cap = { icon: string; label: string };
@@ -76,6 +78,13 @@ function renderLine(s: string): ReactNode {
   });
 }
 
+const caps = (role: 'P1' | 'P2', keys: [string, string], k1: Cap, k2: Cap) => (
+  <div className="ri__caps">
+    <KeyCap role={role} keyChar={keys[0]} icon={k1.icon} label={k1.label} />
+    <KeyCap role={role} keyChar={keys[1]} icon={k2.icon} label={k2.label} />
+  </div>
+);
+
 export default function RoundIntro() {
   const flow = useFlow();
   const o = useOnline();
@@ -93,21 +102,16 @@ export default function RoundIntro() {
     flow.currentRound > 0 &&
     flow.gameId != null;
 
-  // Offline: detect a round-key change → open the gate + guide→2→1→START→start timers
+  // ── Offline ready sequence: open the gate + guide→2→1→START→start timers ──
   //  offStep: 'guide' show guide / 'c2'·'c1' countdown / 'start' START! / null done (game starts)
   const [offStep, setOffStep] = useState<'guide' | 'c2' | 'c1' | 'start' | null>(null);
-  // ⚠️ Don't use a keyRef guard: on StrictMode (dev) mount→unmount→mount the
-  //   ref persists, so the 2nd mount skips openGate (guard matches) and the gate stays closed — a bug
-  //   (the cause of the guide not showing only on the first round while the game overlapped). Instead, in cleanup
-  //   close the gate reliably so a re-run (= strict 2nd mount / round change) always reopens it fresh.
+  // ⚠️ Don't use a keyRef guard: on StrictMode (dev) mount→unmount→mount the ref persists, so the 2nd mount
+  //   skips openGate and the gate stays closed. Instead close the gate in cleanup so a re-run always reopens it fresh.
   useEffect(() => {
     if (!offlineActive || flow.gameId == null) return;
-    // Round 1: guide (GUIDE_MS) then countdown. From round 2 on: skip the guide, countdown only.
     const withGuide = flow.currentRound <= 1;
     const total = withGuide ? ROUND1_TOTAL_MS : COUNTDOWN_MS;
-    // Countdown start offset (after GUIDE_MS if there's a guide, else 0)
     const c2At = withGuide ? GUIDE_MS : 0;
-    // Halt the game for the whole ready sequence — step() only runs once the countdown ends (after START!).
     openGate(total);
     setOffStep(withGuide ? 'guide' : 'c2');
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -123,36 +127,115 @@ export default function RoundIntro() {
     return () => {
       timers.forEach(clearTimeout);
       setOffStep(null);
-      closeGate(); // release the gate on re-run/unmount — the next run (or strict 2nd mount) reopens it
+      closeGate();
     };
   }, [offlineActive, flow.gameId, flow.currentRound]);
 
-  // ── decide payload (online first) ──
-  let gameId: number | null = null;
-  let showOffline = false;
-  let onlineRole: 'P1' | 'P2' = 'P1';
-  let colorRole: 'P1' | 'P2' = 'P1'; // myColor (blue→P1 cyan / red→P2 pink) → KeyCap color + panel color
+  // Make sure the gate is released on unmount (in case of leaving mid-intro)
+  useEffect(() => () => closeGate(), []);
+
+  // ── Online ready sequence: "ROUND n" banner → guide (first appearance only) → 2→1→START. No gate (serverState is null). ──
+  //  onStep: 'round' banner / 'guide' how-to-play / 'c2'·'c1' / 'start' START! / null done (waiting for first snapshot)
+  const [onStep, setOnStep] = useState<'round' | 'guide' | 'c2' | 'c1' | 'start' | null>(null);
+  useEffect(() => {
+    if (!onlineIntro) {
+      setOnStep(null);
+      return;
+    }
+    const withGuide = o.showGuide;
+    const c2At = BANNER_MS + (withGuide ? GUIDE_MS : 0);
+    setOnStep('round');
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    if (withGuide) timers.push(setTimeout(() => setOnStep('guide'), BANNER_MS));
+    timers.push(setTimeout(() => setOnStep('c2'), c2At));
+    timers.push(setTimeout(() => setOnStep('c1'), c2At + COUNT_STEP_MS));
+    timers.push(setTimeout(() => setOnStep('start'), c2At + 2 * COUNT_STEP_MS));
+    timers.push(setTimeout(() => setOnStep(null), c2At + 2 * COUNT_STEP_MS + START_MS));
+    return () => {
+      timers.forEach(clearTimeout);
+      setOnStep(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onlineIntro, o.round]);
+
+  // ── ONLINE render (ROUND banner → guide → 2·1·START) ──
   if (onlineIntro && o.gameId != null && o.role != null) {
-    gameId = o.gameId;
-    onlineRole = o.role;
-    colorRole = (o.myColor ?? 'blue') === 'blue' ? 'P1' : 'P2';
-  } else if (offStep && offlineActive && flow.gameId != null) {
-    gameId = flow.gameId;
-    showOffline = true;
+    const colorRole: 'P1' | 'P2' = (o.myColor ?? 'blue') === 'blue' ? 'P1' : 'P2';
+    const myColorLabel = colorRole === 'P1' ? 'BLUE' : 'RED';
+    const panelColor = colorRole === 'P1' ? 'var(--p1)' : 'var(--p2)';
+
+    if (onStep === 'round') {
+      return (
+        <div className="ri ri--round" data-testid="round-intro" aria-hidden>
+          <div className="ri-round__box anim-sign-on" style={{ '--ri-color': panelColor } as CSSProperties}>
+            <span className="ri-round__num font-arcade glow-text">ROUND {o.round}</span>
+            <span className="ri-round__you font-display" style={{ color: panelColor }}>
+              YOU · {myColorLabel}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    if (onStep === 'c2' || onStep === 'c1' || onStep === 'start') {
+      const label = onStep === 'c2' ? '2' : onStep === 'c1' ? '1' : 'START!';
+      return (
+        <div className="ri ri--count" data-testid="round-intro" aria-hidden>
+          <span
+            key={label}
+            className={`ri-count__num font-arcade glow-text anim-sign-on ${label === 'START!' ? 'ri-count__go' : ''}`}
+          >
+            {label}
+          </span>
+        </div>
+      );
+    }
+
+    if (onStep === 'guide') {
+      const c = COPY[o.gameId];
+      if (!c) return null;
+      const onlineRole = o.role;
+      let tag: string | null = null;
+      let line: ReactNode = null;
+      let body: ReactNode = null;
+      if (c.asym) {
+        const r = c[onlineRole];
+        tag = `My role · ${r.tag}`;
+        line = r.line;
+        body = <div className="ri__keys">{caps(colorRole, ['U', 'I'], r.k1, r.k2)}</div>;
+      } else {
+        line = renderLine(c.line);
+        body = <div className="ri__keys">{caps(colorRole, ['U', 'I'], c.k1, c.k2)}</div>;
+      }
+      return (
+        <div className="ri" data-testid="round-intro" aria-hidden>
+          <div
+            key={`on:${o.gameId}:${o.round}:${onlineRole}`}
+            className="ri__panel corner-brackets anim-sign-on"
+            style={{ '--ri-color': panelColor } as CSSProperties}
+          >
+            <i className="cb2" />
+            {tag && <span className="ri__tag font-display">{tag}</span>}
+            <h2 className="ri__name font-display">{c.name}</h2>
+            <p className="ri__line">{line}</p>
+            {body}
+            <span className="ri__ready c-accent anim-blink">▶ Starting soon</span>
+          </div>
+        </div>
+      );
+    }
+    return null; // between START! and the first server snapshot
   }
-  if (gameId == null) return null;
+
+  // ── OFFLINE render ──
+  if (!(offStep && offlineActive && flow.gameId != null)) return null;
+  const gameId = flow.gameId;
   const c = COPY[gameId];
   if (!c) return null;
 
-  // On an offline countdown step, show a big "2/1/START!" overlay instead of the guide.
+  // On a countdown step, show a big "2/1/START!" overlay instead of the guide.
   const offCountdown =
-    showOffline && offStep === 'c2'
-      ? '2'
-      : showOffline && offStep === 'c1'
-        ? '1'
-        : showOffline && offStep === 'start'
-          ? 'START!'
-          : null;
+    offStep === 'c2' ? '2' : offStep === 'c1' ? '1' : offStep === 'start' ? 'START!' : null;
   if (offCountdown) {
     return (
       <div className="ri ri--count" data-testid="round-intro" aria-hidden>
@@ -166,83 +249,54 @@ export default function RoundIntro() {
     );
   }
 
-  const roundKey = showOffline
-    ? `off:${gameId}:${flow.currentRound}`
-    : `on:${gameId}:${o.round}:${onlineRole}`;
-  // Offline (both shown) = neutral yellow, online = my player color
-  const panelColor = showOffline ? 'var(--accent)' : colorRole === 'P1' ? 'var(--p1)' : 'var(--p2)';
-
-  const caps = (role: 'P1' | 'P2', keys: [string, string], k1: Cap, k2: Cap) => (
-    <div className="ri__caps">
-      <KeyCap role={role} keyChar={keys[0]} icon={k1.icon} label={k1.label} />
-      <KeyCap role={role} keyChar={keys[1]} icon={k2.icon} label={k2.label} />
-    </div>
-  );
-
-  let tag: string | null = null;
   let line: ReactNode = null;
   let body: ReactNode = null;
-
   if (c.asym) {
-    if (showOffline) {
-      line = 'The two roles play differently!';
-      body = (
-        <div className="ri__keys">
-          <div className="ri__side">
-            <span className="ri__who is-p1">{c.P1.tag} · P1</span>
-            <span className="ri__subline">{c.P1.line}</span>
-            {caps('P1', ['Q', 'W'], c.P1.k1, c.P1.k2)}
-          </div>
-          <span className="ri__vs font-arcade">VS</span>
-          <div className="ri__side">
-            <span className="ri__who is-p2">{c.P2.tag} · P2</span>
-            <span className="ri__subline">{c.P2.line}</span>
-            {caps('P2', ['U', 'I'], c.P2.k1, c.P2.k2)}
-          </div>
+    line = 'The two roles play differently!';
+    body = (
+      <div className="ri__keys">
+        <div className="ri__side">
+          <span className="ri__who is-p1">{c.P1.tag} · P1</span>
+          <span className="ri__subline">{c.P1.line}</span>
+          {caps('P1', ['Q', 'W'], c.P1.k1, c.P1.k2)}
         </div>
-      );
-    } else {
-      const r = c[onlineRole];
-      tag = `My role · ${r.tag}`;
-      line = r.line;
-      body = <div className="ri__keys">{caps(colorRole, ['U', 'I'], r.k1, r.k2)}</div>;
-    }
+        <span className="ri__vs font-arcade">VS</span>
+        <div className="ri__side">
+          <span className="ri__who is-p2">{c.P2.tag} · P2</span>
+          <span className="ri__subline">{c.P2.line}</span>
+          {caps('P2', ['U', 'I'], c.P2.k1, c.P2.k2)}
+        </div>
+      </div>
+    );
   } else {
     line = renderLine(c.line);
-    if (showOffline) {
-      body = (
-        <div className="ri__keys">
-          <div className="ri__side">
-            <span className="ri__who is-p1">P1</span>
-            {caps('P1', ['Q', 'W'], c.k1, c.k2)}
-          </div>
-          <span className="ri__vs font-arcade">VS</span>
-          <div className="ri__side">
-            <span className="ri__who is-p2">P2</span>
-            {caps('P2', ['U', 'I'], c.k1, c.k2)}
-          </div>
+    body = (
+      <div className="ri__keys">
+        <div className="ri__side">
+          <span className="ri__who is-p1">P1</span>
+          {caps('P1', ['Q', 'W'], c.k1, c.k2)}
         </div>
-      );
-    } else {
-      body = <div className="ri__keys">{caps(colorRole, ['U', 'I'], c.k1, c.k2)}</div>;
-    }
+        <span className="ri__vs font-arcade">VS</span>
+        <div className="ri__side">
+          <span className="ri__who is-p2">P2</span>
+          {caps('P2', ['U', 'I'], c.k1, c.k2)}
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="ri" data-testid="round-intro" aria-hidden>
       <div
-        key={roundKey}
+        key={`off:${gameId}:${flow.currentRound}`}
         className="ri__panel corner-brackets anim-sign-on"
-        style={{ '--ri-color': panelColor } as CSSProperties}
+        style={{ '--ri-color': 'var(--accent)' } as CSSProperties}
       >
         <i className="cb2" />
-        {tag && <span className="ri__tag font-display">{tag}</span>}
         <h2 className="ri__name font-display">{c.name}</h2>
         <p className="ri__line">{line}</p>
         {body}
-        <span className="ri__ready c-accent anim-blink">
-          {showOffline ? 'GET READY…' : '▶ Starting soon'}
-        </span>
+        <span className="ri__ready c-accent anim-blink">GET READY…</span>
       </div>
     </div>
   );
