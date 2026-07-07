@@ -86,24 +86,14 @@ export default function OnlineController() {
     return () => window.clearInterval(t)
   }, [o.revengePhase])
 
-  // ── Slot machine + VS intro ──
+  // ── Match intro (VS matchup 2s → slot machine → confirmed board held 3s → Round 1) ──
   if (o.phase === 'slot' && o.slotGames && o.opponent) {
     return (
       <MatchIntro
         slotGames={o.slotGames}
         gameNames={GAME_NAMES}
-        me={{
-          nickname: o.me?.nickname ?? 'YOU',
-          color: o.myColor ?? 'blue',
-          bet: o.myBet,
-          allIn: o.myAllIn,
-        }}
-        opp={{
-          nickname: o.opponent.nickname,
-          color: o.oppColor ?? 'red',
-          bet: o.oppBet,
-          allIn: o.oppAllIn,
-        }}
+        me={{ nickname: o.me?.nickname ?? 'YOU', color: o.myColor ?? 'blue', bet: o.myBet, allIn: o.myAllIn }}
+        opp={{ nickname: o.opponent.nickname, color: o.oppColor ?? 'red', bet: o.oppBet, allIn: o.oppAllIn }}
       />
     )
   }

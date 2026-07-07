@@ -65,7 +65,7 @@ export interface OnlineState {
   coinBalance: number | null
   /** Slot machine — one game per round (9). Round r game = slotGames[r-1]; null = a hidden "?" round. */
   slotGames: (GameId | null)[] | null
-  /** This match's bets (VS screen / ALL-IN display) */
+  /** This match's bets (VS matchup screen / ALL-IN display) */
   myBet: number | null
   oppBet: number | null
   myAllIn: boolean

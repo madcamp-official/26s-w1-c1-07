@@ -49,10 +49,11 @@ const MAX_PER_GAME = 3
 /** Of rounds 5~9 (0-based indices 4~8), this many are concealed as a "?" reel on the slot screen. */
 const HIDDEN_ROUND_COUNT = 3
 /**
- * Wait from match:start (slot + bet reveal) until round 1's round:start.
- * Client sequence: 9 reels spin → stop in order from 1.0s at 0.2s intervals (last ≈2.6s) → VS (bet reveal) ~2s.
+ * Wait from match:start until round 1's round:start.
+ * Client sequence: VS matchup ~2s → slot spin → 9 reels stop by ≈4.6s (all slots locked) → confirmed board held 3s.
+ * = the 9 slots lock in at ≈4.6s, then Round 1 starts exactly 3.0s later (4.6s + 3.0s = 7.6s). Keep in sync with MatchIntro.tsx.
  */
-const INTRO_MS = Number(process.env.MATCH_INTRO_MS ?? 5000)
+const INTRO_MS = Number(process.env.MATCH_INTRO_MS ?? 7600)
 
 /**
  * Draw the 9 slot-reel games (one per round) from a candidate pool.

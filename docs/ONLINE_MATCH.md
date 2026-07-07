@@ -12,15 +12,16 @@
     If the pool is too small to honor "≤3 each" (host checked only 1~2), the cap is relaxed so 9 rounds still fill.
   - **Hidden rounds**: **3 of rounds 5~9** are concealed as a **"?" reel** — sent as `null` in `slotGames` (never leaked),
     and revealed by `round:start` only when that round begins.
-- **Intro timeline** (the server delays round 1's start for `INTRO_MS`=5.0s):
+- **Intro timeline** (the server delays round 1's start for `INTRO_MS`=7.6s):
   | Time | Presentation (client `MatchIntro.tsx`) |
   |---|---|
-  | 0s | 9 slot reels start spinning (game-pictogram strip rotates) |
-  | 1.0s → 2.6s | reels stop left-to-right at **0.2s intervals** (reel r = round r; "?" for hidden rounds) |
-  | 3.0s | **VS screen**: both sides' nickname·color·bet coins revealed for ~2 seconds |
-  | 5.0s | server `round:start` → per-round intro (see §1b) → round 1 |
+  | 0s → 2.0s | **VS matchup screen**: both sides' nickname·color·bet coins (+ALL-IN badge) revealed |
+  | 2.0s | slot machine appears and starts spinning (9 reels in a row) |
+  | 3.0s → 4.6s | reels stop left-to-right at **0.2s intervals** (reel r = round r; "?" for hidden rounds) — **all 9 slots confirmed at 4.6s** |
+  | 4.6s → 7.6s | **confirmed 9-slot board held for exactly 3s** (players dwell on the locked-in lineup) |
+  | 7.6s | server `round:start` → per-round intro (see §1b) → round 1 (**exactly 3.0s after the slots lock in**) |
 - **ALL-IN display**: if the bet = the full holdings at join time, `match:start`'s `yourAllIn/oppAllIn` are true →
-  red ALL-IN badge on the VS screen. (Applies to every match regardless of whether it's a rematch.)
+  red ALL-IN badge on the VS matchup screen (shown for the first 2s of the intro). Applies to every match.
 - The coin-settlement rule for match:end is the same as before (quick: ±own bet / code: winner absorbs loser's bet).
 
 ### 1b. Per-round intro + round result + color identity (branch online-round)
@@ -74,7 +75,7 @@ match:end ─ enclose revenge:{stake, allIn} eligibility to the loser (null if n
 | Server | `server/src/rooms.ts` | `Member.allIn`, `Room.postMatch` (rematch window)·`revengeRequesterUserId` |
 | Server | `server/src/index.ts` | `revenge:request/respond/cancel` handlers, `takeRevengePending` (double-processing guard), leaveRoom integration |
 | Client | `client/src/net/online.ts` | phase `'slot'`, revengePhase/offer/closed state, 3 actions |
-| Client | `client/src/net/MatchIntro.tsx` | slot presentation + VS screen (reduce-motion support) |
+| Client | `client/src/net/MatchIntro.tsx` | VS matchup (2s) → 9-reel slot presentation → confirmed board held 3s (reduce-motion support) |
 | Client | `client/src/net/OnlineController.tsx` | REVENGE button/wait/accept dialog, return to main on cancellation |
 | Client | `client/src/components/HudFrame.tsx` | round notation (n/9) correction during an online match |
 
