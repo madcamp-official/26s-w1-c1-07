@@ -1,59 +1,59 @@
 /**
- * OBSIDIAN PROTOCOL — 다크 미니멀 하이테크. design-lab/ideas/05-obsidian 정본을 토큰 계약 위로 이식.
- * 옵시디언 블랙 배경 · 1px 스틸/시안 헤어라인 · 45° 코너컷 clip-path · 얇은 시안 글로우 · Orbitron.
+ * OBSIDIAN PROTOCOL — dark minimal hi-tech. Ports the design-lab/ideas/05-obsidian source of truth onto the token contract.
+ * Obsidian black background · 1px steel/cyan hairline · 45° corner-cut clip-path · thin cyan glow · Orbitron.
  *
- * 구조: (A) :root[data-theme] 토큰 블록이 계약 전체를 재정의(색/폰트/형태/모션) →
- *       (B) 네온 전용 효과 클래스(글로우/스캔라인/신스웨이브)를 [data-theme=] 스코프로 override.
- * 특정도 규칙: 베이스 컴포넌트 CSS(.nc-btn:hover:not(:disabled) 등, 0,3,0)를 이기기 위해
- *              항상 `[data-theme="obsidian"] <베이스와 동일 compound>` 로 +1 attribute 확보.
- * 이 파일은 시각(색/형태/효과)만 바꾼다 — @madpump/shared·게임 좌표엔 절대 관여하지 않는다.
+ * Structure: (A) the :root[data-theme] token block redefines the whole contract (color/font/shape/motion) →
+ *            (B) neon-only effect classes (glow/scanline/synthwave) get overridden under the [data-theme=] scope.
+ * Specificity rule: to beat the base component CSS (.nc-btn:hover:not(:disabled) etc., 0,3,0),
+ *              always secure +1 attribute via `[data-theme="obsidian"] <same compound as the base>`.
+ * This file changes visuals only (color/shape/effect) — it never touches @madpump/shared or game coordinates.
  *
- * 다크 유지: 라이트 테마들과 달리 절제된 "얇은" 글로우를 살린다. 스캔라인 라인은 제거하고
- *            crt-overlay는 좌상 시안·우하 마젠타 초저채도 듀얼 radial glow로 대체한다.
+ * Stays dark: unlike the light themes, it keeps a restrained "thin" glow. The scanline lines are removed and
+ *            crt-overlay is replaced with an ultra-low-saturation dual radial glow (cyan top-left, magenta bottom-right).
  */
 
-/* ─────────────────────────────────────────────────────── (A) 토큰 계약 */
+/* ─────────────────────────────────────────────────────── (A) token contract */
 :root[data-theme='obsidian'] {
-  --bg: #0a0c10;            /* 옵시디언 블랙(최심층) */
-  --bg-raised: #0e1118;     /* 스테이지 바닥/아레나 필드 */
-  --surface: #12151c;       /* 카드/모달/패널 표면 */
-  --surface-deep: #0b0e14;  /* 가라앉은 영역/입력·간판 바닥 */
-  --text: #eaf0f8;          /* 주 텍스트(고휘도) */
-  --text-muted: #8b95a8;    /* 보조 텍스트·라벨 */
-  --text-dim: #4c5568;      /* 비활성·힌트 */
-  --accent: #00f0ff;        /* 유일한 CTA 색 = 일렉트릭 시안 (골드는 랭크 전용) */
-  --accent2: #00f0ff;       /* 하이라이트/글로우 — 시안 통일(골드 확산 금지) */
-  --on-accent: #05161c;     /* 시안 채움 위 잉크 */
-  --p1: #00f0ff;            /* P1(왼쪽) 일렉트릭 시안 */
-  --p1-dim: rgba(0, 240, 255, 0.14);  /* P1 영역 채움(다크 틴트) */
-  --p2: #ff3358;            /* P2(오른쪽) 마젠타 레드 */
-  --p2-dim: rgba(255, 51, 88, 0.14);  /* P2 영역 채움(다크 틴트) */
+  --bg: #0a0c10;            /* obsidian black (deepest layer) */
+  --bg-raised: #0e1118;     /* stage floor / arena field */
+  --surface: #12151c;       /* card/modal/panel surface */
+  --surface-deep: #0b0e14;  /* sunken areas / input & marquee base */
+  --text: #eaf0f8;          /* primary text (high luminance) */
+  --text-muted: #8b95a8;    /* secondary text · labels */
+  --text-dim: #4c5568;      /* disabled · hints */
+  --accent: #00f0ff;        /* the only CTA color = electric cyan (gold is rank-only) */
+  --accent2: #00f0ff;       /* highlight/glow — unified cyan (no gold spread) */
+  --on-accent: #05161c;     /* ink on cyan fill */
+  --p1: #00f0ff;            /* P1 (left) electric cyan */
+  --p1-dim: rgba(0, 240, 255, 0.14);  /* P1 area fill (dark tint) */
+  --p2: #ff3358;            /* P2 (right) magenta red */
+  --p2-dim: rgba(255, 51, 88, 0.14);  /* P2 area fill (dark tint) */
   --error: #ff3358;
   --win: #39e6a3;
   --ok: #39e6a3;
-  --hairline: #232a38;      /* 비발광 스틸 헤어라인 1px */
-  --border-col: #232a38;    /* 기본 실선 보더(스틸) */
+  --hairline: #232a38;      /* non-emissive steel hairline 1px */
+  --border-col: #232a38;    /* default solid border (steel) */
   --border-w: 1px;
-  --scanline-color: transparent; /* 스캔라인 금지 */
-  --vignette-color: rgba(0, 0, 0, 0.5); /* 가장자리 딥 비네팅(레이어감) */
-  --bezel-color: #0a0c10;   /* 다크 베젤 */
+  --scanline-color: transparent; /* no scanlines */
+  --vignette-color: rgba(0, 0, 0, 0.5); /* deep edge vignette (layered feel) */
+  --bezel-color: #0a0c10;   /* dark bezel */
   --bezel-w: 3px;
-  --radius: 0px;            /* 전면 각짐(라운드 대신 코너컷) */
+  --radius: 0px;            /* fully angular (corner-cut instead of round) */
   --radius-sm: 0px;
   --radius-lg: 0px;
-  --radius-pill: 2px;       /* 소형 칩만 2px 예외 */
-  --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.5);   /* 딥 드롭섀도우 1종 */
+  --radius-pill: 2px;       /* small chips only, 2px exception */
+  --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.5);   /* single deep drop shadow */
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.55);
   --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.6);
   --ease: cubic-bezier(0.16, 1, 0.3, 1); /* expo-out */
   --dur-fast: 120ms;
   --dur-base: 240ms;
   --dur-slow: 360ms;
-  --font-arcade: 'Orbitron', 'Space Mono', monospace; /* 계기/숫자(tabular helper 아래) */
+  --font-arcade: 'Orbitron', 'Space Mono', monospace; /* gauges/numbers (see tabular helper below) */
   --font-display: 'Orbitron', 'Noto Sans KR', sans-serif;
   --font-body: 'Noto Sans KR', 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
 
-  /* 시그니처 45° 코너컷 (additive 헬퍼 — 좌상+우하 사선) */
+  /* signature 45° corner-cut (additive helper — top-left + bottom-right diagonals) */
   --cut: 14px;
   --clip-cut: polygon(
     var(--cut) 0,
@@ -74,9 +74,9 @@
   );
 }
 
-/* ─────────────────────────────────────────────────────── (B) 효과 override */
+/* ─────────────────────────────────────────────────────── (B) effect override */
 
-/* 네온 텍스트/박스 글로우 → 얇은 1px 시안 글로우 + 딥 섀도우 */
+/* neon text/box glow → thin 1px cyan glow + deep shadow */
 [data-theme='obsidian'] .glow-text {
   text-shadow: 0 0 1px currentColor, 0 0 8px color-mix(in srgb, currentColor 35%, transparent);
 }
@@ -88,16 +88,16 @@
     var(--shadow-md);
 }
 
-/* CRT 스캔라인 제거 → 좌상 시안·우하 마젠타 듀얼 radial glow(비네팅은 base ::after 유지) */
+/* remove CRT scanlines → dual radial glow (cyan top-left, magenta bottom-right); base ::after keeps the vignette */
 [data-theme='obsidian'] .crt-overlay {
   background:
     radial-gradient(60vw 60vh at 0% 0%, rgba(0, 240, 255, 0.05), transparent 65%),
     radial-gradient(60vw 60vh at 100% 100%, rgba(255, 51, 88, 0.05), transparent 65%);
 }
-/* 신스웨이브 바닥 제거(옵시디언엔 소실점 그리드 없음) */
+/* remove synthwave floor (obsidian has no vanishing-point grid) */
 [data-theme='obsidian'] .vanish-grid { display: none; }
 
-/* 버튼: 네온 링 → surface + 1px 스틸 보더 + 코너컷 + 딥 섀도우 */
+/* button: neon ring → surface + 1px steel border + corner-cut + deep shadow */
 [data-theme='obsidian'] .nc-btn {
   background: var(--surface);
   border: var(--border-w) solid var(--border-col);
@@ -110,7 +110,7 @@
   transition: transform var(--dur-base) var(--ease), border-color var(--dur-base) var(--ease),
     background var(--dur-base) var(--ease), filter var(--dur-fast) var(--ease);
 }
-/* Primary: 시안 1px 발광 보더(채움 아님) — 이 화면의 CTA */
+/* Primary: cyan 1px glowing border (not a fill) — the CTA of this screen */
 [data-theme='obsidian'] .nc-btn--primary {
   border-color: var(--accent);
   color: var(--text);
@@ -119,9 +119,9 @@
     inset 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent),
     var(--shadow-md);
 }
-/* Secondary: 발광 없음, 스틸 보더 */
+/* Secondary: no glow, steel border */
 [data-theme='obsidian'] .nc-btn--secondary { border-color: var(--border-col); color: var(--text); }
-/* Danger: 마젠타 1px 발광 보더 */
+/* Danger: magenta 1px glowing border */
 [data-theme='obsidian'] .nc-btn--danger {
   border-color: var(--error);
   color: var(--text);
@@ -137,7 +137,7 @@
   box-shadow: none;
   color: var(--text-muted);
 }
-/* 호버 = 살짝 부상 + 발광 순간 강화(밝기) — 네온 플리커 제거 */
+/* hover = slight lift + a brief glow boost (brightness) — neon flicker removed */
 [data-theme='obsidian'] .nc-btn:hover:not(:disabled) {
   animation: none;
   filter: brightness(1.18);
@@ -150,7 +150,7 @@
   box-shadow: none;
   filter: none;
 }
-/* 프레스 = 원위치 + 발광 감쇠 */
+/* press = back to origin + glow dampened */
 [data-theme='obsidian'] .nc-btn:active:not(:disabled) {
   transform: translateY(0);
   filter: brightness(0.85);
@@ -158,11 +158,11 @@
   transition: none;
 }
 [data-theme='obsidian'] .nc-btn--primary:active:not(:disabled) { background: var(--p1-dim); }
-/* 비활성 */
+/* disabled */
 [data-theme='obsidian'] .nc-btn:disabled { opacity: 0.4; box-shadow: none; filter: none; }
 [data-theme='obsidian'] .nc-btn__coin { border-color: currentColor; border-radius: 50%; }
 
-/* CoinButton(설정 톱니) — 얇은 시안 글로우 글리프 */
+/* CoinButton (settings gear) — thin cyan glow glyph */
 [data-theme='obsidian'] .nc-coinbtn {
   color: var(--accent2);
   text-shadow: 0 0 1px currentColor, 0 0 8px color-mix(in srgb, var(--accent2) 45%, transparent);
@@ -174,7 +174,7 @@
 }
 [data-theme='obsidian'] .nc-coinbtn:active:not(:disabled) { filter: brightness(0.8); transform: translateY(0); }
 
-/* 모달: 딥 스크림 + blur → 코너컷 surface 패널 + 딥 섀도우 */
+/* modal: deep scrim + blur → corner-cut surface panel + deep shadow */
 [data-theme='obsidian'] .nc-modal-overlay {
   background: rgba(6, 8, 12, 0.78);
   backdrop-filter: blur(6px);
@@ -187,7 +187,7 @@
   clip-path: var(--clip-cut);
   box-shadow: var(--shadow-lg);
 }
-/* 마퀴 스트립 = 가라앉은 간판 바 + 시안 헤어라인 하단선 */
+/* marquee strip = sunken signboard bar + cyan hairline bottom line */
 [data-theme='obsidian'] .marquee-strip {
   background: var(--surface-deep);
   border-bottom: 1px solid var(--border-col);
@@ -199,7 +199,7 @@
   letter-spacing: 0.18em;
 }
 
-/* 코너 브래킷 = 1px 얇은 시안 브래킷(옵시디언은 브래킷 유지, 두께만 축소) */
+/* corner brackets = 1px thin cyan brackets (obsidian keeps the brackets, only thins them) */
 [data-theme='obsidian'] .corner-brackets::before,
 [data-theme='obsidian'] .corner-brackets::after,
 [data-theme='obsidian'] .corner-brackets > .cb2::before,
@@ -208,7 +208,7 @@
   border-color: color-mix(in srgb, var(--p1) 70%, transparent);
 }
 
-/* 램프 → 얇은 링 도트 + 점등 시 얇은 글로우 */
+/* lamp → thin ring dot + a thin glow when lit */
 [data-theme='obsidian'] .lamp {
   border-radius: 50%;
   border: 1px solid var(--border-col);
@@ -221,7 +221,7 @@
   box-shadow: 0 0 8px color-mix(in srgb, var(--lamp-color) 60%, transparent);
 }
 
-/* 터미널 입력 → bg-raised 박스 + 1px 스틸 보더 + 포커스 시안 발광 */
+/* terminal input → bg-raised box + 1px steel border + cyan glow on focus */
 [data-theme='obsidian'] .neon-input {
   background: var(--bg-raised);
   border: var(--border-w) solid var(--border-col);
@@ -236,20 +236,20 @@
 [data-theme='obsidian'] .neon-input .prompt,
 [data-theme='obsidian'] .neon-input input { color: var(--p1); caret-color: var(--accent); }
 
-/* 단위 칩 → 1px 스틸 보더, 2px 살짝 라운드 */
+/* unit chip → 1px steel border, 2px slight round */
 [data-theme='obsidian'] .unit-chip { border: 1px solid var(--border-col); border-radius: 2px; color: var(--text-muted); }
 
-/* 게임 스테이지 베젤: 다크 3px 베젤 + 안쪽 시안 헤어라인 + 코너컷 + 딥 섀도우 */
+/* game stage bezel: dark 3px bezel + inner cyan hairline + corner-cut + deep shadow */
 [data-theme='obsidian'] .crt-bezel {
   border-radius: 0;
   clip-path: var(--clip-cut);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p1) 40%, transparent), var(--shadow-md);
 }
-/* 임박 시 안쪽 헤어라인이 마젠타로 명멸(심장박동 톤) */
+/* when imminent, the inner hairline blinks magenta (heartbeat tone) */
 [data-theme='obsidian'] .crt-bezel.urgent {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p2) 70%, transparent), var(--shadow-md);
 }
 
-/* ── 시그니처 유틸(게임/계기 연출용, 컴포넌트가 opt-in) ── */
-/* Orbitron 계기 숫자: 등폭 정렬(카운트다운·스코어·리더보드) */
+/* ── signature utils (for game/gauge staging, components opt-in) ── */
+/* Orbitron gauge numbers: monospaced alignment (countdown · score · leaderboard) */
 [data-theme='obsidian'] .font-arcade { font-variant-numeric: tabular-nums; }

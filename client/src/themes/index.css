@@ -1,8 +1,8 @@
 /**
- * 테마 재정의 레이어 인덱스 — main.tsx가 theme.css(기본 계약=neon) 다음에 1회 import.
- * 각 파일: `:root[data-theme="<id>"]` 토큰 블록 + `[data-theme="<id>"]` 스코프 효과 override.
- * 활성 테마는 한 번에 하나(data-theme 값 1개)뿐 → 파일 간 특정도 충돌 없음.
- * (neon-coinop은 theme.css :root가 기본이라 별도 파일 불필요.)
+ * Theme override layer index — main.tsx imports it once, right after theme.css (the base contract = neon).
+ * Each file: a `:root[data-theme="<id>"]` token block + `[data-theme="<id>"]`-scoped effect overrides.
+ * Only one theme is active at a time (a single data-theme value) → no specificity clashes between files.
+ * (neon-coinop needs no separate file since theme.css :root is its default.)
  */
 @import './neo-brutal.css';
 @import './clay-toy.css';
@@ -10,9 +10,9 @@
 @import './obsidian.css';
 @import './pico8.css';
 
-/* 텍스트 글로우 토큰 — 제목/포인트 텍스트의 네온 발광을 테마별로 제어(중앙 정의).
-   theme.css :root(neon)은 발광 유지, 라이트 테마는 끄고, 다크(obsidian)는 얇게 남긴다.
-   @import는 규칙보다 먼저 와야 하므로 이 블록은 반드시 import 아래에 위치. */
+/* Text glow token — controls the neon glow of title/highlight text per theme (defined centrally).
+   theme.css :root (neon) keeps the glow, light themes turn it off, and dark (obsidian) leaves a thin one.
+   @import must come before rules, so this block must sit below the imports. */
 :root[data-theme='neo-brutal'],
 :root[data-theme='clay-toy'],
 :root[data-theme='broadcast-arena'],

@@ -1,5 +1,5 @@
 /**
- * Game12 · RED LIGHT, GREEN LIGHT (무궁화 꽃이 피었습니다) — NEON COIN-OP screen.
+ * Game12 · RED LIGHT, GREEN LIGHT — NEON COIN-OP screen.
  * Container testid: scr-game12 / parts: game-stage (CRT bezel), hud-* (HudFrame), btn-exit
  *
  * ── Principles ─────────────────────────────────────────────────────────
@@ -726,7 +726,7 @@ export default function Game12() {
 
         // online mock bot (P2): RUN (U) on green, STOP (I) on the telegraph+red danger window
         // (freeze on 'turning' too — a human brakes on the warning, not after red already hit;
-        //  keep an occasional late reaction so P1 still lands some catch-wins). — 리뷰 #2
+        //  keep an occasional late reaction so P1 still lands some catch-wins). — review #2
         if (getFlow().mode === 'online') {
           const ph = phaseOf(s.reds, s.elapsed);
           const bot = botRef.current;

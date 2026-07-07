@@ -33,7 +33,7 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent) inset;
 }
-/* 미리보기 스와치 [bg, accent, p1, p2] */
+/* preview swatch [bg, accent, p1, p2] */
 .ts-swatch {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

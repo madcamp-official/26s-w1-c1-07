@@ -1,5 +1,5 @@
 /**
- * GAME 13 · POT SHOT (박 터뜨리기) — NEON COIN-OP screen. Owner: game13 agent.
+ * GAME 13 · POT SHOT (burst the pot) — NEON COIN-OP screen. Owner: game13 agent.
  * Container testid: scr-game13 / parts: game-stage (CRT bezel), hud-* (HudFrame), btn-exit
  *
  * ── Principles ──────────────────────────────────────────────────────

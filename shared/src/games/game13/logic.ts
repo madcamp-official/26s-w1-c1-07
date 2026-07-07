@@ -2,17 +2,17 @@ import type { GameInputEvent, GameResult } from '../types'
 import { GAME_DURATION } from '../types'
 
 /**
- * 게임13 = POT SHOT (박 터뜨리기).
- *  · 화면 중앙에 박(pot)이 상하로 왕복(속도는 매 게임 랜덤, 왕복 2~3초).
- *  · P1 좌하단 / P2 우하단 대포. 포물선(중력) 발사체로 박을 맞히면 +1점.
- *  · Q(P1)/U(P2) 홀드: 발사 각도 0~90° 왕복(0.25s에 90° = 360°/s). 떼면 그 각도로 고정.
- *  · W(P1)/I(P2) 홀드: 세기 충전(1초에 MAX). 떼는 순간 고정 각도·충전 세기로 발사.
- *    발사 후 RELOAD(0.4s) 재장전 쿨다운 동안 충전 불가.
- *  · 제한시간 10초 동안 더 많이 맞힌 쪽 승(동점 DRAW).
+ * Game 13 = POT SHOT (burst the pot).
+ *  · A pot bobs up and down at the center of the screen (speed random each game, 2~3s per cycle).
+ *  · P1 bottom-left / P2 bottom-right cannon. Hit the pot with a parabolic (gravity) projectile for +1 point.
+ *  · Hold Q(P1)/U(P2): firing angle sweeps 0~90° (90° in 0.25s = 360°/s). Release to lock that angle.
+ *  · Hold W(P1)/I(P2): charge power (MAX in 1s). On release, fire at the locked angle and charged power.
+ *    After firing, charging is blocked during the RELOAD(0.4s) reload cooldown.
+ *  · Over the 10s time limit, whoever lands more hits wins (tie = DRAW).
  *
- * 좌표계: 논리 캔버스 960×540. y는 아래로 증가(중력 +GRAV). 각도는 x축 기준(0°=수평, 90°=수직).
- * 튜닝: P1(120,476)에서 45°·MAX면 t≈0.57s에 (480,~260) 통과 → 박 중앙 높이와 일치.
- *   각도 30~60°·MAX로 박의 상하 왕복 범위 전체를 커버, 세기로 사거리/궤적 조절.
+ * Coordinate system: logical canvas 960×540. y increases downward (gravity +GRAV). Angle is measured from the x-axis (0°=horizontal, 90°=vertical).
+ * Tuning: from P1(120,476) at 45°·MAX, at t≈0.57s it passes (480,~260) → matching the pot's center height.
+ *   Angle 30~60°·MAX covers the pot's entire up-down travel range; power adjusts the range/trajectory.
  */
 export const G13 = {
   W: 960,
@@ -21,19 +21,19 @@ export const G13 = {
   P2X: 840,
   CANNON_Y: 476,
   POT_X: 480,
-  /** 박 중심 기준 y와 진폭 → 왕복 범위 [BASE-AMP, BASE+AMP] = [140,400] */
+  /** Pot center y and amplitude → travel range [BASE-AMP, BASE+AMP] = [140,400] */
   POT_BASE_Y: 270,
   POT_AMP: 130,
   POT_R: 30,
   PROJ_R: 6,
   GRAV: 900,
-  /** 각속도(도/초). 0.25s에 90° */
+  /** Angular speed (deg/s). 90° in 0.25s */
   ANG_SPEED: 360,
   MAX_POWER: 900,
   MIN_POWER: 220,
-  /** 세기 MAX까지 충전 시간(초) */
+  /** Time to charge power to MAX (s) */
   CHARGE_TIME: 1.0,
-  /** 재장전 쿨다운(초) */
+  /** Reload cooldown (s) */
   RELOAD: 0.4,
 } as const
 
@@ -48,35 +48,35 @@ export interface Shot13 {
 export interface Game13State {
   elapsed: number
   result: GameResult
-  // 조준(각도) — 0~90도, aiming 중 왕복
+  // Aim (angle) — 0~90 deg, sweeps while aiming
   angle1: number
   angle2: number
   aimDir1: number // ±1
   aimDir2: number
   aiming1: boolean
   aiming2: boolean
-  // 세기 충전
+  // Power charge
   power1: number
   power2: number
   charging1: boolean
   charging2: boolean
-  cd1: number // 재장전 쿨다운 잔여(초)
+  cd1: number // Remaining reload cooldown (s)
   cd2: number
-  // 점수
+  // Score
   score1: number
   score2: number
-  // 박
+  // Pot
   potY: number
-  potPeriod: number // 왕복 주기(초) — 렌더 보간용
-  potPhase: number // 위상(라디안)
-  // 발사체
+  potPeriod: number // Cycle period (s) — for render interpolation
+  potPhase: number // Phase (radians)
+  // Projectiles
   shots: Shot13[]
 }
 
 const DEG = Math.PI / 180
 
 export function create(rand: () => number): Game13State {
-  const potPeriod = 2 + rand() // 2~3초 왕복
+  const potPeriod = 2 + rand() // 2~3s per cycle
   const potPhase = rand() * Math.PI * 2
   return {
     elapsed: 0,
@@ -102,7 +102,7 @@ export function create(rand: () => number): Game13State {
   }
 }
 
-/** 발사체 스폰: owner의 대포에서 고정 각도·세기로 */
+/** Spawn a projectile: from owner's cannon at the locked angle and power */
 function fire(state: Game13State, owner: 1 | 2, angleDeg: number, power: number): void {
   const p = Math.max(G13.MIN_POWER, power)
   const a = angleDeg * DEG
@@ -111,7 +111,7 @@ function fire(state: Game13State, owner: 1 | 2, angleDeg: number, power: number)
     x: owner === 1 ? G13.P1X : G13.P2X,
     y: G13.CANNON_Y,
     vx: dir * p * Math.cos(a),
-    vy: -p * Math.sin(a), // 위로(음수)
+    vy: -p * Math.sin(a), // upward (negative)
     owner,
   })
 }
@@ -122,7 +122,7 @@ export function step(state: Game13State, events: GameInputEvent[], dt: number): 
   state.cd1 = Math.max(0, state.cd1 - dt)
   state.cd2 = Math.max(0, state.cd2 - dt)
 
-  // 입력: 각도 홀드(down=시작/up=고정), 세기 홀드(down=충전시작/up=발사)
+  // Input: angle hold (down=start/up=lock), power hold (down=start charge/up=fire)
   for (const e of events) {
     switch (e.code) {
       case 'KeyQ':
@@ -138,7 +138,7 @@ export function step(state: Game13State, events: GameInputEvent[], dt: number): 
             state.power1 = 0
           }
         } else {
-          // 떼는 순간 발사 (충전 중이었고 재장전 아님)
+          // Fire on release (was charging and not reloading)
           if (state.charging1) {
             fire(state, 1, state.angle1, state.power1)
             state.charging1 = false
@@ -165,7 +165,7 @@ export function step(state: Game13State, events: GameInputEvent[], dt: number): 
     }
   }
 
-  // 각도 왕복 (aiming 중에만)
+  // Angle sweep (only while aiming)
   const aStep = G13.ANG_SPEED * dt
   if (state.aiming1) {
     state.angle1 += state.aimDir1 * aStep
@@ -188,15 +188,15 @@ export function step(state: Game13State, events: GameInputEvent[], dt: number): 
     }
   }
 
-  // 세기 충전 (charging 중, MAX까지)
+  // Power charge (while charging, up to MAX)
   const chargeRate = G13.MAX_POWER / G13.CHARGE_TIME
   if (state.charging1) state.power1 = Math.min(G13.MAX_POWER, state.power1 + chargeRate * dt)
   if (state.charging2) state.power2 = Math.min(G13.MAX_POWER, state.power2 + chargeRate * dt)
 
-  // 박 상하 왕복
+  // Pot bobs up and down
   state.potY = G13.POT_BASE_Y + G13.POT_AMP * Math.sin((state.elapsed / state.potPeriod) * Math.PI * 2 + state.potPhase)
 
-  // 발사체 이동 + 박 충돌 + 화면 밖 제거
+  // Move projectiles + pot collision + cull off-screen
   const live: Shot13[] = []
   const potR2 = (G13.POT_R + G13.PROJ_R) * (G13.POT_R + G13.PROJ_R)
   for (const sh of state.shots) {
@@ -206,7 +206,7 @@ export function step(state: Game13State, events: GameInputEvent[], dt: number): 
     const ddx = sh.x - G13.POT_X
     const ddy = sh.y - state.potY
     if (ddx * ddx + ddy * ddy <= potR2) {
-      // 박 명중 → 쏜 쪽 +1점, 발사체 소멸
+      // Pot hit → shooter +1 point, projectile removed
       if (sh.owner === 1) state.score1 += 1
       else state.score2 += 1
       continue

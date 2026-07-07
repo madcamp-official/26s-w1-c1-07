@@ -29,7 +29,7 @@ export default function MainLoggedOut() {
       {/* Top-right: Theme switcher (a global preference, so shown even when logged out) + Login */}
       <header className="s1-header">
         <Button variant="tertiary" data-testid="btn-theme-shop" onClick={() => openModal('theme-shop')}>
-          🎨 테마
+          🎨 Theme
         </Button>
         <Button variant="tertiary" data-testid="btn-login" onClick={() => openLoginModal()}>
           Login

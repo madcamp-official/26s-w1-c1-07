@@ -1,34 +1,34 @@
 /**
- * Game6(공룡 달리기) — 테마: CLAY / SOFT TOY.
- * 씬 전체를 clay-toy 컨셉으로 처음부터 그린다(neon과 동일 요소·좌표, 아트만 교체).
- * 부드러운 몰딩 점토 인형 — 둥글둥글한 블롭, 말랑한 그림자 + 위쪽 하이라이트로 볼륨감.
- * 좌표/크기/속도는 절대 만들지 않는다 → geom.* + @madpump/shared G6 상수만 사용.
+ * Game6 (Dino Run) — theme: CLAY / SOFT TOY.
+ * Draws the whole scene from scratch as a clay-toy concept (same elements/coordinates as neon, art swapped only).
+ * Soft molded clay figures — round blobs, squishy shadow + top highlight for volume.
+ * Never invents coordinates/sizes/speeds → uses only geom.* + @madpump/shared G6 constants.
  */
 import { G6, GAME_DURATION } from '@madpump/shared';
 import { functionColors } from '../../../../net/online';
 import type { Game6DrawScene } from './types';
 
-// ── 팔레트 (아트 디렉션 고정) ──────────────────────────────────────────────
-const FIELD = '#fff1e6'; // 피치 필드
-const PANEL = '#f5e9de'; // 패널(지면)
-const PANEL_EDGE = '#ecdccb'; // 지면 위 립(약간 진한 크림)
-const INK = '#4a3a52'; // 잉크 플럼(텍스트/눈/그림자)
-const CORAL = '#ff8a5c'; // 액센트 코랄
-const BUTTER = '#ffd447'; // 버터
-const CLOUD = '#fffaf4'; // 배경 구름
+// ── palette (art-direction locked) ──────────────────────────────────────────────
+const FIELD = '#fff1e6'; // peach field
+const PANEL = '#f5e9de'; // panel (ground)
+const PANEL_EDGE = '#ecdccb'; // lip above the ground (slightly darker cream)
+const INK = '#4a3a52'; // ink plum (text/eye/shadow)
+const CORAL = '#ff8a5c'; // accent coral
+const BUTTER = '#ffd447'; // butter
+const CLOUD = '#fffaf4'; // background cloud
 
-const SHADOW = 'rgba(74,58,82,0.24)'; // 말랑한 저채도 플럼 그림자
+const SHADOW = 'rgba(74,58,82,0.24)'; // squishy low-saturation plum shadow
 const FONT = "'Baloo 2', sans-serif";
 
-/** 점토 색 3단(base/그늘/하이라이트) */
+/** clay color in 3 tiers (base/shade/highlight) */
 type Clay = { base: string; dark: string; light: string };
-const PINK: Clay = { base: '#ff6e8a', dark: '#e0526f', light: '#ffb0c0' }; // 딸기핑크(P1)
-const MINT: Clay = { base: '#3fc49e', dark: '#2ba183', light: '#8fe3cd' }; // 민트그린(P2)
+const PINK: Clay = { base: '#ff6e8a', dark: '#e0526f', light: '#ffb0c0' }; // strawberry pink (P1)
+const MINT: Clay = { base: '#3fc49e', dark: '#2ba183', light: '#8fe3cd' }; // mint green (P2)
 
-/** 판정→결과 오버레이 사이 인게임 연출 시간(neon과 동일) */
+/** in-game staging time between judging → result overlay (same as neon) */
 const RESULT_FX_MS = 700;
 
-// ── 저수준 그리기 헬퍼 ────────────────────────────────────────────────────
+// ── low-level drawing helpers ────────────────────────────────────────────────────
 function pathRR(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -60,7 +60,7 @@ function noShadow(ctx: CanvasRenderingContext2D): void {
   ctx.shadowOffsetY = 0;
 }
 
-/** 말랑한 점토 알약: 그림자 fill + 위쪽 밝은 하이라이트 */
+/** squishy clay pill: shadow fill + bright top highlight */
 function clayPill(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -77,7 +77,7 @@ function clayPill(
   pathRR(ctx, x, y, w, h, r);
   ctx.fill();
   noShadow(ctx);
-  // 위쪽 하이라이트(퍼피 볼륨)
+  // top highlight (puffy volume)
   ctx.globalAlpha = 0.55;
   ctx.fillStyle = c.light;
   ctx.beginPath();
@@ -86,7 +86,7 @@ function clayPill(
   ctx.restore();
 }
 
-/** 말랑한 점토 원(공/머리 등) */
+/** squishy clay circle (ball/head, etc.) */
 function clayBall(
   ctx: CanvasRenderingContext2D,
   cx: number,
@@ -111,7 +111,7 @@ function clayBall(
   ctx.restore();
 }
 
-/** 단색 소프트 원 puff (이펙트용) */
+/** solid-color soft round puff (for effects) */
 function puff(
   ctx: CanvasRenderingContext2D,
   cx: number,
@@ -129,8 +129,8 @@ function puff(
   ctx.restore();
 }
 
-// ── 스프라이트 ────────────────────────────────────────────────────────────
-/** 통통한 플러시 공룡(P1). leftPx=박스 좌측, bottomPx=박스 하단 */
+// ── sprites ────────────────────────────────────────────────────────────
+/** chunky plush dino (P1). leftPx = box left, bottomPx = box bottom */
 function drawDino(
   ctx: CanvasRenderingContext2D,
   leftPx: number,
@@ -151,7 +151,7 @@ function drawDino(
   if (blink) ctx.globalAlpha = 0.45;
 
   if (!ducking) {
-    // 다리(뒤 → 앞) — runPhase로 교대, 공중이면 짧게 접음
+    // legs (back → front) — alternate via runPhase, tuck short when airborne
     const step = Math.floor(runPhase * 14) % 2 === 0;
     const frontH = grounded ? (step ? 12 : 6) : 6;
     const backH = grounded ? (step ? 6 : 12) : 6;
@@ -160,11 +160,11 @@ function drawDino(
     clayPill(ctx, mx(11), my(40), legW, backH * SC, 5 * SC, legC);
     // front leg
     clayPill(ctx, mx(25), my(40), legW, frontH * SC, 5 * SC, legC);
-    // 꼬리(왼쪽 볼록)
+    // tail (bulge on the left)
     clayBall(ctx, mx(5), my(26), 8 * SC, 7 * SC, c);
-    // 몸통(둥근 알약)
+    // body (round pill)
     clayPill(ctx, mx(6), my(12), 30 * SC, 30 * SC, 13 * SC, c);
-    // 등 위 코랄 뿔 3개
+    // 3 coral spikes on the back
     ctx.save();
     ctx.fillStyle = CORAL;
     for (let i = 0; i < 3; i++) {
@@ -173,11 +173,11 @@ function drawDino(
       ctx.fill();
     }
     ctx.restore();
-    // 머리(오른쪽 위)
+    // head (upper right)
     clayBall(ctx, mx(32), my(15), 11 * SC, 11 * SC, c);
-    // 작은 팔
+    // little arm
     clayPill(ctx, mx(26), my(26), 8 * SC, 5 * SC, 2.5 * SC, legC);
-    // 눈(잉크 점 + 흰 반짝)
+    // eye (ink dot + white glint)
     ctx.fillStyle = INK;
     ctx.beginPath();
     ctx.arc(mx(36), my(12), 2 * SC, 0, Math.PI * 2);
@@ -186,7 +186,7 @@ function drawDino(
     ctx.beginPath();
     ctx.arc(mx(36.6), my(11.4), 0.7 * SC, 0, Math.PI * 2);
     ctx.fill();
-    // 볼터치
+    // cheek blush
     ctx.save();
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = c.light;
@@ -195,18 +195,18 @@ function drawDino(
     ctx.fill();
     ctx.restore();
   } else {
-    // 숙인 자세 — 낮고 길게
+    // ducking pose — low and long
     const step = Math.floor(runPhase * 16) % 2 === 0;
     const frontH = step ? 6 : 3;
     const backH = step ? 3 : 6;
     const legW = 9 * SC;
     clayPill(ctx, mx(12), my(22), legW, backH * SC, 4 * SC, legC);
     clayPill(ctx, mx(24), my(22), legW, frontH * SC, 4 * SC, legC);
-    // 몸통(길쭉한 알약)
+    // body (elongated pill)
     clayPill(ctx, mx(2), my(6), 38 * SC, 18 * SC, 9 * SC, c);
-    // 머리(앞쪽)
+    // head (front)
     clayBall(ctx, mx(36), my(12), 9 * SC, 9 * SC, c);
-    // 눈
+    // eye
     ctx.fillStyle = INK;
     ctx.beginPath();
     ctx.arc(mx(39), my(10), 1.8 * SC, 0, Math.PI * 2);
@@ -219,7 +219,7 @@ function drawDino(
   ctx.restore();
 }
 
-/** 둥근 알약 선인장(P2 점프 장애물). 바닥을 지면에 붙임 */
+/** round-pill cactus (P2 jump obstacle). Bottom pinned to the ground */
 function drawCactus(
   ctx: CanvasRenderingContext2D,
   leftPx: number,
@@ -230,14 +230,14 @@ function drawCactus(
   const H = G6.CACTUS_H;
   const mx = (x: number) => leftPx + x * SC;
   const my = (y: number) => groundPx - (H - y) * SC; // y:0=top..H=ground
-  // 팔(뒤에 먼저)
-  clayPill(ctx, mx(1), my(20), 7 * SC, 12 * SC, 3.5 * SC, c); // 왼팔 세로
-  clayPill(ctx, mx(1), my(24), 9 * SC, 6 * SC, 3 * SC, c); // 왼팔 가로
-  clayPill(ctx, mx(18), my(12), 7 * SC, 12 * SC, 3.5 * SC, c); // 오른팔 세로
-  clayPill(ctx, mx(16), my(18), 9 * SC, 6 * SC, 3 * SC, c); // 오른팔 가로
-  // 몸통(둥근 필)
+  // arms (behind first)
+  clayPill(ctx, mx(1), my(20), 7 * SC, 12 * SC, 3.5 * SC, c); // left arm vertical
+  clayPill(ctx, mx(1), my(24), 9 * SC, 6 * SC, 3 * SC, c); // left arm horizontal
+  clayPill(ctx, mx(18), my(12), 7 * SC, 12 * SC, 3.5 * SC, c); // right arm vertical
+  clayPill(ctx, mx(16), my(18), 9 * SC, 6 * SC, 3 * SC, c); // right arm horizontal
+  // body (round pill)
   clayPill(ctx, mx(8), my(2), 12 * SC, 44 * SC, 6 * SC, c);
-  // 버터색 꽃 점 두 개
+  // two butter-colored flower dots
   ctx.save();
   ctx.fillStyle = BUTTER;
   ctx.beginPath();
@@ -247,7 +247,7 @@ function drawCactus(
   ctx.restore();
 }
 
-/** 동글동글 블롭 새(P2 숙이기 장애물). 머리높이 + 말랑 날갯짓(phase) */
+/** round blob bird (P2 duck obstacle). Head height + squishy wing flap (phase) */
 function drawBird(
   ctx: CanvasRenderingContext2D,
   leftPx: number,
@@ -257,9 +257,9 @@ function drawBird(
   c: Clay,
 ): void {
   const mx = (x: number) => leftPx + x * SC;
-  const my = (y: number) => topPx + y * SC; // 박스 상단 기준(0..28)
+  const my = (y: number) => topPx + y * SC; // relative to box top (0..28)
   const flap = Math.sin(phase * 16); // -1..1
-  // 날개(몸통 뒤) — 위/아래로 부드럽게
+  // wing (behind body) — gently up/down
   ctx.save();
   softShadow(ctx, 6, 3);
   ctx.fillStyle = c.dark;
@@ -267,9 +267,9 @@ function drawBird(
   ctx.ellipse(mx(24), my(14 - flap * 5), 10 * SC, 6 * SC, -flap * 0.5, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
-  // 몸통(통통한 공)
+  // body (chunky ball)
   clayBall(ctx, mx(20), my(14), 15 * SC, 11 * SC, c);
-  // 부리(왼쪽=진행 방향, 코랄)
+  // beak (left = direction of travel, coral)
   ctx.save();
   ctx.fillStyle = CORAL;
   ctx.beginPath();
@@ -279,7 +279,7 @@ function drawBird(
   ctx.closePath();
   ctx.fill();
   ctx.restore();
-  // 눈
+  // eye
   ctx.fillStyle = INK;
   ctx.beginPath();
   ctx.arc(mx(12), my(12), 1.9 * SC, 0, Math.PI * 2);
@@ -290,11 +290,11 @@ function drawBird(
   ctx.fill();
 }
 
-// ── 장면 렌더러 ──────────────────────────────────────────────────────────
+// ── scene renderer ──────────────────────────────────────────────────────────
 export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geom) => {
   const { CW, CH, SC, X, Y } = geom;
 
-  // 색은 '플레이어' 종속(역할 아님). 공룡=P1엔티티, 장애물=P2엔티티.
+  // Color depends on the 'player' (not the role). Dino = P1 entity, obstacle = P2 entity.
   const fc = functionColors();
   const dinoClay = fc.p1 === 'blue' ? PINK : MINT;
   const obstClay = fc.p1 === 'blue' ? MINT : PINK;
@@ -306,12 +306,12 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   const resultFx = fx.find((f) => f.kind === 'chroma' || f.kind === 'rush');
   const resultAge = resultFx ? now - resultFx.t : Infinity;
 
-  // --- 피치 필드 배경 ---
+  // --- peach field background ---
   ctx.clearRect(0, 0, CW, CH);
   ctx.fillStyle = FIELD;
   ctx.fillRect(0, 0, CW, CH);
 
-  // --- 배경 구름 puff(패럴랙스, elapsed로 스크롤) ---
+  // --- background cloud puffs (parallax, scrolls with elapsed) ---
   ctx.save();
   for (const st of geom.STARS) {
     const sx = (st.x - s.elapsed * G6.OBST_SPEED * SC * st.z * 0.18) % CW;
@@ -325,7 +325,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   }
   ctx.restore();
 
-  // 임박 5초: 하늘에 따뜻한 코랄 빛 오버레이
+  // final 5 seconds: warm coral light overlay on the sky
   if (urgent) {
     ctx.save();
     const pulse = 0.05 + 0.05 * (0.5 + 0.5 * Math.sin(now / 180));
@@ -335,20 +335,20 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // --- 지면: 말랑한 둥근 밴드 + 부드러운 top 립 ---
+  // --- ground: squishy round band + soft top lip ---
   ctx.save();
   softShadow(ctx, 10, -3);
   ctx.fillStyle = PANEL;
   pathRR(ctx, -20, horizon, CW + 40, CH - horizon + 20, 26 * SC);
   ctx.fill();
   noShadow(ctx);
-  // top 립(약간 진한 크림)
+  // top lip (slightly darker cream)
   ctx.fillStyle = PANEL_EDGE;
   pathRR(ctx, -20, horizon, CW + 40, 10 * SC, 8 * SC);
   ctx.fill();
   ctx.restore();
 
-  // --- 스피드: 지면 위 소프트 라운드 대시(왼쪽으로 흐름) ---
+  // --- speed: soft round dashes on the ground (flow left) ---
   ctx.save();
   ctx.fillStyle = PANEL_EDGE;
   const gap = 62;
@@ -357,7 +357,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     pathRR(ctx, x, horizon + 22, 26, 7, 3.5);
     ctx.fill();
   }
-  // 작은 점토 조약돌 몇 개(진행감)
+  // a few small clay pebbles (sense of progress)
   ctx.globalAlpha = 0.5;
   ctx.fillStyle = obstClay.light;
   const off2 = (s.elapsed * G6.OBST_SPEED * SC * 0.6) % 140;
@@ -368,13 +368,13 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   }
   ctx.restore();
 
-  // --- 장애물(P2 색) ---
+  // --- obstacles (P2 color) ---
   for (const o of s.obstacles) {
     if (o.type === 'jump') drawCactus(ctx, X(o.x), horizon, SC, obstClay);
     else drawBird(ctx, X(o.x), Y(G6.BIRD_TOP), SC, o.phase, obstClay);
   }
 
-  // --- P2 투척 섬광(spawnAnim) — 오른쪽 끝 소프트 puff ---
+  // --- P2 throw flash (spawnAnim) — soft puff at the right edge ---
   if (s.spawnAnim > 0) {
     const a = Math.min(1, s.spawnAnim / G6.SPAWN_ANIM);
     ctx.save();
@@ -385,7 +385,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // --- 공룡 그림자(지면 원형) ---
+  // --- dino shadow (ellipse on ground) ---
   if (s.result === null) {
     ctx.save();
     ctx.globalAlpha = s.grounded ? 0.22 : 0.12;
@@ -396,10 +396,10 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // --- 공룡(P1 색) ---
+  // --- dino (P1 color) ---
   const dinoBottom = horizon - Y(s.y);
   const blink = crashed && resultAge < RESULT_FX_MS && Math.floor(now / 60) % 2 === 0;
-  const showDino = !(crashed && resultAge > RESULT_FX_MS * 0.55); // 충돌 후 puff로 대체
+  const showDino = !(crashed && resultAge > RESULT_FX_MS * 0.55); // replaced by puff after crash
   if (showDino) {
     drawDino(
       ctx,
@@ -414,13 +414,13 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     );
   }
 
-  // --- 플레이어 배지 ---
+  // --- player badge ---
   ctx.save();
   ctx.textAlign = 'center';
   ctx.font = `700 14px ${FONT}`;
   const badgeX = X(G6.DINO_X + G6.DINO_W / 2);
   const badgeY = dinoBottom - Y(G6.DINO_H) - 10;
-  // 배지 알약
+  // badge pill
   const bw = 30;
   const bh = 18;
   ctx.save();
@@ -438,7 +438,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   }
   ctx.restore();
 
-  // --- P2 리로드 게이지(우상단, 광택 캡슐) ---
+  // --- P2 reload gauge (top-right, glossy capsule) ---
   {
     const ready = s.cooldown <= 0;
     const ratio = ready ? 1 : 1 - s.cooldown / Math.max(0.0001, s.cooldownMax);
@@ -447,12 +447,12 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     const gx = CW - gw - 20;
     const gy = 18;
     ctx.save();
-    // 라벨
+    // label
     ctx.font = `700 11px ${FONT}`;
     ctx.textAlign = 'right';
     ctx.fillStyle = INK;
     ctx.fillText(p2IsYou ? 'P2(YOU) RELOAD' : 'P2 RELOAD', gx + gw, gy - 5);
-    // 트랙(패널 캡슐)
+    // track (panel capsule)
     ctx.save();
     softShadow(ctx, 6, 2);
     ctx.fillStyle = PANEL;
@@ -463,7 +463,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.lineWidth = 1.5;
     pathRR(ctx, gx, gy, gw, gh, gh / 2);
     ctx.stroke();
-    // 채움
+    // fill
     const fillW = Math.max(gh, (gw) * ratio);
     const blinkReady = ready && Math.floor(now / 220) % 2 === 0;
     ctx.save();
@@ -473,7 +473,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.fillStyle = ready ? (blinkReady ? BUTTER : obstClay.base) : obstClay.base;
     pathRR(ctx, gx, gy, fillW, gh, gh / 2);
     ctx.fill();
-    // 광택 하이라이트
+    // glossy highlight
     ctx.globalAlpha = 0.6;
     ctx.fillStyle = '#fff';
     pathRR(ctx, gx + 3, gy + 2, fillW - 6, gh * 0.34, gh * 0.17);
@@ -482,7 +482,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // --- 이펙트(소프트 round puff) ---
+  // --- effects (soft round puff) ---
   for (const f of fx) {
     const age = now - f.t;
     if (f.kind === 'dust' && age < 320) {
@@ -510,13 +510,13 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
       puff(ctx, mxs, mys, 8 + age * 0.05, obstClay.light, alpha * 0.9);
       puff(ctx, mxs, mys, 4, '#fff', alpha);
     } else if (f.kind === 'caption' && age < f.life) {
-      const pop = Math.min(1, age / 120); // 살짝 튀어오르는 등장
+      const pop = Math.min(1, age / 120); // slight bounce-in entrance
       ctx.save();
       ctx.textAlign = 'center';
       ctx.font = `800 ${16 + (1 - pop) * 6}px ${FONT}`;
       const cx = Math.min(CW - 60, Math.max(60, X(f.x)));
       const cy = Y(f.y);
-      // 잉크 아웃라인으로 또렷하게
+      // sharpen with an ink outline
       ctx.lineWidth = 4;
       ctx.strokeStyle = INK;
       ctx.lineJoin = 'round';
@@ -528,7 +528,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     }
   }
 
-  // --- 생존 승리 러쉬(지면 위 따뜻한 소프트 글로우) ---
+  // --- survival-win rush (warm soft glow above the ground) ---
   const rush = fx.find((f) => f.kind === 'rush');
   if (rush) {
     const a = Math.min(1, (now - rush.t) / 260);
@@ -538,7 +538,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     grad.addColorStop(1, `rgba(255,212,71,${0.32 * a})`);
     ctx.fillStyle = grad;
     ctx.fillRect(0, horizon - 70, CW, 70);
-    // 떠오르는 컨페티 puff
+    // rising confetti puffs
     ctx.globalAlpha = 0.8 * a;
     for (let i = 0; i < 8; i++) {
       const px = ((i * 137.5) % CW);
@@ -551,7 +551,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // --- 충돌 순간 연출(부드러운 코랄 플래시) ---
+  // --- crash-moment staging (soft coral flash) ---
   const chroma = fx.find((f) => f.kind === 'chroma');
   if (chroma) {
     const ca = now - chroma.t;

@@ -2,41 +2,41 @@ import type { GameInputEvent, GameResult } from '../types'
 import { GAME_DURATION } from '../types'
 
 /**
- * 게임11 = HOT POTATO (폭탄 돌리기).
- *  · 퓨즈 10초 고정: elapsed가 GAME_DURATION(10s)에 닿는 순간 폭발. 폭발 시 폭탄을 든 쪽이 패배.
- *    (항상 누군가 들고 있으므로 무승부 없음)
- *  · Q(P1)/U(P2) = 상대에게 넘기기. 받은 직후 RECEIVE_CD(0.2s) 동안은 다시 넘길 수 없다
- *    (= "패스 딜레이 0.2초"). 넘기면 소유권은 즉시 상대에게 넘어간다.
- *  · W(P1)/I(P2) = 페이크 모션(연출 전용, 기계 효과 없음. FAKE_CD 쿨다운). 상대를 속이는 심리용.
- *  · 최대 홀드 MAX_HOLD(1.5s): 그 이상 들고 있으면 자동으로 상대에게 넘어간다.
- *  · 화면(렌더): 남은 3초부터 카운트다운 숫자를 가리고, 퓨즈가 끝나갈수록 폭탄이 검정→주황.
+ * Game 11 = HOT POTATO (bomb pass).
+ *  · Fuse fixed at 10s: explodes the moment elapsed hits GAME_DURATION(10s). On explosion, whoever holds the bomb loses.
+ *    (someone is always holding it, so there's no draw)
+ *  · Q(P1)/U(P2) = pass to the opponent. Right after receiving, you can't pass again during RECEIVE_CD(0.2s)
+ *    (= "pass delay 0.2s"). Passing hands ownership to the opponent immediately.
+ *  · W(P1)/I(P2) = fake motion (visual only, no mechanical effect. FAKE_CD cooldown). A mind-game to fool the opponent.
+ *  · Max hold MAX_HOLD(1.5s): hold longer than that and it auto-passes to the opponent.
+ *  · Screen (render): hide the countdown number starting from the last 3s, and the bomb goes black→orange as the fuse runs out.
  */
 export const G11 = {
-  /** 받은 직후 다시 넘길 수 없는 시간(초) — 패스 딜레이 */
+  /** Time (s) after receiving during which you can't pass again — pass delay */
   RECEIVE_CD: 0.2,
-  /** 최대 홀드(초). 초과 시 자동 패스 */
+  /** Max hold (s). Auto-pass when exceeded */
   MAX_HOLD: 1.5,
-  /** 페이크 쿨다운(초) */
+  /** Fake cooldown (s) */
   FAKE_CD: 0.3,
-  /** 남은 시간이 이 값(초) 이하면 카운트다운 숨김(렌더 규칙) */
+  /** If remaining time is at or below this value (s), hide the countdown (render rule) */
   HIDE_UNDER: 3,
 } as const
 
 export interface Game11State {
   elapsed: number
   result: GameResult
-  /** 현재 폭탄 보유자 (1=P1, 2=P2) */
+  /** Current bomb holder (1=P1, 2=P2) */
   holder: 1 | 2
-  /** 현재 보유자가 폭탄을 받은 시각(elapsed) — 홀드 시간·수신 쿨다운 계산 */
+  /** Time (elapsed) the current holder received the bomb — for hold time / receive cooldown calc */
   holdStart: number
-  /** 마지막 패스 발생 시각(elapsed) — 렌더의 날아가는 연출용 */
+  /** Time (elapsed) of the last pass — for the flying render effect */
   passAt: number
-  /** 마지막 자동패스 여부(렌더 구분용) */
+  /** Whether the last pass was an auto-pass (for render distinction) */
   autoPass: boolean
-  /** 페이크 쿨다운 잔여(초) */
+  /** Remaining fake cooldown (s) */
   fakeCd1: number
   fakeCd2: number
-  /** 페이크 발동 시각(elapsed) — 렌더 페인트 연출용. 0=없음 */
+  /** Time (elapsed) a fake was triggered — for render paint effect. 0=none */
   fake1: number
   fake2: number
 }
@@ -56,7 +56,7 @@ export function create(rand: () => number): Game11State {
   }
 }
 
-/** 소유권을 상대에게 넘긴다(즉시). 홀드 타이머·수신 쿨다운 리셋. */
+/** Hands ownership to the opponent (immediately). Resets hold timer and receive cooldown. */
 function pass(state: Game11State, auto: boolean): void {
   state.holder = state.holder === 1 ? 2 : 1
   state.holdStart = state.elapsed
@@ -75,19 +75,19 @@ export function step(state: Game11State, events: GameInputEvent[], dt: number): 
   for (const e of events) {
     if (e.type !== 'down') continue
     switch (e.code) {
-      case 'KeyQ': // P1 패스 (P1이 들고 있고 수신 쿨다운 지났을 때만)
+      case 'KeyQ': // P1 pass (only when P1 is holding and the receive cooldown has passed)
         if (state.holder === 1 && canPass) pass(state, false)
         break
-      case 'KeyU': // P2 패스
+      case 'KeyU': // P2 pass
         if (state.holder === 2 && canPass) pass(state, false)
         break
-      case 'KeyW': // P1 페이크 (보유자만, 쿨다운)
+      case 'KeyW': // P1 fake (holder only, cooldown)
         if (state.holder === 1 && state.fakeCd1 === 0) {
           state.fake1 = state.elapsed
           state.fakeCd1 = G11.FAKE_CD
         }
         break
-      case 'KeyI': // P2 페이크
+      case 'KeyI': // P2 fake
         if (state.holder === 2 && state.fakeCd2 === 0) {
           state.fake2 = state.elapsed
           state.fakeCd2 = G11.FAKE_CD
@@ -96,10 +96,10 @@ export function step(state: Game11State, events: GameInputEvent[], dt: number): 
     }
   }
 
-  // 최대 홀드 초과 → 자동 패스
+  // Max hold exceeded → auto-pass
   if (state.elapsed - state.holdStart >= G11.MAX_HOLD) pass(state, true)
 
-  // 퓨즈 만료 → 폭발. 든 쪽이 패배(상대 승).
+  // Fuse expired → explosion. The holder loses (opponent wins).
   if (state.elapsed >= GAME_DURATION) {
     state.result = state.holder === 1 ? 'P2' : 'P1'
   }

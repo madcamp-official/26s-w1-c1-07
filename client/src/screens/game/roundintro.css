@@ -184,7 +184,7 @@
   .ri-count__go {
     animation: none;
   }
-  /* 모션 축소 시엔 카운트다운 숫자를 정적으로 보이게(투명도 0으로 사라지지 않도록) */
+  /* With reduced motion, keep the countdown numbers static (don't let them fade out to opacity 0) */
   .ri-count__num,
   .ri-count__go {
     opacity: 1;

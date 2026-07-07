@@ -35,7 +35,7 @@ export interface HudFrameProps {
   currentRound: number;
   /** time remaining (ms) — from the game state's derived/view */
   timeRemainingMs: number;
-  /** 남은 시간을 숨긴다("?" 표시). HOT POTATO(11)처럼 퓨즈를 감추는 게임용 */
+  /** Hide the remaining time (show "?"). For games that conceal the fuse, like HOT POTATO(11) */
   hideTime?: boolean;
   className?: string;
 }

@@ -1,42 +1,42 @@
 /**
- * Game6(공룡 달리기) — PICO-8 8비트 픽셀아트 테마 렌더러.
+ * Game6 (Dino Run) — PICO-8 8-bit pixel-art theme renderer.
  *
- * neon 렌더러(Game6.tsx)와 "같은 요소·같은 좌표"를 그리되, 컨셉만 완전히 다르다:
- *  · 모든 것이 청키한 픽셀(작은 채움 rect)로 구성된 도트 스프라이트 — 안티에일리어싱/글로우 없음.
- *  · 공룡·선인장·새는 문자열 비트맵을 셀 단위로 blit. imageSmoothing 끔.
- *  · 색은 '역할'이 아니라 '플레이어'를 따른다(functionColors) — neon과 동일하게 스왑.
+ * Draws the "same elements, same coordinates" as the neon renderer (Game6.tsx), but a completely different concept:
+ *  · Everything is a dot sprite made of chunky pixels (small filled rects) — no anti-aliasing/glow.
+ *  · The dino, cactus and bird are string bitmaps blitted cell by cell. imageSmoothing off.
+ *  · Color follows the "player", not the "role" (functionColors) — swaps identically to neon.
  *
- * 좌표/크기/속도는 절대 만들지 않는다 — geom.* + @madpump/shared G6 상수만 사용(크로스플레이 공정성).
+ * Never invent coordinates/sizes/speeds — use only geom.* + the @madpump/shared G6 constants (crossplay fairness).
  */
 import { G6, GAME_DURATION } from '@madpump/shared';
 import { functionColors } from '../../../../net/online';
 import type { Game6DrawScene } from './types';
 
-// ── PICO-8 16색 팔레트(부분) ────────────────────────────────────────────────
+// ── PICO-8 16-color palette (partial) ───────────────────────────────────────
 const PAL = {
-  bg: '#1d2b53', // 다크 인디고 (하늘/필드)
-  ground: '#000000', // 지면 본체
-  groundAlt: '#422136', // 지면 디더/속도 대시
-  blue: '#29adff', // P1 후보색
-  red: '#ff004d', // P2 후보색
-  accent: '#ffa300', // 오렌지 액센트
-  yellow: '#ffec27', // 옐로
-  text: '#fff1e8', // 텍스트(오프화이트)
-  dim: '#5f574f', // 그림자/디밍
-  dark: '#00000088', // 반투명 검정(그림자)
+  bg: '#1d2b53', // dark indigo (sky/field)
+  ground: '#000000', // ground body
+  groundAlt: '#422136', // ground dither/speed dash
+  blue: '#29adff', // P1 candidate color
+  red: '#ff004d', // P2 candidate color
+  accent: '#ffa300', // orange accent
+  yellow: '#ffec27', // yellow
+  text: '#fff1e8', // text (off-white)
+  dim: '#5f574f', // shadow/dimming
+  dark: '#00000088', // semi-transparent black (shadow)
 } as const;
 
 const FONT = "'Press Start 2P', monospace";
 
-/** 판정→결과 오버레이 전환 사이 인게임 연출 시간(neon과 동일) */
+/** In-game FX duration between the verdict→result overlay transition (same as neon) */
 const RESULT_FX_MS = 700;
 
-// ── 도트 스프라이트(문자열 비트맵, '#'=채움 / ' '=투명) ──────────────────────
-// 공룡(오른쪽을 봄) — 몸통(공유) + 다리 2프레임.
+// ── Dot sprites (string bitmaps, '#'=fill / ' '=transparent) ─────────────────
+// Dino (facing right) — body (shared) + 2 leg frames.
 const DINO_BODY: readonly string[] = [
   '        ###',
   '       ####',
-  '       # ##', // 눈 = 빈칸
+  '       # ##', // eye = blank
   '       ####',
   '   ########',
   '  #########',
@@ -53,10 +53,10 @@ const DINO_LEGS_B: readonly string[] = [
   '   ##  ##  ',
   '  ##    #  ',
 ];
-// 숙인 공룡 — 낮고 길게(머리 앞으로) + 다리 2프레임.
+// Ducking dino — low and long (head forward) + 2 leg frames.
 const DUCK_BODY: readonly string[] = [
   '         ####',
-  '  ###########', // 눈 자리 근처
+  '  ###########', // near the eye position
   ' ############',
   '   ##########',
 ];
@@ -68,7 +68,7 @@ const DUCK_LEGS_B: readonly string[] = [
   '    ##   ##  ',
   '     #   #   ',
 ];
-// 선인장(사구아로).
+// Cactus (saguaro).
 const CACTUS: readonly string[] = [
   '   #   ',
   '   #   ',
@@ -83,7 +83,7 @@ const CACTUS: readonly string[] = [
   '   #   ',
   '   #   ',
 ];
-// 새 — 날개 위/아래 2프레임(왼쪽=진행방향, 부리 col0).
+// Bird — 2 wing up/down frames (left = travel direction, beak at col0).
 const BIRD_UP: readonly string[] = [
   '     ##    ',
   '    ###    ',
@@ -103,7 +103,7 @@ const BIRD_DOWN: readonly string[] = [
   '     ##    ',
 ];
 
-/** 스프라이트 비트맵을 (ox,oy) 좌상단에 셀(cellW×cellH) 단위 청키 픽셀로 그린다. */
+/** Draw a sprite bitmap as chunky pixels of cell (cellW×cellH) size, with (ox,oy) as the top-left. */
 function blit(
   ctx: CanvasRenderingContext2D,
   map: readonly string[],
@@ -125,11 +125,11 @@ function blit(
   }
 }
 
-// ── 씬 렌더러 ────────────────────────────────────────────────────────────────
+// ── Scene renderer ───────────────────────────────────────────────────────────
 export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geom) => {
   const { CW, CH, SC, X, Y, STARS } = geom;
 
-  // 색은 플레이어 종속(역할 아님) — P1엔티티(공룡)=fc.p1 색, P2엔티티(장애물)=fc.p2 색.
+  // Color is player-dependent (not role) — P1 entity (dino) = fc.p1 color, P2 entity (obstacle) = fc.p2 color.
   const fc = functionColors();
   const dinoCol = fc.p1 === 'blue' ? PAL.blue : PAL.red;
   const obstCol = fc.p2 === 'blue' ? PAL.blue : PAL.red;
@@ -143,17 +143,17 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
 
   ctx.imageSmoothingEnabled = false;
 
-  // ── 하늘/필드 배경 ──
+  // ── Sky/field background ──
   ctx.clearRect(0, 0, CW, CH);
   ctx.fillStyle = PAL.bg;
   ctx.fillRect(0, 0, CW, CH);
 
-  // ── 별(단일 픽셀, elapsed로 패럴랙스 스크롤) ──
+  // ── Stars (single pixel, parallax scroll by elapsed) ──
   ctx.save();
   for (const st of STARS) {
     const sx = (st.x - s.elapsed * G6.OBST_SPEED * SC * st.z * 0.25) % CW;
     const x = sx < 0 ? sx + CW : sx;
-    // 밝기/색을 z로 계층화 — 가까운 별은 옐로, 먼 별은 텍스트색
+    // Layer brightness/color by z — near stars are yellow, far stars use the text color
     ctx.fillStyle = st.z > 0.35 ? PAL.yellow : PAL.text;
     ctx.globalAlpha = 0.25 + st.z * 0.5;
     const px = st.r > 1.3 ? 3 : 2;
@@ -161,7 +161,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   }
   ctx.restore();
 
-  // ── 임박(5초 이내): 붉은 디더 스캔 오버레이(하늘 영역) ──
+  // ── Imminent (within 5s): red dither scan overlay (sky region) ──
   if (urgent) {
     ctx.save();
     ctx.fillStyle = PAL.red;
@@ -176,18 +176,18 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // ── 지면: 검은 밴드 + 디더 상단 엣지 + 속도 대시 ──
+  // ── Ground: black band + dithered top edge + speed dashes ──
   ctx.save();
   ctx.fillStyle = PAL.ground;
   ctx.fillRect(0, horizon, CW, CH - horizon);
-  // 상단 1셀 디더 체커(경계 강조, 스크롤로 미세 이동)
+  // Top 1-cell dither checker (boundary emphasis, drifts slightly with scroll)
   const edge = Math.round(SC * 3);
   const eoff = Math.floor((s.elapsed * G6.OBST_SPEED * SC) / edge) % 2;
   ctx.fillStyle = PAL.groundAlt;
   for (let x = 0, i = 0; x < CW; x += edge, i++) {
     if ((i + eoff) % 2 === 0) ctx.fillRect(x, horizon, edge, edge);
   }
-  // 속도 대시(왼쪽으로 흘러 전진감) — 지면 밴드 안 밝은 픽셀 세그먼트
+  // Speed dashes (flow left for a sense of forward motion) — bright pixel segments inside the ground band
   const gap = Math.round(60 * SC);
   const dashOff = (s.elapsed * G6.OBST_SPEED * SC) % gap;
   const dashW = Math.round(20 * SC);
@@ -199,10 +199,10 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   }
   ctx.restore();
 
-  // ── 장애물(P2 색) ──
+  // ── Obstacles (P2 color) ──
   for (const o of s.obstacles) {
     if (o.type === 'jump') {
-      // 선인장 — 바닥을 지면에 붙임
+      // Cactus — sit its base on the ground
       const left = X(o.x);
       const wPx = G6.CACTUS_W * SC;
       const hPx = G6.CACTUS_H * SC;
@@ -210,7 +210,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
       const rows = CACTUS.length;
       blit(ctx, CACTUS, left, horizon - hPx, wPx / cols, hPx / rows, obstCol);
     } else {
-      // 새 — 머리 높이 + 날갯짓(phase). neon과 동일 타이밍(sin(phase*16)).
+      // Bird — head height + wing flap (phase). Same timing as neon (sin(phase*16)).
       const left = X(o.x);
       const top = Y(G6.BIRD_TOP);
       const wPx = G6.BIRD_W * SC;
@@ -222,7 +222,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     }
   }
 
-  // ── P2 투척 섬광(spawnAnim) — 오른쪽 끝에서 장애물이 튀어나오는 순간 청키 픽셀 바 ──
+  // ── P2 throw flash (spawnAnim) — chunky pixel bar the moment an obstacle bursts in from the right edge ──
   if (s.spawnAnim > 0) {
     const a = Math.min(1, s.spawnAnim / G6.SPAWN_ANIM);
     ctx.save();
@@ -237,13 +237,13 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // ── 공룡(P1 색) ──
+  // ── Dino (P1 color) ──
   const ducking = s.ducking && s.grounded;
   const dinoBottom = horizon - Y(s.y);
   const blink = crashed && resultAge < RESULT_FX_MS && Math.floor(now / 60) % 2 === 0;
-  const showDino = !(crashed && resultAge > RESULT_FX_MS * 0.55); // 충돌 후 파편으로 대체
+  const showDino = !(crashed && resultAge > RESULT_FX_MS * 0.55); // replaced by shards after a crash
 
-  // 그림자(지면 위 청키 다크 픽셀 바 — grounded면 진하게)
+  // Shadow (chunky dark pixel bar on the ground — darker when grounded)
   if (s.result === null) {
     ctx.save();
     ctx.fillStyle = PAL.dark;
@@ -276,7 +276,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // ── 플레이어 배지 'P1' + 'YOU'(p1IsYou면 점멸) ──
+  // ── Player badge 'P1' + 'YOU' (blinks if p1IsYou) ──
   ctx.save();
   ctx.font = `10px ${FONT}`;
   ctx.textAlign = 'center';
@@ -289,7 +289,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   }
   ctx.restore();
 
-  // ── P2 리로드 게이지(우상단) — 세그먼트 픽셀 블록 ──
+  // ── P2 reload gauge (top-right) — segmented pixel blocks ──
   {
     const ready = s.cooldown <= 0;
     const ratio = ready ? 1 : 1 - s.cooldown / Math.max(0.0001, s.cooldownMax);
@@ -302,16 +302,16 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.textAlign = 'right';
     ctx.fillStyle = obstCol;
     ctx.fillText(p2IsYou ? 'P2(YOU) RELOAD' : 'P2 RELOAD', gx + gw, gy - 6);
-    // 픽셀 테두리(1px 프레임)
+    // Pixel border (1px frame)
     ctx.fillStyle = PAL.dim;
     ctx.fillRect(gx - 2, gy - 2, gw + 4, 2);
     ctx.fillRect(gx - 2, gy + gh, gw + 4, 2);
     ctx.fillRect(gx - 2, gy, 2, gh);
     ctx.fillRect(gx + gw, gy, 2, gh);
-    // 트랙(어두운 바탕)
+    // Track (dark background)
     ctx.fillStyle = PAL.ground;
     ctx.fillRect(gx, gy, gw, gh);
-    // 세그먼트 채움
+    // Segment fill
     const segN = 10;
     const segGap = 2;
     const segW = (gw - segGap * (segN - 1)) / segN;
@@ -327,7 +327,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // ── 이펙트(픽셀 버스트) ──
+  // ── Effects (pixel burst) ──
   for (const f of fx) {
     const age = now - f.t;
     if (f.kind === 'dust' && age < 320) {
@@ -368,19 +368,19 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
       const my = Math.round(Y(f.y));
       const pxs = Math.max(2, Math.round(SC * 3));
       const arm = Math.round(8 + age * 0.05);
-      // 십자 픽셀 버스트
+      // Cross-shaped pixel burst
       ctx.fillRect(mx - arm, my, arm * 2, pxs);
       ctx.fillRect(mx, my - arm, pxs, arm * 2);
       ctx.restore();
     } else if (f.kind === 'caption' && age < f.life) {
-      const on = Math.floor(age / 110) % 2 === 0 || age > 260; // 점멸 후 유지
+      const on = Math.floor(age / 110) % 2 === 0 || age > 260; // hold after blinking
       if (on) {
         ctx.save();
         ctx.font = `13px ${FONT}`;
         ctx.textAlign = 'center';
         const tx = Math.min(CW - 60, Math.max(60, X(f.x)));
         const ty = Y(f.y);
-        // 도트 느낌의 하드 섀도(1px 오프셋)
+        // Dotty hard shadow (1px offset)
         ctx.fillStyle = PAL.ground;
         ctx.fillText(f.text, tx + 2, ty + 2);
         ctx.fillStyle = f.color;
@@ -390,7 +390,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     }
   }
 
-  // ── 생존 승리 러쉬(지면 위 P1색 픽셀 밴드가 차오름) ──
+  // ── Survival-win rush (a P1-color pixel band fills up over the ground) ──
   const rush = fx.find((f) => f.kind === 'rush');
   if (rush) {
     const a = Math.min(1, (now - rush.t) / 260);
@@ -398,7 +398,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.fillStyle = dinoCol;
     const bandH = Math.round(60 * SC * a);
     const cell = Math.round(SC * 4);
-    // 위로 갈수록 성겨지는 디더 밴드
+    // Dither band that thins out toward the top
     for (let y = horizon - bandH; y < horizon; y += cell) {
       const t = (y - (horizon - bandH)) / Math.max(1, bandH);
       ctx.globalAlpha = 0.2 + t * 0.5;
@@ -409,7 +409,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // ── 충돌 순간: 픽셀 RGB 스플릿 글리치(승패 프레임 계열) ──
+  // ── Crash moment: pixel RGB-split glitch (part of the win/loss frame family) ──
   const chroma = fx.find((f) => f.kind === 'chroma');
   if (chroma && now - chroma.t < 90) {
     ctx.save();

@@ -1,18 +1,18 @@
 /**
- * Game6(공룡 달리기) — NEO-BRUTALISM 테마 렌더러.
+ * Game6 (Dino Run) — NEO-BRUTALISM theme renderer.
  *
- * 디자인: 크림 필드 위에 FLAT BOLD 도형 + 3px 순수 검정 아웃라인 + 하드(블러 0) 드롭섀도.
- *  각 스프라이트는 "먼저 +5,+5 오프셋 검정 실루엣을 깔고 → 그 위에 컬러 도형 + 3px 잉크 스트로크".
- *  glow(shadowBlur) 절대 사용 안 함. 위험/임박은 45° 옐로/블랙 해저드 스트라이프 밴드.
+ * Design: FLAT BOLD shapes on a cream field + 3px pure-black outline + hard (blur 0) drop shadow.
+ *  Each sprite first lays down a +5,+5 offset black silhouette, then a color shape + 3px ink stroke on top.
+ *  Never uses glow (shadowBlur). Danger/imminent = 45° yellow/black hazard stripe band.
  *
- * 기하/판정은 절대 만들지 않는다 — geom.* + @madpump/shared G6 상수만 사용(크로스플레이 불변).
- * 색은 '역할'이 아니라 '플레이어'를 따른다 → functionColors()로 P1/P2 엔티티 색을 정한다.
+ * Never invents geometry/judgment — uses only geom.* + @madpump/shared G6 constants (crossplay invariant).
+ * Color follows the "player", not the "role" → functionColors() decides the P1/P2 entity colors.
  */
 import { G6, GAME_DURATION } from '@madpump/shared';
 import { functionColors } from '@/net/online';
 import type { Game6DrawScene, Fx, Geom } from './types';
 
-// ── 팔레트 ───────────────────────────────────────────────────────────────
+// ── Palette ───────────────────────────────────────────────────────────────
 const INK = '#0a0a0a';
 const CREAM = '#fdf6e3';
 const BLUE = '#2b5bff';
@@ -22,14 +22,14 @@ const YELLOW = '#ffd600';
 const WHITE = '#ffffff';
 const FONT = "'Space Mono', monospace";
 
-/** 하드 섀도 오프셋(px) — 블러 0, 순수 검정 */
+/** Hard shadow offset (px) — blur 0, pure black */
 const SO = 5;
-/** 판정 확정 → 결과 오버레이 전환 사이 인게임 연출 시간(neon과 동일) */
+/** In-game FX duration between judgment lock-in and the result overlay transition (same as neon) */
 const RESULT_FX_MS = 700;
 
 type Pt = readonly [number, number];
 
-/** 로컬 좌표(mx/my로 매핑) 폴리곤을 하드섀도 + 컬러 + 잉크 아웃라인으로 그린다 */
+/** Draws a local-coordinate polygon (mapped via mx/my) with hard shadow + color + ink outline */
 function poly(
   ctx: CanvasRenderingContext2D,
   pts: readonly Pt[],
@@ -45,14 +45,14 @@ function poly(
   };
   ctx.save();
   ctx.globalAlpha = alpha;
-  // 하드 섀도(검정, +SO)
+  // Hard shadow (black, +SO)
   ctx.save();
   ctx.translate(SO, SO);
   path();
   ctx.fillStyle = INK;
   ctx.fill();
   ctx.restore();
-  // 컬러 + 3px 잉크 스트로크
+  // Color + 3px ink stroke
   path();
   ctx.fillStyle = fill;
   ctx.fill();
@@ -63,7 +63,7 @@ function poly(
   ctx.restore();
 }
 
-/** 로컬 좌표 사각형(하드섀도 + 컬러 + 잉크 아웃라인) */
+/** Local-coordinate rectangle (hard shadow + color + ink outline) */
 function box(
   ctx: CanvasRenderingContext2D,
   x0: number,
@@ -90,7 +90,7 @@ function box(
   );
 }
 
-/** 45° 옐로/블랙 해저드 스트라이프 밴드(위험/임박 표시) */
+/** 45° yellow/black hazard stripe band (danger/imminent indicator) */
 function hazardBand(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -106,7 +106,7 @@ function hazardBand(
   ctx.fillStyle = YELLOW;
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = INK;
-  const sw = 16; // 검정 스트라이프 폭
+  const sw = 16; // black stripe width
   const period = sw * 2;
   const s = ((shift % period) + period) % period;
   for (let i = -h - period; i < w + h + period; i += period) {
@@ -125,7 +125,7 @@ function hazardBand(
   ctx.restore();
 }
 
-/** 공룡(P1) — 볼드 플랫 실루엣. leftPx=박스 좌측, bottomPx=박스 하단(지면-y) */
+/** Dino (P1) — bold flat silhouette. leftPx=box left, bottomPx=box bottom (ground-y) */
 function drawDino(
   ctx: CanvasRenderingContext2D,
   leftPx: number,
@@ -143,13 +143,13 @@ function drawDino(
   const a = blink ? 0.35 : 1;
 
   if (!ducking) {
-    // 다리(달리기 교대) — 몸통 뒤에 먼저
+    // Legs (running alternation) — behind the body first
     const step = Math.floor(runPhase * 14) % 2 === 0;
     const frontH = grounded ? (step ? 10 : 4) : 5;
     const backH = grounded ? (step ? 4 : 10) : 5;
     box(ctx, 13, 40, 18, 40 + backH, mx, my, color, a);
     box(ctx, 21, 40, 26, 40 + frontH, mx, my, color, a);
-    // 몸통 실루엣(오른쪽을 봄)
+    // Body silhouette (facing right)
     poly(
       ctx,
       [
@@ -172,7 +172,7 @@ function drawDino(
       color,
       a,
     );
-    // 눈(흰 바탕 + 잉크 점)
+    // Eye (white base + ink dot)
     ctx.save();
     ctx.globalAlpha = a;
     ctx.fillStyle = WHITE;
@@ -228,7 +228,7 @@ function drawDino(
   }
 }
 
-/** 선인장(P2 점프 장애물) — 볼드 플랫. 지면에 바닥을 붙임 */
+/** Cactus (P2 jump obstacle) — bold flat. Bottom pinned to the ground */
 function drawCactus(
   ctx: CanvasRenderingContext2D,
   leftPx: number,
@@ -239,15 +239,15 @@ function drawCactus(
   const H = G6.CACTUS_H;
   const mx = (x: number) => leftPx + x * SC;
   const my = (y: number) => groundPx - (H - y) * SC;
-  // 팔 먼저(몸통 뒤로 겹치도록), 그다음 몸통
-  box(ctx, 2, 18, 8, 31, mx, my, color, 1); // 왼팔 세로
-  box(ctx, 6, 24, 12, 30, mx, my, color, 1); // 왼팔 연결
-  box(ctx, 19, 12, 25, 27, mx, my, color, 1); // 오른팔 세로
-  box(ctx, 15, 20, 21, 26, mx, my, color, 1); // 오른팔 연결
-  box(ctx, 9, 4, 18, 46, mx, my, color, 1); // 몸통
+  // Arms first (so they overlap behind the body), then the body
+  box(ctx, 2, 18, 8, 31, mx, my, color, 1); // left arm vertical
+  box(ctx, 6, 24, 12, 30, mx, my, color, 1); // left arm connector
+  box(ctx, 19, 12, 25, 27, mx, my, color, 1); // right arm vertical
+  box(ctx, 15, 20, 21, 26, mx, my, color, 1); // right arm connector
+  box(ctx, 9, 4, 18, 46, mx, my, color, 1); // body
 }
 
-/** 새(P2 숙이기 장애물) — 볼드 플랫 + 날갯짓(phase). 부리는 왼쪽(진행 방향) */
+/** Bird (P2 duck obstacle) — bold flat + wing flap (phase). Beak points left (travel direction) */
 function drawBird(
   ctx: CanvasRenderingContext2D,
   leftPx: number,
@@ -257,8 +257,8 @@ function drawBird(
   SC: number,
 ): void {
   const mx = (x: number) => leftPx + x * SC;
-  const my = (y: number) => topPx + y * SC; // 박스 상단 기준 (0..28)
-  // 날개(위/아래로 퍼덕) — 몸통 뒤
+  const my = (y: number) => topPx + y * SC; // relative to box top (0..28)
+  // Wings (flap up/down) — behind the body
   const flap = Math.sin(phase * 16);
   poly(
     ctx,
@@ -272,7 +272,7 @@ function drawBird(
     color,
     1,
   );
-  // 몸통
+  // Body
   poly(
     ctx,
     [
@@ -290,7 +290,7 @@ function drawBird(
     color,
     1,
   );
-  // 눈
+  // Eye
   ctx.save();
   ctx.fillStyle = WHITE;
   ctx.beginPath();
@@ -306,7 +306,7 @@ function drawBird(
   ctx.restore();
 }
 
-/** 잉크 아웃라인 텍스트(하드 섀도) — 라벨/캡션 공용 */
+/** Ink-outline text (hard shadow) — shared by labels/captions */
 function inkText(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -333,7 +333,7 @@ export const drawScene: Game6DrawScene = (
 ) => {
   const { CW, CH, SC, X, Y } = geom;
 
-  // 색은 플레이어 종속 — dino(P1엔티티)=fc.p1색, 장애물(P2엔티티)=fc.p2색.
+  // Color is player-dependent — dino (P1 entity)=fc.p1 color, obstacle (P2 entity)=fc.p2 color.
   const fc = functionColors();
   const P1C = fc.p1 === 'blue' ? BLUE : PINK;
   const P2C = fc.p2 === 'blue' ? BLUE : PINK;
@@ -347,12 +347,12 @@ export const drawScene: Game6DrawScene = (
   const resultFx = fx.find((f) => f.kind === 'chroma' || f.kind === 'rush');
   const resultAge = resultFx ? now - resultFx.t : Infinity;
 
-  // ── 하늘 필드(플랫 크림) ──
+  // ── Sky field (flat cream) ──
   ctx.clearRect(0, 0, CW, CH);
   ctx.fillStyle = CREAM;
   ctx.fillRect(0, 0, CW, CH);
 
-  // ── 포스터 태양(볼드 옐로 원 + 잉크 아웃라인 + 하드섀도) ──
+  // ── Poster sun (bold yellow circle + ink outline + hard shadow) ──
   ctx.save();
   const sunX = CW * 0.16;
   const sunY = CH * 0.22;
@@ -370,7 +370,7 @@ export const drawScene: Game6DrawScene = (
   ctx.stroke();
   ctx.restore();
 
-  // ── 볼드 잉크 점(패럴랙스 스크롤) ──
+  // ── Bold ink dots (parallax scroll) ──
   ctx.save();
   ctx.fillStyle = INK;
   for (let i = 0; i < geom.STARS.length; i += 6) {
@@ -383,15 +383,15 @@ export const drawScene: Game6DrawScene = (
   }
   ctx.restore();
 
-  // ── 지면: 두꺼운 잉크 라인 + 스크롤 스피드 텍스처(대시) ──
+  // ── Ground: thick ink line + scrolling speed texture (dashes) ──
   ctx.save();
-  // 지면 밴드(살짝 어두운 크림톤으로 구획)
+  // Ground band (partitioned with a slightly darker cream tone)
   ctx.fillStyle = '#efe6c9';
   ctx.fillRect(0, horizon, CW, CH - horizon);
-  // 두꺼운 잉크 지면선
+  // Thick ink ground line
   ctx.fillStyle = INK;
   ctx.fillRect(0, horizon - 3, CW, 6);
-  // 스피드 대시(왼쪽으로 흐름)
+  // Speed dashes (flowing left)
   const gap = 56;
   const off = scroll % gap;
   for (let x = -off; x < CW; x += gap) {
@@ -399,18 +399,18 @@ export const drawScene: Game6DrawScene = (
   }
   ctx.restore();
 
-  // ── 임박(≤5s): 45° 해저드 스트라이프 밴드(지면선 바로 아래) ──
+  // ── Imminent (≤5s): 45° hazard stripe band (just below the ground line) ──
   if (urgent) {
     hazardBand(ctx, 0, horizon + 30, CW, 22, scroll);
   }
 
-  // ── 장애물(P2 색) ──
+  // ── Obstacles (P2 color) ──
   for (const o of s.obstacles) {
     if (o.type === 'jump') drawCactus(ctx, X(o.x), horizon, P2C, SC);
     else drawBird(ctx, X(o.x), Y(G6.BIRD_TOP), o.phase, P2C, SC);
   }
 
-  // ── P2 투척 섬광(spawnAnim 파생) — 오른쪽 끝 볼드 오렌지 웨지 ──
+  // ── P2 throw flash (derived from spawnAnim) — bold orange wedge at the right edge ──
   if (s.spawnAnim > 0) {
     const p = Math.min(1, s.spawnAnim / G6.SPAWN_ANIM);
     ctx.save();
@@ -428,12 +428,12 @@ export const drawScene: Game6DrawScene = (
     ctx.restore();
   }
 
-  // ── 공룡(P1 색) ──
+  // ── Dino (P1 color) ──
   const dinoBottom = horizon - Y(s.y);
   const blink = crashed && resultAge < RESULT_FX_MS && Math.floor(now / 60) % 2 === 0;
-  const showDino = !(crashed && resultAge > RESULT_FX_MS * 0.55); // 충돌 후 파편으로 대체
+  const showDino = !(crashed && resultAge > RESULT_FX_MS * 0.55); // replaced by shards after crash
 
-  // 공룡 그림자(지면 타원 — 플랫 잉크)
+  // Dino shadow (ground ellipse — flat ink)
   if (s.result === null) {
     ctx.save();
     ctx.globalAlpha = s.grounded ? 0.9 : 0.4;
@@ -458,7 +458,7 @@ export const drawScene: Game6DrawScene = (
     );
   }
 
-  // ── 플레이어 배지(P1 / YOU) ──
+  // ── Player badge (P1 / YOU) ──
   ctx.save();
   ctx.font = `bold 13px ${FONT}`;
   ctx.textAlign = 'center';
@@ -470,7 +470,7 @@ export const drawScene: Game6DrawScene = (
   }
   ctx.restore();
 
-  // ── P2 리로드 게이지(우상단) — 흰 박스 + 3px 잉크 테두리 + 하드섀도, 오렌지 채움 ──
+  // ── P2 reload gauge (top-right) — white box + 3px ink border + hard shadow, orange fill ──
   {
     const ready = s.cooldown <= 0;
     const ratio = ready ? 1 : 1 - s.cooldown / Math.max(0.0001, s.cooldownMax);
@@ -482,20 +482,20 @@ export const drawScene: Game6DrawScene = (
     ctx.font = `bold 11px ${FONT}`;
     ctx.textAlign = 'right';
     inkText(ctx, p2IsYou ? 'P2(YOU) RELOAD' : 'P2 RELOAD', gx + gw, gy - 6, P2C);
-    // 하드 섀도
+    // Hard shadow
     ctx.fillStyle = INK;
     ctx.fillRect(gx + SO, gy + SO, gw, gh);
-    // 흰 트랙 박스
+    // White track box
     ctx.fillStyle = WHITE;
     ctx.fillRect(gx, gy, gw, gh);
-    // 오렌지 채움
+    // Orange fill
     ctx.fillStyle = ORANGE;
     ctx.fillRect(gx, gy, gw * ratio, gh);
-    // 3px 잉크 테두리
+    // 3px ink border
     ctx.lineWidth = 3;
     ctx.strokeStyle = INK;
     ctx.strokeRect(gx + 1.5, gy + 1.5, gw - 3, gh - 3);
-    // 준비 완료 = 옐로 'READY' 태그(점멸)
+    // Ready = yellow 'READY' tag (blinking)
     if (ready && Math.floor(now / 220) % 2 === 0) {
       ctx.font = `bold 10px ${FONT}`;
       ctx.textAlign = 'left';
@@ -504,11 +504,11 @@ export const drawScene: Game6DrawScene = (
     ctx.restore();
   }
 
-  // ── 이펙트 ──
+  // ── Effects ──
   for (const f of fx) {
     const age = now - f.t;
     if (f.kind === 'dust' && age < 320) {
-      // 볼드 잉크 먼지 조각
+      // Bold ink dust bits
       ctx.save();
       ctx.globalAlpha = Math.max(0, 0.8 - age / 400);
       ctx.fillStyle = INK;
@@ -521,7 +521,7 @@ export const drawScene: Game6DrawScene = (
       }
       ctx.restore();
     } else if (f.kind === 'shards' && age < 640) {
-      // 충돌 파편 — 컬러 사각 + 잉크 아웃라인이 사방으로
+      // Crash shards — color squares + ink outline flying in all directions
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - age / 640);
       const cx = X(f.x);
@@ -541,7 +541,7 @@ export const drawScene: Game6DrawScene = (
       }
       ctx.restore();
     } else if (f.kind === 'spawn' && age < 260) {
-      // 볼드 오렌지 다이아몬드 임팩트
+      // Bold orange diamond impact
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - age / 260);
       const cx = X(f.x);
@@ -568,7 +568,7 @@ export const drawScene: Game6DrawScene = (
       ctx.stroke();
       ctx.restore();
     } else if (f.kind === 'caption' && age < f.life) {
-      // 볼드 캡션 — 흰 플레이트 + 잉크 테두리 + 하드섀도 + 컬러 텍스트
+      // Bold caption — white plate + ink border + hard shadow + color text
       const on = Math.floor(age / 110) % 2 === 0 || age > 260;
       if (on) {
         ctx.save();
@@ -594,7 +594,7 @@ export const drawScene: Game6DrawScene = (
     }
   }
 
-  // ── 생존 승리 러쉬 — 지면 위 볼드 P1 색 밴드(잉크 테두리) ──
+  // ── Survival-win rush — bold P1-color band above the ground (ink border) ──
   const rush = fx.find((f) => f.kind === 'rush');
   if (rush) {
     const p = Math.min(1, (now - rush.t) / 260);
@@ -607,7 +607,7 @@ export const drawScene: Game6DrawScene = (
     ctx.restore();
   }
 
-  // ── 충돌 순간 하드 오프셋 더블비전(짧게) ──
+  // ── Hard-offset double vision at crash moment (brief) ──
   const chroma = fx.find((f) => f.kind === 'chroma');
   if (chroma && now - chroma.t < 90) {
     ctx.save();

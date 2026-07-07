@@ -40,30 +40,30 @@
   --font-display: 'Gugi', sans-serif;
   --font-body: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
 
-  /* ── 테마 계약 확장 토큰 (테마 시스템 정본) ──────────────────────────────
-     모든 테마(themes/<id>.css)가 이 전체 계약을 재정의한다. 아래 값은 neon 기본값이며
-     기존 화면 동작을 100% 보존한다(추가 토큰은 순수 additive, 두 detokenize만 값 동일 치환). */
-  --text-dim: #6f6396;                    /* 3차 텍스트/비활성/힌트 */
-  --on-accent: #0b0616;                   /* --accent 채움 위 잉크색 */
-  --ok: var(--win);                       /* 성공 피드백(복사됨/일치) */
-  --border-col: var(--hairline);          /* 실선 보더 색(보더 강조 테마용) */
-  --border-w: 1px;                        /* 기본 보더 두께 */
-  --scanline-color: rgba(0, 0, 0, 0.22);  /* CRT 스캔라인 틴트(비-CRT 테마는 transparent) */
-  --vignette-color: rgba(0, 0, 0, 0.45);  /* 화면 가장자리 비네팅 */
-  --bezel-color: #000;                    /* 게임 스테이지 베젤/프레임 색 */
-  --bezel-w: 14px;                        /* 베젤 두께 */
-  --radius: 0px;                          /* 기본 코너 반경(네온=각짐) */
+  /* ── theme contract extension tokens (theme system source of truth) ──────────────────────────────
+     Every theme (themes/<id>.css) redefines this whole contract. The values below are the neon defaults and
+     preserve existing screen behavior 100% (added tokens are purely additive; only two detokenizations are value-identical swaps). */
+  --text-dim: #6f6396;                    /* tertiary text / disabled / hint */
+  --on-accent: #0b0616;                   /* ink color on an --accent fill */
+  --ok: var(--win);                       /* success feedback (copied / match) */
+  --border-col: var(--hairline);          /* solid border color (for border-emphasis themes) */
+  --border-w: 1px;                        /* default border width */
+  --scanline-color: rgba(0, 0, 0, 0.22);  /* CRT scanline tint (transparent for non-CRT themes) */
+  --vignette-color: rgba(0, 0, 0, 0.45);  /* screen-edge vignetting */
+  --bezel-color: #000;                    /* game-stage bezel/frame color */
+  --bezel-w: 14px;                        /* bezel width */
+  --radius: 0px;                          /* default corner radius (neon = sharp) */
   --radius-sm: 6px;
   --radius-lg: 12px;
   --radius-pill: 999px;
   --shadow-sm: 0 0 6px color-mix(in srgb, var(--accent2) 45%, transparent);
   --shadow-md: 0 0 12px color-mix(in srgb, var(--accent2) 45%, transparent);
   --shadow-lg: 0 0 24px color-mix(in srgb, var(--accent2) 55%, transparent);
-  --ease: steps(1, end);                  /* 모션 정체성: 네온=하드 스텝 */
+  --ease: steps(1, end);                  /* motion identity: neon = hard steps */
   --dur-fast: 120ms;
   --dur-base: 220ms;
   --dur-slow: 400ms;
-  --text-glow: 0 0 4px currentColor, 0 0 18px currentColor; /* 네온 텍스트 글로우(제목/포인트) */
+  --text-glow: 0 0 4px currentColor, 0 0 18px currentColor; /* neon text glow (titles/highlights) */
 }
 
 /* ---------------------------------------------------------------- global */

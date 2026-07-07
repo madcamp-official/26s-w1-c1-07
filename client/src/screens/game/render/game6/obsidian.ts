@@ -1,16 +1,16 @@
 /**
- * Game6(공룡 달리기) — OBSIDIAN 테마.
+ * Game6 (Dino Run) — OBSIDIAN theme.
  * DARK MINIMAL HI-TECH: near-black field, thin neon wireframe sprites (1.5px stroke),
  * electric-cyan(P1) / magenta-red(P2) accents, corner-cut HUD panel, receding steel grid.
  *
- * 계약: types.ts의 Game6DrawScene 시그니처를 정확히 구현. 좌표/판정은 geom + @madpump/shared G6 상수만 사용.
- * 색은 '역할'이 아니라 '플레이어'를 따른다 → functionColors()로 P1/P2 엔티티 색을 스왑.
+ * Contract: implements the Game6DrawScene signature from types.ts exactly. Coords/judgment use only geom + @madpump/shared G6 constants.
+ * Color follows the "player", not the "role" → functionColors() swaps the P1/P2 entity colors.
  */
 import type { Game6DrawScene } from './types';
 import { G6, GAME_DURATION } from '@madpump/shared';
 import { functionColors } from '../../../../net/online';
 
-// ── OBSIDIAN 팔레트 ─────────────────────────────────────────────
+// ── OBSIDIAN palette ─────────────────────────────────────────────
 const FIELD = '#0a0c10'; // near-black field
 const RAISED = '#0e1118'; // raised panel
 const TEXT = '#eaf0f8'; // label text
@@ -21,7 +21,7 @@ const CYAN_RGB = '0,240,255';
 const RED_RGB = '255,51,88';
 const FONT = "'Orbitron', sans-serif";
 
-/** 판정 → 결과 오버레이 전환 사이 인게임 연출 시간(충돌/생존) — Game6.tsx의 RESULT_FX_MS와 동일 */
+/** In-game FX duration between judgment and the result overlay transition (crash/survive) — same as RESULT_FX_MS in Game6.tsx */
 const RESULT_FX_MS = 700;
 
 interface Neon {
@@ -31,7 +31,7 @@ interface Neon {
   p2rgb: string;
 }
 
-/** 문자 단위 letter-spacing 텍스트(브라우저 letterSpacing 프로퍼티 미의존 → TS strict 안전) */
+/** Per-character letter-spacing text (does not rely on the browser letterSpacing property → TS strict safe) */
 function spacedText(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -54,7 +54,7 @@ function spacedText(
   ctx.textAlign = prevAlign;
 }
 
-/** 얇은 네온 와이어프레임 폴리곤(1.5px stroke + thin glow + near-transparent dark fill) */
+/** Thin neon wireframe polygon (1.5px stroke + thin glow + near-transparent dark fill) */
 function wire(
   ctx: CanvasRenderingContext2D,
   pts: readonly (readonly [number, number])[],
@@ -74,7 +74,7 @@ function wire(
   ctx.stroke();
 }
 
-/** 앵귤러 와이어프레임 랩터(P1). leftPx=박스 좌측, bottomPx=박스 하단, sc=geom.SC */
+/** Angular wireframe raptor (P1). leftPx=box left, bottomPx=box bottom, sc=geom.SC */
 function drawRaptor(
   ctx: CanvasRenderingContext2D,
   leftPx: number,
@@ -98,7 +98,7 @@ function drawRaptor(
   if (blink) ctx.globalAlpha = 0.35;
 
   if (!ducking) {
-    // 서 있는 랩터(오른쪽을 봄) — 날카로운 각진 실루엣
+    // Standing raptor (facing right) — sharp angular silhouette
     wire(
       ctx,
       [
@@ -118,7 +118,7 @@ function drawRaptor(
       rgb,
       true,
     );
-    // 앞발(짧은 팔)
+    // Forelimb (short arm)
     ctx.beginPath();
     ctx.moveTo(mx(27), my(24));
     ctx.lineTo(mx(33), my(28));
@@ -127,7 +127,7 @@ function drawRaptor(
     ctx.shadowBlur = 6;
     ctx.lineWidth = 1.5;
     ctx.stroke();
-    // 다리(달리기 — runPhase 교대). 공중이면 접음.
+    // Legs (running — runPhase alternation). Tucked when airborne.
     const step = Math.floor(runPhase * 14) % 2 === 0;
     const frontH = grounded ? (step ? 41 + 8 : 41 + 2) : 41 + 4;
     const backH = grounded ? (step ? 41 + 2 : 41 + 8) : 41 + 4;
@@ -139,14 +139,14 @@ function drawRaptor(
     };
     leg(15, backH);
     leg(22, frontH);
-    // 눈(발광 점)
+    // Eye (glowing dot)
     ctx.shadowBlur = 0;
     ctx.fillStyle = col;
     ctx.beginPath();
     ctx.arc(mx(33), my(10), 1.5 * sc, 0, Math.PI * 2);
     ctx.fill();
   } else {
-    // 숙인 자세 — 낮고 길게, 머리를 앞으로
+    // Ducking pose — low and long, head forward
     wire(
       ctx,
       [
@@ -187,7 +187,7 @@ function drawRaptor(
   ctx.restore();
 }
 
-/** 선인장(P2 점프 장애물) — 날카로운 빨강 아웃라인. 바닥을 지면에 붙임 */
+/** Cactus (P2 jump obstacle) — sharp red outline. Bottom pinned to the ground */
 function drawCactus(
   ctx: CanvasRenderingContext2D,
   leftPx: number,
@@ -202,7 +202,7 @@ function drawCactus(
   const P = (x: number, y: number): readonly [number, number] => [mx(x), my(y)];
   ctx.save();
   ctx.lineJoin = 'miter';
-  // 각진 단일 아웃라인(몸통 + 좌우 팔) — 하나의 실루엣
+  // Angular single outline (body + left/right arms) — one silhouette
   wire(
     ctx,
     [
@@ -226,7 +226,7 @@ function drawCactus(
   ctx.restore();
 }
 
-/** 새(P2 숙이기 장애물) — 빨강 아웃라인 + 날갯짓(phase) */
+/** Bird (P2 duck obstacle) — red outline + wing flap (phase) */
 function drawBird(
   ctx: CanvasRenderingContext2D,
   leftPx: number,
@@ -237,11 +237,11 @@ function drawBird(
   sc: number,
 ): void {
   const mx = (x: number) => leftPx + x * sc;
-  const my = (y: number) => topPx + y * sc; // 박스 상단 기준 (0..28)
+  const my = (y: number) => topPx + y * sc; // relative to box top (0..28)
   const P = (x: number, y: number): readonly [number, number] => [mx(x), my(y)];
   ctx.save();
   ctx.lineJoin = 'miter';
-  // 몸통(부리는 왼쪽 = 진행 방향)
+  // Body (beak points left = travel direction)
   wire(
     ctx,
     [P(2, 14), P(10, 9), P(24, 8), P(34, 10), P(38, 15), P(28, 19), P(12, 19), P(7, 16)],
@@ -249,10 +249,10 @@ function drawBird(
     rgb,
     true,
   );
-  // 날개 — 위/아래로 퍼덕
+  // Wing — flap up/down
   const flap = Math.sin(phase * 16);
   wire(ctx, [P(15, 12), P(30, 12), P(22, 12 - 9 * flap)], col, rgb, true);
-  // 눈
+  // Eye
   ctx.shadowBlur = 0;
   ctx.fillStyle = col;
   ctx.beginPath();
@@ -261,13 +261,13 @@ function drawBird(
   ctx.restore();
 }
 
-// ── 장면 렌더러 ─────────────────────────────────────────────────
+// ── Scene renderer ─────────────────────────────────────────────────
 export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geom) => {
   const { CW, CH, SC } = geom;
   const X = geom.X;
   const Y = geom.Y;
 
-  // 색은 플레이어 종속: P1엔티티는 fc.p1가 blue면 CYAN, red면 RED. P2는 반대.
+  // Color is player-dependent: P1 entity = CYAN if fc.p1 is blue, RED if red. P2 is the opposite.
   const fc = functionColors();
   const swap = fc.p1 === 'red';
   const col: Neon = swap
@@ -281,12 +281,12 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   const resultFx = fx.find((f) => f.kind === 'chroma' || f.kind === 'rush');
   const resultAge = resultFx ? now - resultFx.t : Infinity;
 
-  // --- 배경(near-black) ---
+  // --- Background (near-black) ---
   ctx.clearRect(0, 0, CW, CH);
   ctx.fillStyle = FIELD;
   ctx.fillRect(0, 0, CW, CH);
 
-  // --- 패럴랙스 별(faint steel dots, elapsed로 스크롤) ---
+  // --- Parallax stars (faint steel dots, scrolled by elapsed) ---
   ctx.save();
   for (const st of geom.STARS) {
     const sx = (st.x - s.elapsed * G6.OBST_SPEED * SC * st.z * 0.18) % CW;
@@ -297,7 +297,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   }
   ctx.restore();
 
-  // --- 지면 아래 원근 스틸 그리드(receding) ---
+  // --- Perspective steel grid below the ground (receding) ---
   ctx.save();
   const vpx = CW / 2;
   ctx.strokeStyle = urgent ? `rgba(${col.p2rgb},0.14)` : 'rgba(35,42,56,0.55)';
@@ -321,7 +321,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   }
   ctx.restore();
 
-  // --- 지면선(cyan horizon) + 스피드 대시 스크롤(cyan, 왼쪽으로) ---
+  // --- Ground line (cyan horizon) + speed dash scroll (cyan, leftward) ---
   ctx.save();
   ctx.strokeStyle = CYAN;
   ctx.shadowColor = CYAN;
@@ -344,13 +344,13 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   }
   ctx.restore();
 
-  // --- 장애물(빨강 아웃라인) ---
+  // --- Obstacles (red outline) ---
   for (const o of s.obstacles) {
     if (o.type === 'jump') drawCactus(ctx, X(o.x), horizon, col.p2, col.p2rgb, SC);
     else drawBird(ctx, X(o.x), Y(G6.BIRD_TOP), o.phase, col.p2, col.p2rgb, SC);
   }
 
-  // --- P2 투척 섬광(spawnAnim 파생, 오른쪽 끝) ---
+  // --- P2 throw flash (derived from spawnAnim, right edge) ---
   if (s.spawnAnim > 0) {
     const a = Math.min(1, s.spawnAnim / G6.SPAWN_ANIM);
     ctx.save();
@@ -363,7 +363,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // --- 랩터(P1) ---
+  // --- Raptor (P1) ---
   const dinoBottom = horizon - Y(s.y);
   const blink = crashed && resultAge < RESULT_FX_MS && Math.floor(now / 60) % 2 === 0;
   const showDino = !(crashed && resultAge > RESULT_FX_MS * 0.55);
@@ -381,7 +381,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
       SC,
     );
   }
-  // 지면 그림자(원형)
+  // Ground shadow (circular)
   if (s.result === null) {
     ctx.save();
     ctx.globalAlpha = s.grounded ? 0.4 : 0.2;
@@ -392,7 +392,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // --- 플레이어 배지(P1 / YOU) ---
+  // --- Player badge (P1 / YOU) ---
   ctx.save();
   ctx.font = `9px ${FONT}`;
   ctx.fillStyle = col.p1;
@@ -407,7 +407,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   }
   ctx.restore();
 
-  // --- P2 리로드 게이지(우상단, corner-cut 패널) ---
+  // --- P2 reload gauge (top-right, corner-cut panel) ---
   {
     const ready = s.cooldown <= 0;
     const ratio = ready ? 1 : 1 - s.cooldown / Math.max(0.0001, s.cooldownMax);
@@ -416,7 +416,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     const gx = CW - 170;
     const gy = 18;
     const notch = 9;
-    // 45° 노치를 top-left / bottom-right 두 코너에 적용한 폴리곤 경로
+    // Polygon path with 45° notches applied to the top-left / bottom-right corners
     const panel = (): void => {
       ctx.beginPath();
       ctx.moveTo(gx + notch, gy);
@@ -429,7 +429,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     };
 
     ctx.save();
-    // 라벨
+    // Label
     ctx.font = `8px ${FONT}`;
     ctx.fillStyle = TEXT;
     ctx.shadowColor = col.p2;
@@ -437,7 +437,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     spacedText(ctx, p2IsYou ? 'P2(YOU) RELOAD' : 'P2 RELOAD', gx + gw, gy - 5, 2, 'right');
     ctx.shadowBlur = 0;
 
-    // 패널 배경 + 채움(clip) + 프레임
+    // Panel background + fill (clip) + frame
     panel();
     ctx.fillStyle = RAISED;
     ctx.fill();
@@ -453,7 +453,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.fillRect(gx, gy, gw * ratio, gh);
     ctx.restore();
 
-    // 얇은 시안 프레임
+    // Thin cyan frame
     panel();
     ctx.strokeStyle = `rgba(${CYAN_RGB},0.7)`;
     ctx.shadowColor = CYAN;
@@ -463,7 +463,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // --- 이펙트 ---
+  // --- Effects ---
   for (const f of fx) {
     const age = now - f.t;
     if (f.kind === 'dust' && age < 320) {
@@ -526,7 +526,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     }
   }
 
-  // --- 생존 승리 러쉬(지면선 시안 글로우) ---
+  // --- Survival-win rush (cyan glow on the ground line) ---
   const rush = fx.find((f) => f.kind === 'rush');
   if (rush) {
     const a = Math.min(1, (now - rush.t) / 260);
@@ -539,7 +539,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // --- 서브틀 비네트 ---
+  // --- Subtle vignette ---
   ctx.save();
   const vg = ctx.createRadialGradient(CW / 2, CH / 2, CH * 0.3, CW / 2, CH / 2, CH * 0.75);
   vg.addColorStop(0, 'rgba(0,0,0,0)');
@@ -548,7 +548,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   ctx.fillRect(0, 0, CW, CH);
   ctx.restore();
 
-  // --- 충돌 순간 크로마틱(승패 순간에만) ---
+  // --- Chromatic at crash moment (only at the win/loss instant) ---
   const chroma = fx.find((f) => f.kind === 'chroma');
   if (chroma && now - chroma.t < 90) {
     ctx.save();

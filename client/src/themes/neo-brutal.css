@@ -1,67 +1,67 @@
 /**
- * NEO-BRUTAL DUEL ARENA — design-lab/ideas/01-neo-brutal 정본을 토큰 계약 위로 이식.
- * 크림 페이퍼 배경 · 3~4px 순수 잉크 보더 · blur-0 하드 드롭섀도우 · 대문자 Black Han Sans.
+ * NEO-BRUTAL DUEL ARENA — ports the design-lab/ideas/01-neo-brutal source of truth onto the token contract.
+ * cream paper background · 3–4px pure ink border · blur-0 hard drop shadow · uppercase Black Han Sans.
  *
- * 구조: (A) :root[data-theme] 토큰 블록이 계약 전체를 재정의(색/폰트/형태/모션) →
- *       (B) 네온 전용 효과 클래스(글로우/스캔라인/신스웨이브)를 [data-theme=] 스코프로 override.
- * 특정도 규칙: 베이스 컴포넌트 CSS(.nc-btn:hover:not(:disabled) 등, 0,3,0)를 이기기 위해
- *              항상 `[data-theme="neo-brutal"] <베이스와 동일 compound>` 로 +1 attribute 확보.
- * 이 파일은 시각(색/형태/효과)만 바꾼다 — @madpump/shared·게임 좌표엔 절대 관여하지 않는다.
+ * Structure: (A) the :root[data-theme] token block redefines the whole contract (color/font/shape/motion) →
+ *       (B) neon-only effect classes (glow/scanline/synthwave) get overridden within the [data-theme=] scope.
+ * Specificity rule: to beat the base component CSS (.nc-btn:hover:not(:disabled) etc., 0,3,0),
+ *              always scope with `[data-theme="neo-brutal"] <same compound as base>` to gain +1 attribute.
+ * This file changes visuals only (color/shape/effect) — it never touches @madpump/shared or game coordinates.
  */
 
-/* ─────────────────────────────────────────────────────── (A) 토큰 계약 */
+/* ─────────────────────────────────────────────────────── (A) token contract */
 :root[data-theme='neo-brutal'] {
-  --bg: #fdf6e3;            /* 크림 페이퍼 */
-  --bg-raised: #f3ead3;     /* 스테이지 바닥/패널 내부 */
-  --surface: #ffffff;       /* 카드/모달/입력 */
-  --surface-deep: #f3ead3;  /* 가라앉은 영역/짝수행 지브라 */
-  --text: #0a0a0a;          /* 유일한 잉크색 = 텍스트·보더·섀도우 */
+  --bg: #fdf6e3;            /* cream paper */
+  --bg-raised: #f3ead3;     /* stage floor/panel interior */
+  --surface: #ffffff;       /* card/modal/input */
+  --surface-deep: #f3ead3;  /* sunken area/even-row zebra */
+  --text: #0a0a0a;          /* the sole ink color = text/border/shadow */
   --text-muted: #5c5c52;
   --text-dim: #8a8a7e;
-  --accent: #ff5c00;        /* 히어로 CTA / 포인트 */
-  --accent2: #ffd600;       /* 하이라이트/선택/노랑 */
-  --on-accent: #0a0a0a;     /* accent 위 잉크 */
-  --p1: #2b5bff;            /* P1(왼쪽) 일렉트릭 블루 */
-  --p1-dim: #d9e2ff;        /* P1 영역 채움(라이트 틴트) */
-  --p2: #ff2e88;            /* P2(오른쪽) 핫 핑크 */
-  --p2-dim: #ffd9ea;        /* P2 영역 채움 */
+  --accent: #ff5c00;        /* hero CTA / accent point */
+  --accent2: #ffd600;       /* highlight/selection/yellow */
+  --on-accent: #0a0a0a;     /* ink over accent */
+  --p1: #2b5bff;            /* P1 (left) electric blue */
+  --p1-dim: #d9e2ff;        /* P1 area fill (light tint) */
+  --p2: #ff2e88;            /* P2 (right) hot pink */
+  --p2-dim: #ffd9ea;        /* P2 area fill */
   --error: #e5142e;
   --win: #00b85c;
   --ok: #00b85c;
-  --hairline: #0a0a0a;      /* 1px 금지 → 잉크 보더로 통일 */
+  --hairline: #0a0a0a;      /* no 1px → unified to ink border */
   --border-col: #0a0a0a;
   --border-w: 3px;
-  --scanline-color: transparent; /* 스캔라인 금지 */
+  --scanline-color: transparent; /* no scanlines */
   --vignette-color: transparent;
   --bezel-color: #0a0a0a;
   --bezel-w: 4px;
-  --radius: 0px;            /* 전면 각짐 */
+  --radius: 0px;            /* fully squared off */
   --radius-sm: 0px;
   --radius-lg: 0px;
-  --radius-pill: 8px;       /* 키캡/뱃지/필만 예외 */
-  --shadow-sm: 4px 4px 0 #0a0a0a;   /* blur-0 하드 오프셋 */
+  --radius-pill: 8px;       /* keycap/badge/pill are the only exception */
+  --shadow-sm: 4px 4px 0 #0a0a0a;   /* blur-0 hard offset */
   --shadow-md: 6px 6px 0 #0a0a0a;
   --shadow-lg: 10px 10px 0 #0a0a0a;
-  --ease: cubic-bezier(0.2, 0.9, 0.3, 1.15); /* 스냅 오버슈트 */
+  --ease: cubic-bezier(0.2, 0.9, 0.3, 1.15); /* snap overshoot */
   --dur-fast: 120ms;
   --dur-base: 160ms;
   --dur-slow: 240ms;
-  --font-arcade: 'Space Mono', 'Courier New', monospace; /* 계기/대시보드 */
+  --font-arcade: 'Space Mono', 'Courier New', monospace; /* gauges/dashboard */
   --font-display: 'Black Han Sans', 'Apple SD Gothic Neo', sans-serif;
   --font-body: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
 }
 
-/* ─────────────────────────────────────────────────────── (B) 효과 override */
+/* ─────────────────────────────────────────────────────── (B) effect override */
 
-/* 네온 텍스트/박스 글로우 → 플랫 / 하드 섀도우 */
+/* neon text/box glow → flat / hard shadow */
 [data-theme='neo-brutal'] .glow-text { text-shadow: none; }
 [data-theme='neo-brutal'] .glow-box { box-shadow: var(--shadow-md); }
 
-/* CRT 스캔라인 + 신스웨이브 바닥 제거 */
+/* remove CRT scanlines + synthwave floor */
 [data-theme='neo-brutal'] .crt-overlay { display: none; }
 [data-theme='neo-brutal'] .vanish-grid { display: none; }
 
-/* 버튼: 네온 보더+글로우 → 잉크 보더 + 하드 섀도우 물리버튼 */
+/* button: neon border+glow → ink border + hard-shadow physical button */
 [data-theme='neo-brutal'] .nc-btn {
   background: var(--surface);
   border: var(--border-w) solid var(--border-col);
@@ -81,7 +81,7 @@
   box-shadow: none;
   color: var(--text-muted);
 }
-/* 호버 = 박스가 좌상단으로 들림(하드섀도우 커짐) — 네온 플리커 제거 */
+/* hover = box lifts toward top-left (hard shadow grows) — neon flicker removed */
 [data-theme='neo-brutal'] .nc-btn:hover:not(:disabled) {
   animation: none;
   filter: none;
@@ -94,7 +94,7 @@
   transform: none;
   box-shadow: none;
 }
-/* 프레스 = 물리적으로 눌려 들어감(섀도우 소멸) */
+/* press = physically pushed in (shadow vanishes) */
 [data-theme='neo-brutal'] .nc-btn:active:not(:disabled) {
   transform: translate(6px, 6px);
   box-shadow: none;
@@ -105,7 +105,7 @@
 [data-theme='neo-brutal'] .nc-btn--primary:active:not(:disabled) { background: var(--accent); }
 [data-theme='neo-brutal'] .nc-btn__coin { border-color: currentColor; border-radius: 50%; }
 
-/* CoinButton(설정 톱니 등) — 글로우 제거, 잉크 글리프 */
+/* CoinButton (settings gear etc.) — glow removed, ink glyph */
 [data-theme='neo-brutal'] .nc-coinbtn { color: var(--text); text-shadow: none; }
 [data-theme='neo-brutal'] .nc-coinbtn:hover:not(:disabled) {
   animation: none;
@@ -114,14 +114,14 @@
 }
 [data-theme='neo-brutal'] .nc-coinbtn:active:not(:disabled) { filter: none; transform: translate(1px, 1px); }
 
-/* 모달: 다크 스크림 → 잉크 반투명, 패널 = 4px 보더 + 하드 섀도우 */
+/* modal: dark scrim → translucent ink, panel = 4px border + hard shadow */
 [data-theme='neo-brutal'] .nc-modal-overlay { background: color-mix(in srgb, var(--text) 40%, transparent); }
 [data-theme='neo-brutal'] .nc-modal {
   border: 4px solid var(--border-col);
   border-radius: 0;
   box-shadow: var(--shadow-lg);
 }
-/* 마퀴 스트립 = 잉크 바 + 크림 텍스트(제목줄 시그니처) */
+/* marquee strip = ink bar + cream text (title-row signature) */
 [data-theme='neo-brutal'] .marquee-strip {
   background: var(--text);
   border-bottom: none;
@@ -129,17 +129,17 @@
 }
 [data-theme='neo-brutal'] .marquee-strip .marquee-title { text-shadow: none; color: var(--bg); }
 
-/* 코너 브래킷 제거(두꺼운 보더로 대체) */
+/* remove corner brackets (replaced by thick border) */
 [data-theme='neo-brutal'] .corner-brackets::before,
 [data-theme='neo-brutal'] .corner-brackets::after,
 [data-theme='neo-brutal'] .corner-brackets > .cb2::before,
 [data-theme='neo-brutal'] .corner-brackets > .cb2::after { display: none; }
 
-/* 램프 → 잉크 보더 사각 칩(글로우 없음) */
+/* lamp → ink-border square chip (no glow) */
 [data-theme='neo-brutal'] .lamp { border-radius: 0; border: 2px solid var(--border-col); background: var(--surface); }
 [data-theme='neo-brutal'] .lamp.lit { box-shadow: none; background: var(--lamp-color, var(--accent)); border-color: var(--border-col); }
 
-/* 터미널 입력 → 잉크 보더 박스 + 포커스 하드 섀도우 */
+/* terminal input → ink-border box + hard shadow on focus */
 [data-theme='neo-brutal'] .neon-input {
   background: var(--surface);
   border: var(--border-w) solid var(--border-col);
@@ -149,15 +149,15 @@
 [data-theme='neo-brutal'] .neon-input .prompt,
 [data-theme='neo-brutal'] .neon-input input { color: var(--text); caret-color: var(--accent); }
 
-/* 단위 칩 → 잉크 보더 필 */
+/* unit chip → ink border pill */
 [data-theme='neo-brutal'] .unit-chip { border: 2px solid var(--border-col); color: var(--text); }
 
-/* 게임 스테이지 베젤: 토큰(잉크 4px)로 이미 적용. 라운드 제거 + 하드 섀도우 */
+/* game stage bezel: already applied via token (ink 4px). radius removed + hard shadow */
 [data-theme='neo-brutal'] .crt-bezel { border-radius: 0; box-shadow: var(--shadow-md); }
 [data-theme='neo-brutal'] .crt-bezel.urgent { box-shadow: var(--shadow-md); }
 
-/* ── 시그니처 유틸(게임/결과 연출용, 컴포넌트가 opt-in) ── */
-/* 위험 경계 45° 옐로/블랙 밴드 */
+/* ── signature utils (for game/result staging, opt-in by components) ── */
+/* hazard-boundary 45° yellow/black band */
 [data-theme='neo-brutal'] .hazard,
 [data-theme='neo-brutal'] .nb-hazard {
   background: repeating-linear-gradient(45deg, #ffd600 0 12px, #0a0a0a 12px 24px);

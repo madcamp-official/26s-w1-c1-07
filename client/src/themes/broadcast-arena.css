@@ -1,76 +1,76 @@
 /**
- * BROADCAST ARENA — design-lab/ideas/04-broadcast-arena 정본을 토큰 계약 위로 이식.
- * 주간 스타디움 e스포츠 중계 룩 · 밝은 스튜디오 배경 · 흰 방송 패널 · 얇은 쿨그레이 헤어라인 ·
- * 팀 컬러 듀얼(P1 블루 / P2 레드) · 네이비 앵커 스트립 · 골드는 승리 전용으로 희소.
+ * BROADCAST ARENA — ports the design-lab/ideas/04-broadcast-arena source of truth onto the token contract.
+ * daytime stadium esports broadcast look · bright studio background · white broadcast panel · thin cool-gray hairline ·
+ * dual team colors (P1 blue / P2 red) · navy anchor strip · gold is rare, reserved for victory.
  *
- * 구조: (A) :root[data-theme] 토큰 블록이 계약 전체를 재정의(색/폰트/형태/모션) →
- *       (B) 네온 전용 효과 클래스(글로우/스캔라인/신스웨이브)를 [data-theme=] 스코프로 override.
- * 특정도 규칙: 베이스 컴포넌트 CSS(.nc-btn:hover:not(:disabled) 등, 0,3,0)를 이기기 위해
- *              항상 `[data-theme="broadcast-arena"] <베이스와 동일 compound>` 로 +1 attribute 확보.
- * 섀도 모델: 네온 글로우 전면 폐기 → 단일 소프트 엘리베이션(navy 12% 드롭섀도)만 사용.
- * 이 파일은 시각(색/형태/효과)만 바꾼다 — @madpump/shared·게임 좌표엔 절대 관여하지 않는다.
+ * Structure: (A) the :root[data-theme] token block redefines the whole contract (color/font/shape/motion) →
+ *       (B) neon-only effect classes (glow/scanline/synthwave) get overridden within the [data-theme=] scope.
+ * Specificity rule: to beat the base component CSS (.nc-btn:hover:not(:disabled) etc., 0,3,0),
+ *              always scope with `[data-theme="broadcast-arena"] <same compound as base>` to gain +1 attribute.
+ * Shadow model: neon glow fully dropped → use only a single soft elevation (navy 12% drop shadow).
+ * This file changes visuals only (color/shape/effect) — it never touches @madpump/shared or game coordinates.
  */
 
-/* ─────────────────────────────────────────────────────── (A) 토큰 계약 */
+/* ─────────────────────────────────────────────────────── (A) token contract */
 :root[data-theme='broadcast-arena'] {
-  --bg: #eef2f7;            /* 스튜디오 라이트 그레이블루 */
-  --bg-raised: #e3eaf3;     /* 스테이지 바닥/패널 뒤 필드 톤 */
-  --surface: #ffffff;       /* 방송 패널/카드/모달 화이트 */
-  --surface-deep: #e3eaf3;  /* 가라앉은 영역/짝수행 지브라 */
-  --text: #0e1e3c;          /* 네이비 잉크 = 본문·헤드라인 */
-  --text-muted: #5b6b82;    /* 캡션·라벨·비활성 */
-  --text-dim: #8b98ad;      /* 3차 텍스트/힌트 */
-  --accent: #0e1e3c;        /* 유일 CTA = 중계 네이비 스트립 */
-  --accent2: #c99312;       /* 트로피 골드 — 승리/1위/MVP 전용(희소) */
-  --on-accent: #ffffff;     /* 네이비 위 흰 텍스트 */
-  --p1: #0b63e5;            /* P1(왼쪽) 팀 블루 */
-  --p1-dim: #e3eefd;        /* P1 영역 채움(라이트 틴트) */
-  --p2: #e0323e;           /* P2(오른쪽) 팀 레드 */
-  --p2-dim: #fce8e9;        /* P2 영역 채움(라이트 틴트) */
-  --error: #d7263d;         /* LIVE 레드 = 에러 */
-  --win: #c99312;           /* 승리 = 골드 */
-  --ok: #12a150;            /* 성공 피드백(복사됨/일치) */
-  --hairline: #c9d4e3;      /* 1px 쿨그레이 헤어라인 */
+  --bg: #eef2f7;            /* studio light gray-blue */
+  --bg-raised: #e3eaf3;     /* stage floor/field tone behind panels */
+  --surface: #ffffff;       /* broadcast panel/card/modal white */
+  --surface-deep: #e3eaf3;  /* sunken area/even-row zebra */
+  --text: #0e1e3c;          /* navy ink = body & headline */
+  --text-muted: #5b6b82;    /* caption/label/disabled */
+  --text-dim: #8b98ad;      /* tertiary text/hint */
+  --accent: #0e1e3c;        /* sole CTA = broadcast navy strip */
+  --accent2: #c99312;       /* trophy gold — victory/1st/MVP only (rare) */
+  --on-accent: #ffffff;     /* white text over navy */
+  --p1: #0b63e5;            /* P1 (left) team blue */
+  --p1-dim: #e3eefd;        /* P1 area fill (light tint) */
+  --p2: #e0323e;           /* P2 (right) team red */
+  --p2-dim: #fce8e9;        /* P2 area fill (light tint) */
+  --error: #d7263d;         /* LIVE red = error */
+  --win: #c99312;           /* victory = gold */
+  --ok: #12a150;            /* success feedback (copied/match) */
+  --hairline: #c9d4e3;      /* 1px cool-gray hairline */
   --border-col: #c9d4e3;
   --border-w: 1px;
-  --scanline-color: transparent; /* CRT 스캔라인 금지 */
-  --vignette-color: transparent; /* 비네팅 금지 */
-  --bezel-color: #0e1e3c;   /* 스테이지 프레임 = 네이비 */
+  --scanline-color: transparent; /* no CRT scanlines */
+  --vignette-color: transparent; /* no vignette */
+  --bezel-color: #0e1e3c;   /* stage frame = navy */
   --bezel-w: 2px;
-  --radius: 6px;            /* 일반 카드/모달 */
-  --radius-sm: 4px;         /* 입력/작은 요소 */
-  --radius-lg: 10px;        /* 큰 패널 */
-  --radius-pill: 999px;     /* 스코어 버그/뱃지/필 */
-  --shadow-sm: 0 2px 8px rgba(14, 30, 60, 0.12);   /* 단일 소프트 엘리베이션 */
+  --radius: 6px;            /* regular card/modal */
+  --radius-sm: 4px;         /* input/small element */
+  --radius-lg: 10px;        /* large panel */
+  --radius-pill: 999px;     /* score bug/badge/pill */
+  --shadow-sm: 0 2px 8px rgba(14, 30, 60, 0.12);   /* single soft elevation */
   --shadow-md: 0 8px 24px rgba(14, 30, 60, 0.12);
   --shadow-lg: 0 16px 40px rgba(14, 30, 60, 0.16);
-  --ease: cubic-bezier(0.16, 1, 0.3, 1); /* 소프트 데셀 */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1); /* soft decel */
   --dur-fast: 120ms;
   --dur-base: 240ms;
   --dur-slow: 360ms;
-  --font-arcade: 'Archivo', 'IBM Plex Sans KR', sans-serif; /* 계기/숫자(타뷸러) */
+  --font-arcade: 'Archivo', 'IBM Plex Sans KR', sans-serif; /* gauges/numbers (tabular) */
   --font-display: 'Archivo', 'IBM Plex Sans KR', sans-serif;
   --font-body: 'IBM Plex Sans KR', 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
 }
 
-/* ─────────────────────────────────────────────────────── (B) 효과 override */
+/* ─────────────────────────────────────────────────────── (B) effect override */
 
-/* 네온 텍스트/박스 글로우 → 플랫 / 소프트 섀도우 */
+/* neon text/box glow → flat / soft shadow */
 [data-theme='broadcast-arena'] .glow-text { text-shadow: none; }
 [data-theme='broadcast-arena'] .glow-box { box-shadow: var(--shadow-md); }
 
-/* 계기/스코어 숫자 = 타뷸러 고정폭(Archivo tnum) — 방송 숫자 정렬 */
+/* gauge/score numbers = tabular fixed-width (Archivo tnum) — broadcast number alignment */
 [data-theme='broadcast-arena'] .font-arcade {
   font-feature-settings: 'tnum';
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
 }
 
-/* CRT 스캔라인 + 신스웨이브 바닥 제거 */
+/* remove CRT scanlines + synthwave floor */
 [data-theme='broadcast-arena'] .crt-overlay { display: none; }
 [data-theme='broadcast-arena'] .vanish-grid { display: none; }
 
-/* 버튼: 네온 보더+글로우 → 흰 방송 패널 + 얇은 보더 + 소프트 섀도 플랫 버튼 */
+/* button: neon border+glow → white broadcast panel + thin border + soft-shadow flat button */
 [data-theme='broadcast-arena'] .nc-btn {
   background: var(--surface);
   border: var(--border-w) solid var(--border-col);
@@ -90,7 +90,7 @@
   box-shadow: none;
   color: var(--text-muted);
 }
-/* 호버 = 살짝 밝아지며 섀도가 커져 패널이 부유 — 네온 플리커 제거 */
+/* hover = brightens slightly and the shadow grows so the panel floats — neon flicker removed */
 [data-theme='broadcast-arena'] .nc-btn:hover:not(:disabled) {
   animation: none;
   filter: brightness(1.06);
@@ -104,7 +104,7 @@
   box-shadow: none;
   filter: none;
 }
-/* 프레스 = 1px 하강하며 섀도 소멸(눌림) */
+/* press = drops 1px as the shadow vanishes (pressed) */
 [data-theme='broadcast-arena'] .nc-btn:active:not(:disabled) {
   transform: translateY(1px);
   box-shadow: none;
@@ -115,7 +115,7 @@
 [data-theme='broadcast-arena'] .nc-btn--primary:active:not(:disabled) { background: var(--accent); }
 [data-theme='broadcast-arena'] .nc-btn__coin { border-color: currentColor; border-radius: 50%; }
 
-/* CoinButton(설정 톱니 등) — 글로우 제거, 네이비 잉크 글리프 */
+/* CoinButton (settings gear etc.) — glow removed, navy ink glyph */
 [data-theme='broadcast-arena'] .nc-coinbtn { color: var(--text); text-shadow: none; }
 [data-theme='broadcast-arena'] .nc-coinbtn:hover:not(:disabled) {
   animation: none;
@@ -124,14 +124,14 @@
 }
 [data-theme='broadcast-arena'] .nc-coinbtn:active:not(:disabled) { filter: brightness(0.9); transform: translateY(1px); }
 
-/* 모달: 다크 스크림 → 네이비 반투명 딤, 패널 = 얇은 보더 + 소프트 섀도 부유 */
+/* modal: dark scrim → translucent navy dim, panel = thin border + soft-shadow float */
 [data-theme='broadcast-arena'] .nc-modal-overlay { background: color-mix(in srgb, var(--text) 45%, transparent); }
 [data-theme='broadcast-arena'] .nc-modal {
   border: var(--border-w) solid var(--border-col);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
 }
-/* 마퀴 스트립 = 네이비 앵커 바 + 흰 텍스트(로워서드 스트랩 시그니처) */
+/* marquee strip = navy anchor bar + white text (lower-third strap signature) */
 [data-theme='broadcast-arena'] .marquee-strip {
   background: var(--accent);
   border-bottom: none;
@@ -139,17 +139,17 @@
 }
 [data-theme='broadcast-arena'] .marquee-strip .marquee-title { text-shadow: none; color: var(--on-accent); }
 
-/* 코너 브래킷 제거(얇은 보더 + 소프트 섀도로 대체) */
+/* remove corner brackets (replaced by thin border + soft shadow) */
 [data-theme='broadcast-arena'] .corner-brackets::before,
 [data-theme='broadcast-arena'] .corner-brackets::after,
 [data-theme='broadcast-arena'] .corner-brackets > .cb2::before,
 [data-theme='broadcast-arena'] .corner-brackets > .cb2::after { display: none; }
 
-/* 램프 → 방송 LIVE 도트(글로우 없음, 점등 시 레드) */
+/* lamp → broadcast LIVE dot (no glow, red when lit) */
 [data-theme='broadcast-arena'] .lamp { border: var(--border-w) solid var(--border-col); background: var(--surface); }
 [data-theme='broadcast-arena'] .lamp.lit { box-shadow: none; background: var(--lamp-color, var(--error)); border-color: var(--lamp-color, var(--error)); }
 
-/* 터미널 입력 → 흰 바탕 얇은 보더 박스 + 포커스 네이비 아웃라인/좌측 스트립 */
+/* terminal input → white thin-border box + navy focus outline/left strip */
 [data-theme='broadcast-arena'] .neon-input {
   background: var(--surface);
   border: var(--border-w) solid var(--border-col);
@@ -160,22 +160,22 @@
 [data-theme='broadcast-arena'] .neon-input .prompt,
 [data-theme='broadcast-arena'] .neon-input input { color: var(--text); caret-color: var(--accent); }
 
-/* 단위 칩 → 얇은 보더 필 */
+/* unit chip → thin border pill */
 [data-theme='broadcast-arena'] .unit-chip { border: var(--border-w) solid var(--border-col); color: var(--text-muted); }
 
-/* 게임 스테이지 베젤: 토큰(네이비 2px)로 이미 적용. 6px 라운드 + 소프트 섀도 */
+/* game stage bezel: already applied via token (navy 2px). 6px radius + soft shadow */
 [data-theme='broadcast-arena'] .crt-bezel { border-radius: var(--radius); box-shadow: var(--shadow-md); }
 [data-theme='broadcast-arena'] .crt-bezel.urgent { box-shadow: 0 8px 24px color-mix(in srgb, var(--error) 22%, transparent); }
 
-/* ── 시그니처 유틸(게임/결과 연출용, 컴포넌트가 opt-in) ── */
-/* 로워서드 네이비 스트랩 */
+/* ── signature utils (for game/result staging, opt-in by components) ── */
+/* lower-third navy strap */
 [data-theme='broadcast-arena'] .lower-third,
 [data-theme='broadcast-arena'] .ba-strap {
   background: var(--accent);
   color: var(--on-accent);
   border-radius: 0;
 }
-/* 골드 챔피언 바(승리/1위/MVP 전용) */
+/* gold champion bar (victory/1st/MVP only) */
 [data-theme='broadcast-arena'] .champion,
 [data-theme='broadcast-arena'] .ba-gold {
   background: linear-gradient(180deg, #e4b33c 0%, var(--accent2) 100%);

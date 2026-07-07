@@ -1,68 +1,68 @@
 /**
- * CLAY TOY BATTLE — design-lab/ideas/03-clay-toy 정본을 토큰 계약 위로 이식.
- * 피치 크림 배경 · 아이보리 클레이 표면 · 이중(드롭+inset) 소프트 볼륨 섀도우 · 통통한 Jua.
+ * CLAY TOY BATTLE — ports the design-lab/ideas/03-clay-toy source of truth onto the token contract.
+ * peach cream background · ivory clay surface · dual (drop+inset) soft volume shadow · chunky Jua.
  *
- * 구조: (A) :root[data-theme] 토큰 블록이 계약 전체를 재정의(색/폰트/형태/모션) →
- *       (B) 네온 전용 효과 클래스(글로우/스캔라인/신스웨이브)를 [data-theme=] 스코프로 override.
- * 특정도 규칙: 베이스 컴포넌트 CSS(.nc-btn:hover:not(:disabled) 등, 0,3,0)를 이기기 위해
- *              항상 `[data-theme="clay-toy"] <베이스와 동일 compound>` 로 +1 attribute 확보.
- * 이 파일은 시각(색/형태/효과)만 바꾼다 — @madpump/shared·게임 좌표엔 절대 관여하지 않는다.
+ * Structure: (A) the :root[data-theme] token block redefines the whole contract (color/font/shape/motion) →
+ *       (B) neon-only effect classes (glow/scanline/synthwave) get overridden within the [data-theme=] scope.
+ * Specificity rule: to beat the base component CSS (.nc-btn:hover:not(:disabled) etc., 0,3,0),
+ *              always scope with `[data-theme="clay-toy"] <same compound as base>` to gain +1 attribute.
+ * This file changes visuals only (color/shape/effect) — it never touches @madpump/shared or game coordinates.
  */
 
-/* ─────────────────────────────────────────────────────── (A) 토큰 계약 */
+/* ─────────────────────────────────────────────────────── (A) token contract */
 :root[data-theme='clay-toy'] {
-  --bg: #fff1e6;            /* 피치 크림 페이지 배경 */
-  --bg-raised: #f5e9de;     /* 스테이지 바닥/패널 내부(살짝 깊은 톤) */
-  --surface: #fffbf7;       /* 아이보리 클레이 카드/모달/버튼 표면 */
-  --surface-deep: #f5e9de;  /* 눌린 홈/입력 트랙/짝수행(sunken) */
-  --text: #4a3a52;          /* 딥 플럼 잉크 — 순검정 금지 */
+  --bg: #fff1e6;            /* peach cream page background */
+  --bg-raised: #f5e9de;     /* stage floor/panel interior (slightly deeper tone) */
+  --surface: #fffbf7;       /* ivory clay card/modal/button surface */
+  --surface-deep: #f5e9de;  /* pressed groove/input track/even rows (sunken) */
+  --text: #4a3a52;          /* deep plum ink — no pure black */
   --text-muted: #9c8cab;
   --text-dim: #bcaecb;
-  --accent: #ff8a5c;        /* 코랄 — 핵심 CTA / 타이머 임박 */
-  --accent2: #ffd447;       /* 버터 옐로 — 하이라이트/별/트로피 */
-  --on-accent: #fff9f4;     /* accent 채움 위 아이보리 텍스트 */
-  --p1: #ff6e8a;            /* P1(왼쪽) 딸기 클레이 핑크 */
-  --p1-dim: #ffdee6;        /* P1 영역 채움(라이트 틴트) */
-  --p2: #3fc49e;            /* P2(오른쪽) 민트 클레이 그린 */
-  --p2-dim: #d6f4ea;        /* P2 영역 채움 */
+  --accent: #ff8a5c;        /* coral — key CTA / timer running out */
+  --accent2: #ffd447;       /* butter yellow — highlight/star/trophy */
+  --on-accent: #fff9f4;     /* ivory text over accent fill */
+  --p1: #ff6e8a;            /* P1 (left) strawberry clay pink */
+  --p1-dim: #ffdee6;        /* P1 area fill (light tint) */
+  --p2: #3fc49e;            /* P2 (right) mint clay green */
+  --p2-dim: #d6f4ea;        /* P2 area fill */
   --error: #e85d6f;
-  --win: #ffb53c;          /* WIN 메달/시상대 골드 */
-  --ok: #3fc49e;           /* 성공 피드백(복사됨/일치) = 민트 */
-  --hairline: rgba(74, 58, 82, 0.12); /* 선 최소화 → 소프트 플럼 헤어라인 */
+  --win: #ffb53c;          /* WIN medal/podium gold */
+  --ok: #3fc49e;           /* success feedback (copied/match) = mint */
+  --hairline: rgba(74, 58, 82, 0.12); /* minimize lines → soft plum hairline */
   --border-col: rgba(74, 58, 82, 0.12);
   --border-w: 2px;
-  --scanline-color: transparent; /* 스캔라인 금지 */
+  --scanline-color: transparent; /* no scanlines */
   --vignette-color: transparent;
-  --bezel-color: #f5e9de;   /* 소프트 크림 베젤(윤곽은 섀도우 볼륨으로) */
+  --bezel-color: #f5e9de;   /* soft cream bezel (outline comes from the shadow volume) */
   --bezel-w: 12px;
-  --radius: 24px;          /* 빚어놓은 찰흙 — 날카로운 모서리 0개 */
+  --radius: 24px;          /* molded clay — zero sharp corners */
   --radius-sm: 16px;
   --radius-lg: 32px;
   --radius-pill: 999px;
-  /* 클레이 볼륨 3중 섀도우: 바깥 소프트 드롭 + 아래 안쪽 음영(부푼 배) + 위 안쪽 하이라이트(무광 광택) */
+  /* clay volume triple shadow: outer soft drop + lower inner shade (swollen belly) + upper inner highlight (matte sheen) */
   --shadow-sm: 0 6px 14px rgba(74, 58, 82, 0.14), inset 0 -6px 8px rgba(74, 58, 82, 0.12), inset 0 5px 6px rgba(255, 255, 255, 0.85);
   --shadow-md: 0 10px 24px rgba(74, 58, 82, 0.14), inset 0 -10px 14px rgba(74, 58, 82, 0.12), inset 0 8px 10px rgba(255, 255, 255, 0.85);
   --shadow-lg: 0 18px 40px rgba(74, 58, 82, 0.14), inset 0 -10px 14px rgba(74, 58, 82, 0.12), inset 0 8px 10px rgba(255, 255, 255, 0.85);
-  --ease: cubic-bezier(0.34, 1.56, 0.64, 1); /* 백 오버슈트 젤리 스프링 */
+  --ease: cubic-bezier(0.34, 1.56, 0.64, 1); /* back-overshoot jelly spring */
   --dur-fast: 150ms;
   --dur-base: 260ms;
   --dur-slow: 320ms;
-  --font-arcade: 'Baloo 2', 'Jua', sans-serif; /* 숫자/라틴/계기 */
+  --font-arcade: 'Baloo 2', 'Jua', sans-serif; /* numbers/latin/gauges */
   --font-display: 'Jua', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
   --font-body: 'Noto Sans KR', 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
 }
 
-/* ─────────────────────────────────────────────────────── (B) 효과 override */
+/* ─────────────────────────────────────────────────────── (B) effect override */
 
-/* 네온 텍스트/박스 글로우 → 플랫 / 소프트 클레이 볼륨 */
+/* neon text/box glow → flat / soft clay volume */
 [data-theme='clay-toy'] .glow-text { text-shadow: none; }
 [data-theme='clay-toy'] .glow-box { box-shadow: var(--shadow-md); }
 
-/* CRT 스캔라인 + 신스웨이브 바닥 제거 */
+/* remove CRT scanlines + synthwave floor */
 [data-theme='clay-toy'] .crt-overlay { display: none; }
 [data-theme='clay-toy'] .vanish-grid { display: none; }
 
-/* 버튼: 네온 보더+글로우 → 통통한 클레이 알약(소프트 볼륨 섀도우) */
+/* button: neon border+glow → chunky clay pill (soft volume shadow) */
 [data-theme='clay-toy'] .nc-btn {
   background: var(--surface);
   border: none;
@@ -82,7 +82,7 @@
   box-shadow: none;
   color: var(--text-muted);
 }
-/* 호버 = 말랑하게 살짝 떠오름(드롭 섀도우 확대) — 네온 플리커 제거 */
+/* hover = softly floats up a touch (drop shadow grows) — neon flicker removed */
 [data-theme='clay-toy'] .nc-btn:hover:not(:disabled) {
   animation: none;
   filter: none;
@@ -95,7 +95,7 @@
   transform: none;
   box-shadow: none;
 }
-/* 프레스 = 젤리처럼 짜부라짐(바깥 드롭 소멸 + 안쪽 눌림) */
+/* press = squashes like jelly (outer drop vanishes + inner press) */
 [data-theme='clay-toy'] .nc-btn:active:not(:disabled) {
   transform: scale(0.97);
   box-shadow: inset 0 -4px 8px rgba(74, 58, 82, 0.2), inset 0 6px 10px rgba(74, 58, 82, 0.1);
@@ -106,7 +106,7 @@
 [data-theme='clay-toy'] .nc-btn--primary:active:not(:disabled) { background: var(--accent); }
 [data-theme='clay-toy'] .nc-btn__coin { border-color: currentColor; border-radius: 50%; }
 
-/* CoinButton(설정 톱니 등) — 글로우 제거, 소프트 클레이 글리프 */
+/* CoinButton (settings gear etc.) — glow removed, soft clay glyph */
 [data-theme='clay-toy'] .nc-coinbtn { color: var(--accent); text-shadow: none; }
 [data-theme='clay-toy'] .nc-coinbtn:hover:not(:disabled) {
   animation: none;
@@ -115,14 +115,14 @@
 }
 [data-theme='clay-toy'] .nc-coinbtn:active:not(:disabled) { filter: none; transform: scale(0.94); }
 
-/* 모달: 다크 스크림 → 플럼 반투명 딤, 패널 = 라운드 + 확대 드롭 섀도우 */
+/* modal: dark scrim → translucent plum dim, panel = rounded + enlarged drop shadow */
 [data-theme='clay-toy'] .nc-modal-overlay { background: color-mix(in srgb, var(--text) 35%, transparent); }
 [data-theme='clay-toy'] .nc-modal {
   border: none;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
 }
-/* 마퀴 스트립 = 눌린 홈 톤 소프트 헤더(제목줄 시그니처) */
+/* marquee strip = sunken-groove-tone soft header (title-row signature) */
 [data-theme='clay-toy'] .marquee-strip {
   background: var(--surface-deep);
   border-bottom: none;
@@ -130,17 +130,17 @@
 }
 [data-theme='clay-toy'] .marquee-strip .marquee-title { text-shadow: none; color: var(--text); }
 
-/* 코너 브래킷 제거(윤곽은 클레이 볼륨 섀도우로) */
+/* remove corner brackets (outline comes from the clay volume shadow) */
 [data-theme='clay-toy'] .corner-brackets::before,
 [data-theme='clay-toy'] .corner-brackets::after,
 [data-theme='clay-toy'] .corner-brackets > .cb2::before,
 [data-theme='clay-toy'] .corner-brackets > .cb2::after { display: none; }
 
-/* 램프 → 소프트 원형 클레이 칩(글로우 없음) */
+/* lamp → soft round clay chip (no glow) */
 [data-theme='clay-toy'] .lamp { border-radius: 50%; border: none; background: var(--surface-deep); }
 [data-theme='clay-toy'] .lamp.lit { box-shadow: none; background: var(--lamp-color, var(--accent)); border-color: transparent; }
 
-/* 터미널 입력 → 눌린 홈(sunken) + 포커스 시 accent 링 */
+/* terminal input → sunken groove + accent ring on focus */
 [data-theme='clay-toy'] .neon-input {
   background: var(--surface-deep);
   border: none;
@@ -153,9 +153,9 @@
 [data-theme='clay-toy'] .neon-input .prompt,
 [data-theme='clay-toy'] .neon-input input { color: var(--text); caret-color: var(--accent); }
 
-/* 단위 칩 → 소프트 클레이 필 */
+/* unit chip → soft clay pill */
 [data-theme='clay-toy'] .unit-chip { border: none; background: var(--surface-deep); color: var(--text); }
 
-/* 게임 스테이지 베젤: 토큰(소프트 크림 12px)로 적용. 라운드 확대 + 확대 드롭 섀도우 */
+/* game stage bezel: applied via token (soft cream 12px). larger radius + enlarged drop shadow */
 [data-theme='clay-toy'] .crt-bezel { border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); }
 [data-theme='clay-toy'] .crt-bezel.urgent { box-shadow: var(--shadow-lg); }

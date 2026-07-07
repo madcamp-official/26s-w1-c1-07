@@ -1,39 +1,39 @@
 /**
- * Game6(공룡 달리기) — 테마: BROADCAST ARENA (esports 방송 그래픽).
- * 라이브 매치 오버레이 컨셉으로 씬 전체를 처음부터 그린다. 좌표/판정은 neon과 동일(공정성) —
- * geom.* + @madpump/shared G6 상수만 기준. 여기 있는 건 '그리기'뿐.
+ * Game6 (Dino Run) — theme: BROADCAST ARENA (esports broadcast graphics).
+ * Draws the whole scene from scratch as a live-match overlay concept. Coordinates/judging match neon (fairness) —
+ * based only on geom.* + @madpump/shared G6 constants. All that lives here is the drawing.
  *
- * 아트: CLEAN FLAT VECTOR. 팔레트 = 쿨 라이트 필드/네이비/팀블루/팀레드/골드. 폰트 Archivo.
- *  · 공룡(P1엔티티) = 팀 컬러의 깔끔한 플랫 마스코트 러너.
- *  · 장애물(P2엔티티) = 팀 컬러의 깔끔한 플랫 도형.
- *  · 지면 = 라이트 필드 그라디언트 위 수렴 그리드 + 얇은 대시 스피드 텍스처.
- *  · 리로드 게이지 = 방송 로어서드 바(네이비 라운드렉트 + 화이트 라벨 + 팀 컬러 채움).
- *  · 배지 = 스코어보드 'bug'(네이비 필 + 팀 컬러). 이펙트 = 클린 플랫 팝.
- * 그림자는 은은한 소프트 드롭섀도우 1겹(shadowBlur ~6, 낮은 알파 네이비) — 네온 글로우 아님.
+ * Art: CLEAN FLAT VECTOR. Palette = cool light field / navy / team-blue / team-red / gold. Font Archivo.
+ *  · Dino (P1 entity) = clean flat mascot runner in team color.
+ *  · Obstacle (P2 entity) = clean flat shape in team color.
+ *  · Ground = converging grid over a light-field gradient + thin dashed speed texture.
+ *  · Reload gauge = broadcast lower-third bar (navy round-rect + white label + team-color fill).
+ *  · Badge = scoreboard 'bug' (navy fill + team color). Effects = clean flat pop.
+ * Shadow is a single subtle soft drop-shadow (shadowBlur ~6, low-alpha navy) — not a neon glow.
  */
 import { G6, GAME_DURATION } from '@madpump/shared';
 import { functionColors } from '../../../../net/online';
 import type { Game6DrawScene } from './types';
 
-// ── 방송 팔레트 (테마 고정) ──────────────────────────────────────────────
+// ── broadcast palette (theme-locked) ──────────────────────────────────────────
 const PAL = {
-  field: '#eef2f7', // 쿨 라이트 필드
-  panel: '#e3eaf3', // 필드 패널(지면 아래 살짝 진한 톤)
-  navy: '#0e1e3c', // 네이비(텍스트/외곽/필/그림자 베이스)
-  blue: '#0b63e5', // 팀 블루 (기본 P1)
-  red: '#e0323e', // 팀 레드 (기본 P2)
-  gold: '#c99312', // 골드(강조/YOU/생존)
-  line: '#c3cedd', // 그리드/트랙 라인
+  field: '#eef2f7', // cool light field
+  panel: '#e3eaf3', // field panel (slightly darker tone below ground)
+  navy: '#0e1e3c', // navy (base for text/outline/fill/shadow)
+  blue: '#0b63e5', // team blue (default P1)
+  red: '#e0323e', // team red (default P2)
+  gold: '#c99312', // gold (accent/YOU/survival)
+  line: '#c3cedd', // grid/track line
   white: '#ffffff',
 } as const;
 
 const FONT = "'Archivo', sans-serif";
-/** 판정 → 결과 오버레이 전환 사이 인게임 연출 시간(neon과 동일) */
+/** in-game staging time between judging → result overlay transition (same as neon) */
 const RESULT_FX_MS = 700;
-/** 은은한 소프트 드롭섀도우 색(낮은 알파 네이비) */
+/** subtle soft drop-shadow color (low-alpha navy) */
 const SHADOW = 'rgba(14,30,60,0.22)';
 
-/** 라운드렉트 경로 (반경 r) */
+/** round-rect path (radius r) */
 function roundRect(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -52,7 +52,7 @@ function roundRect(
   ctx.closePath();
 }
 
-/** 소프트 드롭섀도우 1겹 ON */
+/** turn ON a single soft drop-shadow */
 function softShadow(ctx: CanvasRenderingContext2D, blur = 6, dy = 2): void {
   ctx.shadowColor = SHADOW;
   ctx.shadowBlur = blur;
@@ -69,10 +69,10 @@ function noShadow(ctx: CanvasRenderingContext2D): void {
 export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geom) => {
   const { CW, CH, SC, X, Y, STARS } = geom;
 
-  // 색은 '역할'이 아니라 '플레이어'를 따른다 — P1엔티티(공룡)/P2엔티티(장애물) 팀 컬러 결정.
+  // Color follows the 'player', not the 'role' — decides P1-entity (dino) / P2-entity (obstacle) team colors.
   const fc = functionColors();
-  const dinoCol = fc.p1 === 'blue' ? PAL.blue : PAL.red; // 공룡 = P1엔티티 색
-  const obstCol = fc.p2 === 'blue' ? PAL.blue : PAL.red; // 장애물 = P2엔티티 색
+  const dinoCol = fc.p1 === 'blue' ? PAL.blue : PAL.red; // dino = P1-entity color
+  const obstCol = fc.p2 === 'blue' ? PAL.blue : PAL.red; // obstacle = P2-entity color
 
   const horizon = Y(G6.GROUND_Y);
   const remainingMs = Math.max(0, (GAME_DURATION - s.elapsed) * 1000);
@@ -81,21 +81,21 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   const resultFx = fx.find((f) => f.kind === 'chroma' || f.kind === 'rush');
   const resultAge = resultFx ? now - resultFx.t : Infinity;
 
-  // ── 배경: 스튜디오 라이트 필드 ─────────────────────────────────────────
+  // ── background: studio light field ─────────────────────────────────────────
   ctx.clearRect(0, 0, CW, CH);
   const sky = ctx.createLinearGradient(0, 0, 0, horizon);
   sky.addColorStop(0, '#f6f9fc');
   sky.addColorStop(1, PAL.field);
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, CW, horizon);
-  // 지면 아래 필드 패널
+  // field panel below ground
   const panel = ctx.createLinearGradient(0, horizon, 0, CH);
   panel.addColorStop(0, PAL.panel);
   panel.addColorStop(1, '#d7e0ec');
   ctx.fillStyle = panel;
   ctx.fillRect(0, horizon, CW, CH - horizon);
 
-  // ── 상단 방송 프레임 라인(얇은 골드 헤어라인 — 스튜디오 룩) ─────────────
+  // ── top broadcast frame line (thin gold hairline — studio look) ─────────────
   ctx.save();
   ctx.strokeStyle = 'rgba(201,147,18,0.35)';
   ctx.lineWidth = 1;
@@ -105,7 +105,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   ctx.stroke();
   ctx.restore();
 
-  // ── 하늘 도트(패럴랙스) — 방송용 은은한 앰비언트, elapsed로 스크롤 ───────
+  // ── sky dots (parallax) — subtle broadcast ambient, scrolls with elapsed ───────
   ctx.save();
   ctx.fillStyle = 'rgba(14,30,60,0.10)';
   for (const st of STARS) {
@@ -118,7 +118,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   }
   ctx.restore();
 
-  // ── 수렴 그리드(원근) — 소실점에서 필드로 퍼지는 얇은 라인 ─────────────
+  // ── converging grid (perspective) — thin lines spreading from the vanishing point into the field ─────────────
   ctx.save();
   const vpx = CW / 2;
   ctx.strokeStyle = urgent ? 'rgba(224,50,62,0.16)' : 'rgba(195,206,221,0.55)';
@@ -129,7 +129,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.lineTo(vpx + k * 92, CH);
     ctx.stroke();
   }
-  // 다가오는 가로 라인(전진감)
+  // approaching horizontal lines (sense of forward motion)
   const gscroll = (s.elapsed * 0.7) % 1;
   const N = 8;
   for (let j = 0; j < N; j++) {
@@ -143,7 +143,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   }
   ctx.restore();
 
-  // ── 지평선(클린 네이비) + 스피드 대시 ─────────────────────────────────
+  // ── horizon (clean navy) + speed dashes ─────────────────────────────────
   ctx.save();
   ctx.strokeStyle = PAL.navy;
   ctx.lineWidth = 2;
@@ -151,7 +151,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   ctx.moveTo(0, horizon + 0.5);
   ctx.lineTo(CW, horizon + 0.5);
   ctx.stroke();
-  // 얇은 대시(왼쪽으로 흘러 속도감)
+  // thin dashes (flow left for a sense of speed)
   ctx.strokeStyle = 'rgba(14,30,60,0.30)';
   ctx.lineWidth = 2;
   const gap = 58;
@@ -164,7 +164,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
   ctx.stroke();
   ctx.restore();
 
-  // 임박 5초: 상단 레드 텔롭 스트립
+  // final 5 seconds: top red telop strip
   if (urgent) {
     const pulse = 0.35 + 0.25 * (0.5 + 0.5 * Math.sin(now / 130));
     ctx.save();
@@ -173,13 +173,13 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // ── 장애물(팀 컬러 플랫 도형) ─────────────────────────────────────────
+  // ── obstacles (flat shapes in team color) ─────────────────────────────────────────
   for (const o of s.obstacles) {
     if (o.type === 'jump') drawCactus(ctx, X(o.x), horizon, SC, obstCol);
     else drawBird(ctx, X(o.x), Y(G6.BIRD_TOP), o.phase, SC, obstCol);
   }
 
-  // ── P2 투척 섬광(spawnAnim) — 오른쪽 끝에서 장애물 투입 순간 ───────────
+  // ── P2 throw flash (spawnAnim) — the moment an obstacle is injected from the right edge ───────────
   if (s.spawnAnim > 0) {
     const a = Math.min(1, s.spawnAnim / G6.SPAWN_ANIM);
     const rgb = obstCol === PAL.red ? '224,50,62' : '11,99,229';
@@ -193,12 +193,12 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // ── 공룡(P1엔티티, 팀 컬러 플랫 마스코트) ─────────────────────────────
+  // ── dino (P1 entity, flat mascot in team color) ─────────────────────────────
   const dinoBottom = horizon - Y(s.y);
   const blink = crashed && resultAge < RESULT_FX_MS && Math.floor(now / 60) % 2 === 0;
   const showDino = !(crashed && resultAge > RESULT_FX_MS * 0.55);
 
-  // 공룡 그림자(지면 소프트 엘립스)
+  // dino shadow (soft ellipse on ground)
   if (s.result === null) {
     ctx.save();
     ctx.globalAlpha = s.grounded ? 0.22 : 0.12;
@@ -223,7 +223,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     );
   }
 
-  // ── 플레이어 배지 (스코어보드 'bug' — 네이비 필 + 팀 컬러 탭) ──────────
+  // ── player badge (scoreboard 'bug' — navy fill + team-color tab) ──────────
   {
     const cx = X(G6.DINO_X + G6.DINO_W / 2);
     const topY = dinoBottom - Y(G6.DINO_H) - 26;
@@ -244,17 +244,17 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     roundRect(ctx, px, py, pillW, pillH, pillH / 2);
     ctx.fill();
     noShadow(ctx);
-    // 팀 컬러 탭(왼쪽 원형)
+    // team-color tab (left circle)
     ctx.fillStyle = dinoCol;
     ctx.beginPath();
     ctx.arc(px + 9, py + pillH / 2, 4.5, 0, Math.PI * 2);
     ctx.fill();
-    // 라벨
+    // label
     ctx.fillStyle = PAL.white;
     ctx.fillText(label, px + padL, py + pillH / 2 + 0.5);
     ctx.restore();
 
-    // 'YOU' 점멸(골드)
+    // 'YOU' blink (gold)
     if (p1IsYou && Math.floor(now / 500) % 2 === 0) {
       ctx.save();
       ctx.font = `800 10px ${FONT}`;
@@ -266,7 +266,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     }
   }
 
-  // ── P2 리로드 게이지 = 방송 로어서드 바 ───────────────────────────────
+  // ── P2 reload gauge = broadcast lower-third bar ───────────────────────────────
   {
     const ready = s.cooldown <= 0;
     const ratio = ready ? 1 : 1 - s.cooldown / Math.max(0.0001, s.cooldownMax);
@@ -274,7 +274,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     const gh = 12;
     const gx = CW - gw - 20;
     const gy = 18;
-    // 로어서드 셸(네이비 라운드렉트 + 소프트 섀도우), 라벨 영역까지 감싸는 넓은 판
+    // lower-third shell (navy round-rect + soft shadow), a wide panel wrapping the label area too
     const shellPadX = 10;
     const shellY = gy - 20;
     const shellH = 20 + gh + 8;
@@ -287,30 +287,30 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.fill();
     noShadow(ctx);
 
-    // 라벨(화이트 Archivo) + 준비 상태(골드) + 탭 피겨
+    // label (white Archivo) + ready state (gold) + tab figure
     ctx.font = `700 9px ${FONT}`;
     ctx.textBaseline = 'alphabetic';
     ctx.textAlign = 'left';
     ctx.fillStyle = PAL.white;
     ctx.fillText(p2IsYou ? 'P2 (YOU) · RELOAD' : 'P2 · RELOAD', gx, gy - 6);
-    // 우측 탭 피겨(퍼센트) — 태뷸러 느낌
+    // right tab figure (percent) — tabular feel
     ctx.textAlign = 'right';
     const pct = Math.round(ratio * 100);
     ctx.fillStyle = ready ? PAL.gold : 'rgba(255,255,255,0.75)';
     ctx.fillText(ready ? 'READY' : `${pct < 10 ? '0' : ''}${pct}%`, gx + gw, gy - 6);
 
-    // 트랙(어두운 네이비 홈)
+    // track (dark navy groove)
     ctx.fillStyle = 'rgba(0,0,0,0.28)';
     roundRect(ctx, gx, gy, gw, gh, gh / 2);
     ctx.fill();
-    // 채움(팀 레드 = P2엔티티 색), ready면 골드 점멸
+    // fill (team red = P2-entity color), gold blink when ready
     const fillW = Math.max(0, (gw - 2) * ratio);
     if (fillW > 0) {
       const blinkReady = ready && Math.floor(now / 200) % 2 === 0;
       ctx.fillStyle = ready ? (blinkReady ? PAL.gold : obstCol) : obstCol;
       roundRect(ctx, gx + 1, gy + 1, fillW, gh - 2, (gh - 2) / 2);
       ctx.fill();
-      // 상단 하이라이트 헤어라인
+      // top highlight hairline
       ctx.fillStyle = 'rgba(255,255,255,0.22)';
       roundRect(ctx, gx + 1, gy + 1, fillW, (gh - 2) / 2, (gh - 2) / 4);
       ctx.fill();
@@ -318,7 +318,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // ── 이펙트 (클린 플랫 팝) ──────────────────────────────────────────────
+  // ── effects (clean flat pop) ──────────────────────────────────────────────
   for (const f of fx) {
     const age = now - f.t;
     if (f.kind === 'dust' && age < 320) {
@@ -373,7 +373,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     } else if (f.kind === 'caption' && age < f.life) {
       const on = Math.floor(age / 110) % 2 === 0 || age > 260;
       if (on) {
-        // 방송 캡션 칩(네이비 필 + 컬러 라벨)
+        // broadcast caption chip (navy fill + colored label)
         const cap = f.text;
         ctx.save();
         ctx.font = `800 13px ${FONT}`;
@@ -389,7 +389,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
         roundRect(ctx, cx - chW / 2, cy - chH / 2, chW, chH, 5);
         ctx.fill();
         noShadow(ctx);
-        // 좌측 컬러 액센트 바
+        // left color accent bar
         ctx.fillStyle = f.color === '#05d9e8' || f.color === '#0b63e5' ? dinoCol : f.color;
         roundRect(ctx, cx - chW / 2, cy - chH / 2, 4, chH, 2);
         ctx.fill();
@@ -401,7 +401,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     }
   }
 
-  // ── 생존 승리 러쉬(지면 위 팀 컬러 밴드 라이즈) ────────────────────────
+  // ── survival-win rush (team-color band rising above the ground) ────────────────────────
   const rush = fx.find((f) => f.kind === 'rush');
   if (rush) {
     const a = Math.min(1, (now - rush.t) / 260);
@@ -415,7 +415,7 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
     ctx.restore();
   }
 
-  // ── 충돌 순간 플랫 플래시(레드 비네트 팝, 짧게) ────────────────────────
+  // ── flat flash on crash (short red vignette pop) ────────────────────────
   const chroma = fx.find((f) => f.kind === 'chroma');
   if (chroma && now - chroma.t < 120) {
     const a = Math.max(0, 1 - (now - chroma.t) / 120);
@@ -430,10 +430,10 @@ export const drawScene: Game6DrawScene = (ctx, s, fx, now, p1IsYou, p2IsYou, geo
 };
 
 // ───────────────────────────────────────────────────────────────────────────
-// 스프라이트 (CLEAN FLAT VECTOR — 채움=팀 컬러, 소프트 드롭섀도우 1겹)
+// Sprites (CLEAN FLAT VECTOR — fill = team color, single soft drop-shadow)
 // ───────────────────────────────────────────────────────────────────────────
 
-/** 공룡(P1엔티티) — 깔끔한 플랫 마스코트 러너. leftPx=박스 좌측, bottomPx=박스 하단 */
+/** dino (P1 entity) — clean flat mascot runner. leftPx = box left, bottomPx = box bottom */
 function drawDino(
   ctx: CanvasRenderingContext2D,
   leftPx: number,
@@ -462,7 +462,7 @@ function drawDino(
   ctx.lineJoin = 'round';
 
   if (!ducking) {
-    // 다리(달리기 — runPhase로 교대). 공중이면 짧게 접음. (몸통 뒤에 먼저)
+    // legs (running — alternate via runPhase). Tuck short when airborne. (behind the body first)
     const step = Math.floor(runPhase * 14) % 2 === 0;
     const frontH = grounded ? (step ? 10 : 4) : 5;
     const backH = grounded ? (step ? 4 : 10) : 5;
@@ -473,13 +473,13 @@ function drawDino(
     softShadow(ctx, 6, 3);
     leg(13, backH);
     leg(21, frontH);
-    // 몸통 실루엣(소프트 섀도우 1겹)
+    // body silhouette (single soft shadow)
     poly([
       [4, 32], [12, 24], [12, 14], [19, 14], [19, 4], [40, 4],
       [41, 16], [30, 16], [30, 21], [27, 21], [27, 40], [13, 40], [13, 32],
     ]);
     noShadow(ctx);
-    // 팔(플랫 스터브)
+    // arm (flat stub)
     ctx.lineWidth = 2.4 * SC * 0.83;
     ctx.strokeStyle = col;
     ctx.lineCap = 'round';
@@ -487,7 +487,7 @@ function drawDino(
     ctx.moveTo(mx(28), my(23));
     ctx.lineTo(mx(33), my(27));
     ctx.stroke();
-    // 눈(화이트 스클레라 + 네이비 동공)
+    // eye (white sclera + navy pupil)
     ctx.fillStyle = PAL.white;
     ctx.beginPath();
     ctx.arc(mx(34), my(9), 2.2 * SC, 0, Math.PI * 2);
@@ -497,7 +497,7 @@ function drawDino(
     ctx.arc(mx(34.6), my(9), 1.1 * SC, 0, Math.PI * 2);
     ctx.fill();
   } else {
-    // 숙인 자세 — 낮고 길게(머리 앞으로)
+    // ducking pose — low and long (head forward)
     const step = Math.floor(runPhase * 16) % 2 === 0;
     const frontH = step ? 8 : 4;
     const backH = step ? 4 : 8;
@@ -524,7 +524,7 @@ function drawDino(
   ctx.restore();
 }
 
-/** 선인장(P2 점프 장애물) — 깔끔한 플랫 레드 블록. 지면(ground)에 바닥 붙임 */
+/** cactus (P2 jump obstacle) — clean flat red block. Bottom pinned to the ground */
 function drawCactus(
   ctx: CanvasRenderingContext2D,
   leftPx: number,
@@ -542,16 +542,16 @@ function drawCactus(
     roundRect(ctx, mx(x0), my(y1), (x1 - x0) * SC, (y1 - y0) * SC, r);
     ctx.fill();
   };
-  seg(10, 4, 17, 46, 3); // 몸통
-  noShadow(ctx); // 팔은 그림자 없이(겹침 방지, 클린)
-  seg(3, 18, 8, 30, 2.5); // 왼팔 세로
-  seg(6, 24, 11, 30, 2.5); // 왼팔 연결
-  seg(19, 12, 24, 26, 2.5); // 오른팔 세로
-  seg(16, 20, 21, 26, 2.5); // 오른팔 연결
+  seg(10, 4, 17, 46, 3); // body
+  noShadow(ctx); // arms without shadow (avoid overlap, stay clean)
+  seg(3, 18, 8, 30, 2.5); // left arm vertical
+  seg(6, 24, 11, 30, 2.5); // left arm joint
+  seg(19, 12, 24, 26, 2.5); // right arm vertical
+  seg(16, 20, 21, 26, 2.5); // right arm joint
   ctx.restore();
 }
 
-/** 새(P2 숙이기 장애물) — 깔끔한 플랫 레드 실루엣 + 날갯짓(phase) */
+/** bird (P2 duck obstacle) — clean flat red silhouette + wing flap (phase) */
 function drawBird(
   ctx: CanvasRenderingContext2D,
   leftPx: number,
@@ -561,12 +561,12 @@ function drawBird(
   col: string,
 ): void {
   const mx = (x: number) => leftPx + x * SC;
-  const my = (y: number) => topPx + y * SC; // 박스 상단 기준 (0..28)
+  const my = (y: number) => topPx + y * SC; // relative to box top (0..28)
   ctx.save();
   ctx.fillStyle = col;
   ctx.lineJoin = 'round';
   softShadow(ctx, 6, 3);
-  // 몸통(부리는 왼쪽 = 진행 방향)
+  // body (beak on the left = direction of travel)
   ctx.beginPath();
   const body: readonly [number, number][] = [
     [2, 14], [10, 9], [24, 8], [34, 10], [38, 15], [28, 19], [12, 19], [7, 16],
@@ -575,7 +575,7 @@ function drawBird(
   ctx.closePath();
   ctx.fill();
   noShadow(ctx);
-  // 날개 — 위/아래로 퍼덕(플랫 삼각)
+  // wing — flaps up/down (flat triangle)
   const flap = Math.sin(phase * 16);
   ctx.beginPath();
   ctx.moveTo(mx(15), my(12));
@@ -583,7 +583,7 @@ function drawBird(
   ctx.lineTo(mx(22), my(12 - 9 * flap));
   ctx.closePath();
   ctx.fill();
-  // 눈(화이트 + 네이비)
+  // eye (white + navy)
   ctx.fillStyle = PAL.white;
   ctx.beginPath();
   ctx.arc(mx(12), my(12), 2 * SC, 0, Math.PI * 2);

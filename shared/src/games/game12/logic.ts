@@ -2,28 +2,28 @@ import type { GameInputEvent, GameResult } from '../types'
 import { GAME_DURATION } from '../types'
 
 /**
- * 게임12 = RED LIGHT, GREEN LIGHT (무궁화 꽃이 피었습니다).
- *  · 두 플레이어는 왼쪽 출발선(pos=0)에서 오른쪽 술래/도착선(pos=1)을 향해 달린다.
- *  · Q(P1)/U(P2) 연타로 전진(관성 있음 — 안 누르면 서서히 감속). W(P1)/I(P2)=급정거(속도 0).
- *  · 술래는 랜덤 간격으로 green(등 돌림·안전) ↔ red(응시·위험). red 직전 TELEGRAPH(0.2s) 예고.
- *  · red 중 속도가 CAUGHT_SPEED 이상이면 적발 → 그 플레이어 즉시 패배(상대 승).
- *    둘 다 같은 프레임에 적발되면 술래에 더 가까운(pos 큰) 쪽이 잡아먹혀 패배.
- *  · red가 아닐 때 도착선(pos>=1) 도달 → 즉시 승리.
- *  · 10초 종료 시 아무도 못 끝냈으면 더 가까운(pos 큰) 쪽 승, 동률이면 DRAW.
+ * Game 12 = RED LIGHT, GREEN LIGHT.
+ *  · Both players run from the left start line (pos=0) toward the "it"/tagger and finish line on the right (pos=1).
+ *  · Mash Q(P1)/U(P2) to advance (with inertia — decelerates gradually when not pressed). W(P1)/I(P2)=hard stop (speed 0).
+ *  · The "it" alternates at random intervals between green (back turned · safe) ↔ red (staring · dangerous). Just before red, a TELEGRAPH(0.2s) heads-up.
+ *  · During red, if speed is at or above CAUGHT_SPEED you're caught → that player loses immediately (opponent wins).
+ *    If both are caught on the same frame, the one closer to the "it" (larger pos) gets eaten and loses.
+ *  · Reaching the finish line (pos>=1) when it's not red → instant win.
+ *  · If nobody finishes by the 10s mark, the one closer (larger pos) wins; if tied, DRAW.
  *
- * 술래 스케줄(reds)은 create(rand)에서 미리 굽는다(서버 권위 — 결정적). 렌더는 elapsed로 phase 파생.
+ * The "it" schedule (reds) is pre-baked in create(rand) (server-authoritative — deterministic). Render derives phase from elapsed.
  */
 export const G12 = {
-  /** 최대 속도(pos/초). 낮게 잡아 한 번의 green으로 결승선에 못 닿게 — 여러 red를 넘어야 도착 */
+  /** Max speed (pos/s). Kept low so a single green can't reach the finish — you must clear several reds to arrive */
   V_MAX: 0.6,
-  /** 연타 1회 임펄스(pos/초). 사람이 ~10회/초 연타 시 ~0.45 pos/초 유지 */
+  /** Impulse per mash (pos/s). A human mashing ~10/s sustains ~0.45 pos/s */
   MASH: 0.13,
-  /** 지수 감속 계수(1/초) — 안 누르면 v *= e^(-FRICTION·dt).
-   *  0.2s 코스팅만으론 임계값 아래로 못 내려가 → 반드시 급정거(W/I)로 멈춰야 안전(의도된 난이도) */
+  /** Exponential decay coefficient (1/s) — when not pressed, v *= e^(-FRICTION·dt).
+   *  0.2s of coasting alone won't drop below the threshold → you must hard-stop (W/I) to be safe (intended difficulty) */
   FRICTION: 3.4,
-  /** red 중 적발 속도 임계값(pos/초) */
+  /** Speed threshold for being caught during red (pos/s) */
   CAUGHT_SPEED: 0.12,
-  /** red 직전 예고 시간(초) — 술래가 도는 동안 멈출 여유 */
+  /** Heads-up time before red (s) — leeway to stop while the "it" turns around */
   TELEGRAPH: 0.35,
   FINISH: 1.0,
 } as const
@@ -35,14 +35,14 @@ export interface Game12State {
   v1: number
   pos2: number
   v2: number
-  /** 적발(잡아먹힘) 여부 — 렌더 연출용 */
+  /** Whether caught (eaten) — for render effect */
   caught1: boolean
   caught2: boolean
-  /** red 구간 평탄 배열 [s0,e0,s1,e1,...] (elapsed 기준). 렌더가 phase 판정에 재사용 */
+  /** Flat array of red intervals [s0,e0,s1,e1,...] (in elapsed). Render reuses it for phase decisions */
   reds: number[]
 }
 
-/** elapsed가 red 구간 안(응시 중)인지 */
+/** Whether elapsed is inside a red interval (being watched) */
 export function isRed(reds: number[], elapsed: number): boolean {
   for (let i = 0; i < reds.length; i += 2) {
     if (elapsed >= reds[i] && elapsed < reds[i + 1]) return true
@@ -50,7 +50,7 @@ export function isRed(reds: number[], elapsed: number): boolean {
   return false
 }
 
-/** 예고(turning) 중인지 — red 시작 0.2s 전 */
+/** Whether in the heads-up (turning) window — 0.2s before red starts */
 export function isTelegraph(reds: number[], elapsed: number): boolean {
   for (let i = 0; i < reds.length; i += 2) {
     if (elapsed >= reds[i] - G12.TELEGRAPH && elapsed < reds[i]) return true
@@ -59,7 +59,7 @@ export function isTelegraph(reds: number[], elapsed: number): boolean {
 }
 
 export function create(rand: () => number): Game12State {
-  // green(0.7~1.7s) ↔ red(0.6~1.3s) 교대 스케줄을 10초까지 굽는다. 첫 red는 0.6~1.2s(빨리 개입).
+  // Bake an alternating green(0.7~1.7s) ↔ red(0.6~1.3s) schedule out to 10s. First red is at 0.6~1.2s (early intervention).
   const reds: number[] = []
   let t = 0.6 + rand() * 0.6
   while (t < GAME_DURATION) {
@@ -67,7 +67,7 @@ export function create(rand: () => number): Game12State {
     const s = t
     const e = Math.min(GAME_DURATION, t + redDur)
     reds.push(s, e)
-    t = e + (0.7 + rand() * 1.0) // 다음 green
+    t = e + (0.7 + rand() * 1.0) // next green
   }
   return {
     elapsed: 0,
@@ -86,7 +86,7 @@ export function step(state: Game12State, events: GameInputEvent[], dt: number): 
   if (state.result) return state
   state.elapsed += dt
 
-  // 입력: 연타 임펄스 / 급정거
+  // Input: mash impulse / hard stop
   for (const e of events) {
     if (e.type !== 'down') continue
     switch (e.code) {
@@ -105,14 +105,14 @@ export function step(state: Game12State, events: GameInputEvent[], dt: number): 
     }
   }
 
-  // 관성 이동 + 지수 감속 (뒤로는 안 감)
+  // Inertial movement + exponential decay (never goes backward)
   const decay = Math.exp(-G12.FRICTION * dt)
   state.pos1 = Math.min(G12.FINISH, state.pos1 + state.v1 * dt)
   state.pos2 = Math.min(G12.FINISH, state.pos2 + state.v2 * dt)
   state.v1 = Math.max(0, state.v1 * decay)
   state.v2 = Math.max(0, state.v2 * decay)
 
-  // red 중 적발 판정 (예고 구간은 제외 — 그때 멈추면 안전)
+  // Caught check during red (excluding the heads-up window — stopping then is safe)
   if (isRed(state.reds, state.elapsed)) {
     if (state.v1 >= G12.CAUGHT_SPEED) state.caught1 = true
     if (state.v2 >= G12.CAUGHT_SPEED) state.caught2 = true
@@ -131,7 +131,7 @@ export function step(state: Game12State, events: GameInputEvent[], dt: number): 
     }
   }
 
-  // 도착선 도달 → 승리 (red가 아니거나, red라도 위에서 적발 안 됐으면 = 느리게 넘은 것)
+  // Reached the finish line → win (when it's not red, or during red but not caught above = crossed slowly)
   const f1 = state.pos1 >= G12.FINISH
   const f2 = state.pos2 >= G12.FINISH
   if (f1 || f2) {
@@ -139,7 +139,7 @@ export function step(state: Game12State, events: GameInputEvent[], dt: number): 
     return state
   }
 
-  // 시간 종료 → 더 가까운(pos 큰) 쪽 승
+  // Time's up → the closer one (larger pos) wins
   if (state.elapsed >= GAME_DURATION) {
     state.result = state.pos1 > state.pos2 ? 'P1' : state.pos2 > state.pos1 ? 'P2' : 'DRAW'
   }

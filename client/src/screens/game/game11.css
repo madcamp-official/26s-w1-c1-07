@@ -1,7 +1,7 @@
 /**
- * 게임11 · HOT POTATO 전용 스타일 — game11 에이전트 소유 (NEON COIN-OP).
- * 공용 theme.css 유틸(.crt-bezel/.vanish-grid/.font-arcade/.glow-text/토큰) 위에
- * 레이아웃/연출만 얹는다. game10.css 구조를 따르되 g11 네임스페이스.
+ * Game 11 · HOT POTATO dedicated styles — owned by the game11 agent (NEON COIN-OP).
+ * Layered on top of the shared theme.css utilities (.crt-bezel/.vanish-grid/.font-arcade/.glow-text/tokens),
+ * adding only layout/presentation. Follows the game10.css structure but under the g11 namespace.
  */
 
 .g11-screen {
@@ -33,16 +33,16 @@
   z-index: 1;
 }
 
-/* CRT 스테이지 — 베젤은 theme.css .crt-bezel, 여기서는 크기만.
-   상하 고정 크롬(topbar+HUD+키캡+gap+padding) + 베젤 테두리 28px,
-   캔버스 16:9 → 스테이지 폭 ≤ (100vh − 크롬) × 16/9 + 28px */
+/* CRT stage — the bezel comes from theme.css .crt-bezel; here we only set the size.
+   Fixed top/bottom chrome (topbar+HUD+keycaps+gap+padding) + 28px bezel border,
+   canvas 16:9 → stage width ≤ (100vh − chrome) × 16/9 + 28px */
 .g11-stage {
   width: min(1020px, 100%, calc((100vh - 310px) * 16 / 9 + 28px));
   z-index: 1;
   transition: box-shadow 140ms ease;
 }
 
-/* 막판(남은 3초 이하) — 위험 오렌지 글로우 펄스 */
+/* Endgame (3s or less remaining) — danger orange glow pulse */
 .g11-stage.urgent {
   animation: g11-danger 700ms steps(2, end) infinite;
 }
@@ -59,7 +59,7 @@
   aspect-ratio: 16 / 9;
 }
 
-/* 하단 키캡 열 — 좌 P1 / 우 P2, 실제 배정 키 표기 */
+/* Bottom keycap row — P1 on the left / P2 on the right, showing the actually assigned keys */
 .g11-keys {
   width: min(1020px, 100%);
   display: flex;
