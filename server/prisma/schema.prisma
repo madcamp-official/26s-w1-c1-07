@@ -27,25 +27,19 @@ enum MatchResult {
 }
 
 /// Class/group
-model UserGroup {
-  id        BigInt   @id @default(autoincrement())
-  name      String   @unique(map: "uq_group_name") @db.VarChar(100)
-  isPublic  Boolean  @default(true) @map("is_public")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  users AppUser[]
-
-  @@map("user_group")
-}
 
 /// Roster login user — logs in by picking from each class's fixed member list (prisma/seed.ts).
 /// (Google OAuth was dropped because it is unreachable on the internal network — see docs/AUTH.md.
 ///  The same name can appear in different classes, so nickname uniqueness is per class.)
 model AppUser {
   id               BigInt    @id @default(autoincrement())
+  /// Google account subject (sub claim) — the stable identity key. Login = Google OAuth (docs/AUTH.md v3)
+  googleSub        String    @unique(map: "uq_user_google") @map("google_sub") @db.VarChar(64)
+  /// Display name (from the Google profile name). Not unique — identity is googleSub.
   nickname         String    @db.VarChar(50)
+  email            String?   @db.VarChar(320)
+  googleImageUrl   String?   @map("google_image_url") @db.VarChar(500)
   uploadedImageKey String?   @map("uploaded_image_key") @db.VarChar(300)
-  groupId          BigInt?   @map("group_id")
   /// Coins held (starts at 30) — used for online betting and unlocking offline games (shared/src/coins.ts)
   coins            Int       @default(30)
   /// Number of offline games unlocked (0~7) — the first n are unlocked in UNLOCK_ORDER order
@@ -53,12 +47,9 @@ model AppUser {
   createdAt        DateTime  @default(now()) @map("created_at")
   deletedAt        DateTime? @map("deleted_at")
 
-  group      UserGroup?  @relation(fields: [groupId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_user_group")
   matchesAsA GameMatch[] @relation("MatchPlayerA")
   matchesAsB GameMatch[] @relation("MatchPlayerB")
 
-  @@unique([groupId, nickname], map: "uq_user_group_nick")
-  @@index([groupId], map: "ix_user_group")
   @@map("app_user")
 }
 

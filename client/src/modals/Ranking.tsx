@@ -66,7 +66,7 @@ export default function RankingModal() {
     <Modal
       open={open}
       onClose={closeModal}
-      marquee={`${data?.groupName ?? 'Class'} full ranking — FULL RANKING`}
+      marquee="FULL RANKING"
       accentColor="var(--accent)"
       testId="modal-ranking"
       width={560}

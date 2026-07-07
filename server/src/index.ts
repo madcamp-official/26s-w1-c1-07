@@ -1,7 +1,7 @@
 /**
  * MADPUMP server — Fastify(REST) + Socket.IO(real-time) single process.
- * Roster login (Class → member select, docs/AUTH.md) + socket handshake + lobby (code room · quick start)
- * + server-authoritative match runner + class leaderboard.
+ * Google OAuth login (GIS ID-token, docs/AUTH.md) + socket handshake + lobby (code room · quick start)
+ * + server-authoritative match runner + global leaderboard.
  */
 import { createServer } from 'node:http'
 import { existsSync } from 'node:fs'
@@ -13,6 +13,7 @@ import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
 import fstatic from '@fastify/static'
 import { Server as IOServer } from 'socket.io'
+import { OAuth2Client } from 'google-auth-library'
 import {
   ALL_GAME_IDS,
   EV,
@@ -49,16 +50,19 @@ import { MatchRunner, type Participant } from './match'
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT ?? 3000)
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173'
-// Allow multiple comma-separated origins — serve the public domain (https) and internal IP (http) at once.
+// Allow multiple comma-separated origins — serve the public domain (https) and the internal IP (http) at once.
 // e.g. "https://madcade.madcamp-kaist.org,http://172.10.8.242"
 const CLIENT_ORIGINS = CLIENT_ORIGIN.split(',').map((s) => s.trim()).filter(Boolean)
+// Google OAuth (GIS ID-token flow) — verify the ID token's audience against our client id. No client secret needed.
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? ''
+const googleOAuth = new OAuth2Client(GOOGLE_CLIENT_ID)
 // Enable the Secure cookie flag only on HTTPS. On an HTTP deployment, turning on Secure makes the browser
 // stop sending the cookie, so session/socket auth fails. Turn it on with COOKIE_SECURE=1 when using HTTPS (cloudflared/domain).
 const secureCookies = process.env.COOKIE_SECURE === '1'
 
 const app = Fastify({ logger: false })
 await app.register(cookie)
-// Credentialed CORS for dev (5173→3000 cross-origin) REST. No effect in production since it's the same origin.
+// Credentialed CORS — allows both the public domain and the internal IP origins.
 await app.register(cors, { origin: CLIENT_ORIGINS, credentials: true })
 
 // prod: serve the built client statically (client/dist)
@@ -72,53 +76,50 @@ function cookieOpts() {
   return { httpOnly: true, secure: secureCookies, sameSite: 'lax' as const, path: '/' }
 }
 
-// ── REST: roster login (docs/AUTH.md) ──────────────────────────
-// Classes (user_group) and each class's fixed members (app_user) are pre-seeded via prisma/seed.ts.
-// Since this is for an internal-network-only audience, login is just member selection with no password or other auth step.
+// ── REST: Google OAuth login (GIS ID-token, docs/AUTH.md v3) ─────────
+// The client (GIS "Sign in with Google" button) sends the credential (an ID token); the server verifies it.
+// Login is identity-only: a new account is created immediately on first sign-in (display name = Google name).
+interface GoogleProfile {
+  sub: string
+  email: string
+  name: string
+  picture: string | null
+}
 
-/** Class/member list for the login dialog (no auth required) */
-app.get('/api/roster', async () => {
-  const groups = await prisma.userGroup.findMany({
-    orderBy: { name: 'asc' },
-    include: {
-      users: {
-        where: { deletedAt: null },
-        orderBy: { id: 'asc' }, // keep seed order (= roster order)
-        select: { id: true, nickname: true },
-      },
-    },
-  })
-  return {
-    groups: groups.map((g) => ({
-      id: g.id.toString(),
-      name: g.name,
-      members: g.users.map((u) => ({ id: u.id.toString(), nickname: u.nickname })),
-    })),
+async function verifyGoogleCredential(credential: string): Promise<GoogleProfile | null> {
+  try {
+    const ticket = await googleOAuth.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID })
+    const p = ticket.getPayload()
+    if (!p?.sub) return null
+    return { sub: p.sub, email: p.email ?? '', name: p.name ?? p.email ?? 'Player', picture: p.picture ?? null }
+  } catch {
+    return null
   }
-})
+}
 
-/** Member-select login — issues a session immediately for a userId that's in the roster */
-app.post('/api/login', async (req, reply) => {
-  const body = (req.body ?? {}) as { userId?: string }
-  if (!body.userId || !/^\d+$/.test(body.userId)) {
-    return reply.code(400).send({ error: { code: 'VALIDATION', message: 'userId required' } })
-  }
-  const user = await prisma.appUser.findFirst({
-    where: { id: BigInt(body.userId), deletedAt: null },
-    include: { group: true },
+app.post('/api/auth/google', async (req, reply) => {
+  const { credential } = (req.body ?? {}) as { credential?: string }
+  if (!credential) return reply.code(400).send({ error: { code: 'VALIDATION', message: 'credential required' } })
+  const g = await verifyGoogleCredential(credential)
+  if (!g) return reply.code(401).send({ error: { code: 'INVALID_CREDENTIAL', message: 'Google token verification failed' } })
+
+  // Find-or-create by the stable googleSub. On first login the display name = Google profile name.
+  // On repeat logins we refresh email/photo but keep the existing nickname (no rename feature yet).
+  const nickname = (g.name || 'Player').trim().slice(0, 50) || 'Player'
+  const user = await prisma.appUser.upsert({
+    where: { googleSub: g.sub },
+    update: { email: g.email || null, googleImageUrl: g.picture, deletedAt: null },
+    create: { googleSub: g.sub, email: g.email || null, nickname, googleImageUrl: g.picture },
   })
-  if (!user) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'No such user' } })
 
-  const groupName = user.group?.name ?? null
-  const sid = createSession({ userId: user.id, nickname: user.nickname, imageUrl: null, groupName })
+  const sid = createSession({ userId: user.id, nickname: user.nickname, imageUrl: user.googleImageUrl })
   reply.setCookie(SESSION_COOKIE, sid, cookieOpts())
   return {
     status: 'USER',
     user: {
       id: user.id.toString(),
       nickname: user.nickname,
-      imageUrl: null,
-      groupName,
+      imageUrl: user.googleImageUrl,
       coins: user.coins,
       unlockedCount: user.unlockedCount,
     },
@@ -137,7 +138,6 @@ app.get('/api/me', async (req) => {
       id: s.userId.toString(),
       nickname: s.nickname,
       imageUrl: s.imageUrl,
-      groupName: s.groupName,
       coins: u.coins,
       unlockedCount: u.unlockedCount,
     },
@@ -220,20 +220,16 @@ app.post('/api/farm/claim', async (req, reply) => {
   return { status: 'OK', reward, coins: u.coins }
 })
 
-// ── REST: class leaderboard ─────────────────────────────────────────
-// Rank my class's users by held coins (win/draw/loss aggregated from game_match — shown for reference).
+// ── REST: global leaderboard ────────────────────────────────────────
+// Rank ALL users by held coins (win/draw/loss aggregated from game_match — shown for reference).
 // Sort: coins↓ → wins↓ → userId↑ / coin ties get the same rank (competition ranking).
 app.get('/api/leaderboard', async (req, reply) => {
   const s = getSession(req.cookies[SESSION_COOKIE])
   if (!s) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: 'Login required' } })
   const myUserId = s.userId.toString()
-  if (!s.groupName) return { status: 'OK', groupName: null, myUserId, entries: [] }
-
-  const group = await prisma.userGroup.findUnique({ where: { name: s.groupName } })
-  if (!group) return { status: 'OK', groupName: s.groupName, myUserId, entries: [] }
 
   const users = await prisma.appUser.findMany({
-    where: { groupId: group.id, deletedAt: null },
+    where: { deletedAt: null },
     select: { id: true, nickname: true, coins: true },
   })
   const ids = users.map((u) => u.id)
@@ -289,7 +285,7 @@ app.get('/api/leaderboard', async (req, reply) => {
     }
   })
 
-  return { status: 'OK', groupName: s.groupName, myUserId, entries }
+  return { status: 'OK', groupName: null, myUserId, entries }
 })
 
 app.post('/api/auth/logout', async (req, reply) => {

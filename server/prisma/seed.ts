@@ -1,6 +1,9 @@
 /**
- * MADPUMP seed data
- * Canonical: docs/ERD.md note #15 (game dictionary) / note #17 (single-row scoring settings) / docs/AUTH.md (roster login)
+ * MADPUMP seed data — game dictionary + scoring settings only.
+ * Canonical: docs/ERD.md note #15 (game dictionary) / note #17 (single-row scoring settings).
+ *
+ * Classes/roster removed (docs/AUTH.md v3): users are created on Google login, so there is
+ * no pre-seeded member list anymore.
  *
  * Idempotent: uses upsert so it is safe to run multiple times.
  * Run: npm --workspace @madpump/server run db:seed  (or npx prisma db seed)
@@ -27,29 +30,9 @@ const GAMES = [
   { id: 13, name: "POT SHOT" },
 ] as const;
 
-// Fixed per-class member roster — login picks from this list (docs/AUTH.md).
-// The same name can appear in different classes (e.g. Lee Seojin) → app_user uniqueness is (group_id, nickname).
-const ROSTER: Record<string, string[]> = {
-  "Class 1": [
-    "Lee Jimin", "Park Junseo", "Ra Taehyeong", "Lee Jonghyeok", "Yu Nayeon", "Yu Yeongseok", "Kim Taehyeon", "Kwon Sunho",
-    "Lee Yudam", "An Jonghwa", "Heo Seojun", "Lee Seojin", "Jeong Seoyeong", "Lee Yewon", "Kim Huiseo", "Ju Seongmin",
-  ],
-  "Class 2": [
-    "Park Seoyun", "Choi Jaeyun", "Kim Minjae", "Lee Yeji", "Kim Gyeongwon", "Lee Jaejun", "Yang Uhyeon", "Ju Yeongjun",
-    "Park Jimin", "Hwang Siu", "Park Chaehun", "Park Soyo", "Won Geonhui", "Lee Seoyeong", "Im Yubin", "Park Dohyeon",
-    "Park Jeongjun", "Kim Dohyeon", "Kim Doyeon",
-  ],
-  "Class 3": [
-    "Son Gihwan", "Kim Yunseo", "Yang Hoseong", "Jeong Yujin", "Kim Min", "Jo Yejun", "An Sohui", "Lee Seojin",
-    "Kang Uhyeon", "Song Jaehun", "Lee Jio", "Kim Jaehun", "Im Seongjin", "Park Jiho", "Jo Junho", "Kim Gyumin",
-    "Seo Yeongbin", "Kim Hyeri", "Park Suhyeon", "Park Minsu",
-  ],
-};
-
 async function main() {
   // Game dictionary: `name` has a unique constraint, so if renumbering moves a name to a different id
-  // (e.g. old DB id2="Missile Match" → new id2="Tide Fencing") a plain upsert hits a unique collision.
-  // Handle it in two phases:
+  // a plain upsert hits a unique collision. Handle it in two phases:
   //   (1) upsert every row with a temporary unique name ("__tmp_{id}") → frees the old names
   //   (2) update to the final names (all distinct → no collision)
   for (const g of GAMES) {
@@ -63,24 +46,6 @@ async function main() {
     await prisma.game.update({ where: { id: g.id }, data: { name: g.name } });
   }
 
-  // Classes + member roster
-  let userCount = 0;
-  for (const [groupName, members] of Object.entries(ROSTER)) {
-    const group = await prisma.userGroup.upsert({
-      where: { name: groupName },
-      update: {},
-      create: { name: groupName, isPublic: true },
-    });
-    for (const nickname of members) {
-      await prisma.appUser.upsert({
-        where: { groupId_nickname: { groupId: group.id, nickname } },
-        update: { deletedAt: null }, // restore a soft-deleted member if they are in the roster
-        create: { nickname, groupId: group.id },
-      });
-      userCount += 1;
-    }
-  }
-
   // Scoring settings: always a single row (id=1). Defaults Win 3 / Draw 1 / Loss 0.
   await prisma.scoreConfig.upsert({
     where: { id: 1 },
@@ -88,14 +53,13 @@ async function main() {
     create: { id: 1, winPoints: 3, drawPoints: 1, lossPoints: 0 },
   });
 
-  const [games, groups, users, cfg] = await Promise.all([
+  const [games, users, cfg] = await Promise.all([
     prisma.game.count(),
-    prisma.userGroup.count(),
     prisma.appUser.count(),
     prisma.scoreConfig.count(),
   ]);
   console.log(
-    `✅ Seed done — game ${games} rows, user_group ${groups} rows, app_user ${users} rows (roster ${userCount} members), score_config ${cfg} rows`,
+    `✅ Seed done — game ${games} rows, app_user ${users} rows, score_config ${cfg} rows`,
   );
 }
 

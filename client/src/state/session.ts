@@ -5,8 +5,7 @@
  * Usage:
  *   const session = useSession();          // subscribe in a React component
  *   restoreSession();                      // restore session via GET /api/me on boot
- *   await fetchRoster();                   // class·member list for the login dialog
- *   await loginAs(userId);                 // select member → log in immediately (no auth step)
+ *   await loginWithGoogle(credential);     // Google sign-in (GIS credential) → log in
  *   logout();                              // log out → then navigate('/')
  */
 import { createStore, useStore } from './store';
@@ -161,35 +160,18 @@ export async function restoreSession(): Promise<void> {
   }
 }
 
-/** Class·member list for the login dialog (GET /api/roster) */
-export interface RosterMember {
-  id: string;
-  nickname: string;
-}
-export interface RosterGroup {
-  id: string;
-  name: string;
-  members: RosterMember[];
-}
-
-export async function fetchRoster(): Promise<RosterGroup[]> {
-  const res = await fetch(`${SERVER_URL}/api/roster`, { credentials: 'include' });
-  if (!res.ok) throw new Error('ROSTER_FAILED');
-  const data = await res.json();
-  return (data.groups ?? []) as RosterGroup[];
-}
-
 /**
- * Member-selection login (POST /api/login) — on success, issues session cookie + updates the store.
+ * Google login (POST /api/auth/google) — send the GIS credential (ID token); the server verifies it,
+ * creates the account on first sign-in, and issues the session cookie. Updates the store on success.
  * @returns true on success / false on failure
  */
-export async function loginAs(userId: string): Promise<boolean> {
+export async function loginWithGoogle(credential: string): Promise<boolean> {
   try {
-    const res = await fetch(`${SERVER_URL}/api/login`, {
+    const res = await fetch(`${SERVER_URL}/api/auth/google`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ userId }),
+      body: JSON.stringify({ credential }),
     });
     if (!res.ok) return false;
     const data = await res.json();
