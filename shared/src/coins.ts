@@ -18,13 +18,17 @@ export const STARTING_COINS = 30
 
 /**
  * Display (= play) order of the offline game select screen.
- * After the full renumbering, the internal id itself matches the screen order, so this array is the identity (1..10).
+ * After the full renumbering, the internal id itself matches the screen order, so this array is the identity (1..13).
  * (screen label "GAME N" = array position = game id)
  */
-export const GAME_ORDER: readonly GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+export const GAME_ORDER: readonly GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 
-/** Locked games = the last two in display order (unlocked with coins). Everything else is open from the start. */
-export const LOCKABLE_GAME_IDS: readonly GameId[] = [GAME_ORDER[GAME_ORDER.length - 2], GAME_ORDER[GAME_ORDER.length - 1]]
+/**
+ * Locked games (coin-unlock targets) = games 9 & 10, fixed. Everything else (including the new 11/12/13) is open from the start.
+ * (Pinned explicitly so adding games doesn't push the lock onto the last two — this keeps the unlocked_count bitmask
+ *  meaning bit0=9 / bit1=10, preserving existing users' unlock state.)
+ */
+export const LOCKABLE_GAME_IDS: readonly GameId[] = [9, 10]
 
 /** Default-open games = everything except the lockable ones (playable even by logged-out users) */
 export const FREE_GAME_IDS: readonly GameId[] = GAME_ORDER.filter(

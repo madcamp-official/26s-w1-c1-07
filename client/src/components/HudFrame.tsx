@@ -35,6 +35,8 @@ export interface HudFrameProps {
   currentRound: number;
   /** time remaining (ms) — from the game state's derived/view */
   timeRemainingMs: number;
+  /** 남은 시간을 숨긴다("?" 표시). HOT POTATO(11)처럼 퓨즈를 감추는 게임용 */
+  hideTime?: boolean;
   className?: string;
 }
 
@@ -56,6 +58,7 @@ export function HudFrame({
   roundCount,
   currentRound,
   timeRemainingMs,
+  hideTime = false,
   className = '',
 }: HudFrameProps) {
   // During an online match, correct the round labels with the server values (9 rounds / current round) —
@@ -86,7 +89,7 @@ export function HudFrame({
       <div className="nc-hud__timer" data-testid="hud-countdown">
         <span className="nc-hud__time-caption font-arcade c-muted">TIME</span>
         <span className={`nc-hud__secs font-arcade glow-text ${urgent ? 'anim-urgent' : 'c-accent'}`}>
-          {secs}
+          {hideTime ? '?' : secs}
         </span>
         <span className="nc-hud__round-caption font-arcade c-muted">
           ROUND {currentRound}/{roundCount}

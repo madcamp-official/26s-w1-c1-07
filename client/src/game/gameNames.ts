@@ -15,4 +15,7 @@ export const GAME_NAMES: Record<GameId, string> = {
   8: 'Pew Pew',
   9: 'Speed Gomoku',
   10: 'Tug of War',
+  11: 'HOT POTATO',
+  12: 'RED LIGHT, GREEN LIGHT',
+  13: 'POT SHOT',
 };

@@ -75,8 +75,8 @@ export interface FlowState {
 
 /** SPEC S4: default 3 rounds / 60 sec per round (Q1 ruling) */
 export const DEFAULT_ROUND_CONFIG: RoundConfig = { roundCount: 3, timePerRoundSec: 60 };
-/** Default = all 10 games */
-export const ALL_GAME_IDS: GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+/** Default = all 13 games */
+export const ALL_GAME_IDS: GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 
 const INITIAL: FlowState = {
   mode: null,

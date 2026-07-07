@@ -10,8 +10,8 @@
  * it is copied into client without referencing the design-lab folder.
  */
 
-/** Mini-game identifier (1, 2, 3) */
-export type GameId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+/** Mini-game identifier (1..13) */
+export type GameId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 
 /** Player role in a local match */
 export type PlayerRole = 'P1' | 'P2';

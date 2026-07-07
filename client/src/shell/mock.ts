@@ -142,7 +142,7 @@ export interface Leaderboard {
   entryOf(userId: string): LeaderboardEntry | null;
 }
 
-const GAME_IDS: GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const GAME_IDS: GameId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 
 function emptyPerGame(): Record<GameId, PerGameStats> {
   return Object.fromEntries(

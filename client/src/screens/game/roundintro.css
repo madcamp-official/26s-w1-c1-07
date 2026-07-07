@@ -141,11 +141,52 @@
   to { text-shadow: 0 0 6px currentColor, 0 0 22px currentColor; }
 }
 
+/* ── Ready countdown "2 · 1 · START!" (3s after the guide) ── */
+.ri--count {
+  background: rgba(13, 2, 33, 0.7);
+}
+.ri-count__num {
+  font-size: clamp(72px, 18vw, 160px);
+  color: var(--accent);
+  text-shadow:
+    0 0 8px currentColor,
+    0 0 32px color-mix(in srgb, var(--accent) 70%, transparent);
+  /* Each number pops in, grows slightly, then fades (replayed at each step via key swap) */
+  animation: ri-count-pop 700ms ease-out both;
+}
+.ri-count__go {
+  font-size: clamp(48px, 12vw, 108px);
+  color: var(--win, #3dff8e);
+  text-shadow:
+    0 0 8px currentColor,
+    0 0 32px color-mix(in srgb, var(--win, #3dff8e) 70%, transparent);
+  animation: ri-count-go 600ms ease-out both;
+}
+
+@keyframes ri-count-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  25% { transform: scale(1.1); opacity: 1; }
+  70% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+@keyframes ri-count-go {
+  0% { transform: scale(0.6); opacity: 0; }
+  30% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1.4); opacity: 0.85; }
+}
+
 /* The info lives in the HUD/game rather than this overlay, so remove all animation when reduced motion is preferred (static display) */
+
 @media (prefers-reduced-motion: reduce) {
   .ri,
-  .ri.ri--out,
-  .ri__name {
+  .ri__name,
+  .ri-count__num,
+  .ri-count__go {
     animation: none;
+  }
+  /* 모션 축소 시엔 카운트다운 숫자를 정적으로 보이게(투명도 0으로 사라지지 않도록) */
+  .ri-count__num,
+  .ri-count__go {
+    opacity: 1;
   }
 }

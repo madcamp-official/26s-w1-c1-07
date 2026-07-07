@@ -9,7 +9,7 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// Game type dictionary — fixed mapping to the code's game numbers (1~10). This table is the "code mirror".
+// Game type dictionary — fixed mapping to the code's game numbers (1~13). This table is the "code mirror".
 // (id = screen order, matches shared/coins.ts GAME_ORDER)
 const GAMES = [
   { id: 1, name: "Number Guess" },
@@ -22,6 +22,9 @@ const GAMES = [
   { id: 8, name: "Pew Pew" },
   { id: 9, name: "Speed Gomoku" },
   { id: 10, name: "Tug of War" },
+  { id: 11, name: "HOT POTATO" },
+  { id: 12, name: "RED LIGHT, GREEN LIGHT" },
+  { id: 13, name: "POT SHOT" },
 ] as const;
 
 // Fixed per-class member roster — login picks from this list (docs/AUTH.md).
@@ -44,12 +47,20 @@ const ROSTER: Record<string, string[]> = {
 };
 
 async function main() {
+  // Game dictionary: `name` has a unique constraint, so if renumbering moves a name to a different id
+  // (e.g. old DB id2="Missile Match" → new id2="Tide Fencing") a plain upsert hits a unique collision.
+  // Handle it in two phases:
+  //   (1) upsert every row with a temporary unique name ("__tmp_{id}") → frees the old names
+  //   (2) update to the final names (all distinct → no collision)
   for (const g of GAMES) {
     await prisma.game.upsert({
       where: { id: g.id },
-      update: { name: g.name }, // sync only the name, preserve the operational is_active value
-      create: { id: g.id, name: g.name, isActive: true },
+      update: { name: `__tmp_${g.id}` },
+      create: { id: g.id, name: `__tmp_${g.id}`, isActive: true },
     });
+  }
+  for (const g of GAMES) {
+    await prisma.game.update({ where: { id: g.id }, data: { name: g.name } });
   }
 
   // Classes + member roster
