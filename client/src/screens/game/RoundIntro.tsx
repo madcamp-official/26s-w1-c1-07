@@ -19,6 +19,7 @@
 import { useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { KeyCap } from '../../components';
+import { sfx } from '@/audio';
 import { useFlow } from '../../state/flow';
 import { useOnline } from '../../net/online';
 import { closeGate, openGate } from '../../state/roundIntroGate';
@@ -126,6 +127,13 @@ export default function RoundIntro() {
       closeGate(); // release the gate on re-run/unmount — the next run (or strict 2nd mount) reopens it
     };
   }, [offlineActive, flow.gameId, flow.currentRound]);
+
+  // Countdown SFX — play a tick on each "2"/"1" step and the GO cue on "START!", synced to the number appearing.
+  // (offStep is offline-only; the online countdown's start/GO SFX are handled by the audio controller's store subscription.)
+  useEffect(() => {
+    if (offStep === 'c2' || offStep === 'c1') sfx('flow-countdown-tick');
+    else if (offStep === 'start') sfx('flow-go');
+  }, [offStep]);
 
   // ── decide payload (online first) ──
   let gameId: number | null = null;
