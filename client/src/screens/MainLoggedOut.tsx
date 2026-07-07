@@ -26,8 +26,11 @@ export default function MainLoggedOut() {
     <main data-testid="scr-main-out" className="s1-root">
       <div className="vanish-grid" aria-hidden />
 
-      {/* Top-right: Login (Settings is reachable only via the gear inside the online panel) */}
+      {/* Top-right: Theme switcher (a global preference, so shown even when logged out) + Login */}
       <header className="s1-header">
+        <Button variant="tertiary" data-testid="btn-theme-shop" onClick={() => openModal('theme-shop')}>
+          🎨 테마
+        </Button>
         <Button variant="tertiary" data-testid="btn-login" onClick={() => openLoginModal()}>
           Login
         </Button>

@@ -456,7 +456,7 @@
   transform: translateX(-50%);
   font-size: 22px;
   color: var(--accent);
-  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  text-shadow: var(--text-glow);
   white-space: nowrap;
   pointer-events: none;
   animation: g2-intro-show 1600ms steps(1, end) both;

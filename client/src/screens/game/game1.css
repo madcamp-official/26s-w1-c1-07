@@ -179,7 +179,7 @@
 .g1-panel__num {
   font-size: clamp(48px, 7vw, 90px);
   line-height: 1;
-  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  text-shadow: var(--text-glow);
   animation: g1-burst 80ms steps(2, end) both;
 }
 

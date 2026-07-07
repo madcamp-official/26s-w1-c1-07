@@ -41,12 +41,12 @@
 
 .s1-logo-mad {
   color: var(--p2);
-  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  text-shadow: var(--text-glow);
 }
 
 .s1-logo-pump {
   color: var(--p1);
-  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  text-shadow: var(--text-glow);
 }
 
 /* faulty lamp gag — the last P in PUMP flickers intermittently (steps, mostly lit at rest) */

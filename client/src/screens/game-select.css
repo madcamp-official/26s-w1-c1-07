@@ -86,7 +86,7 @@
 
 .s8-cabinet:hover .s8-marquee-title {
   color: var(--cab-color);
-  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  text-shadow: var(--text-glow);
 }
 
 .s8-cabinet:hover .s8-marquee .lamp {

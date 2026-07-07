@@ -65,7 +65,7 @@
 .g9-round-intro__sub {
   font-size: 20px;
   letter-spacing: 0.04em;
-  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  text-shadow: var(--text-glow);
 }
 
 @keyframes g9-intro {

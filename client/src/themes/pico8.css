@@ -1,0 +1,181 @@
+/**
+ * PICO-8 PLAYGROUND — design-lab/ideas/06-pico8 정본을 토큰 계약 위로 이식.
+ * PICO-8 16색 고정 팔레트 · 다크블루 배경 · 2px 순수 블랙 아웃라인 · blur-0 하드 블랙 섀도우 · 픽셀폰트.
+ *
+ * 구조: (A) :root[data-theme] 토큰 블록이 계약 전체를 재정의(색/폰트/형태/모션) →
+ *       (B) 네온 전용 효과 클래스(글로우/스캔라인/신스웨이브)를 [data-theme=] 스코프로 override.
+ * 특정도 규칙: 베이스 컴포넌트 CSS(.nc-btn:hover:not(:disabled) 등, 0,3,0)를 이기기 위해
+ *              항상 `[data-theme="pico8"] <베이스와 동일 compound>` 로 +1 attribute 확보.
+ * 이 파일은 시각(색/형태/효과)만 바꾼다 — @madpump/shared·게임 좌표엔 절대 관여하지 않는다.
+ * 팔레트 밖 색 금지(16색): #000 #1D2B53 #7E2553 #008751 #5F574F #C2C3C7 #FFF1E8 #FF004D
+ *                          #FFA300 #FFEC27 #00E436 #29ADFF #83769C #FF77A8 #FFCCAA.
+ */
+
+/* ─────────────────────────────────────────────────────── (A) 토큰 계약 */
+:root[data-theme='pico8'] {
+  --bg: #1d2b53;            /* PICO-8 다크블루 배경 */
+  --bg-raised: #000000;     /* 스테이지 스크린 최심층/게임 무대 배경 */
+  --surface: #7e2553;       /* 카드/모달/패널(다크퍼플) */
+  --surface-deep: #000000;  /* 가라앉은 영역/입력 바탕/짝수행 지브라 */
+  --text: #fff1e8;          /* 주 텍스트(PICO-8 화이트) */
+  --text-muted: #c2c3c7;    /* 보조 텍스트/라벨(라이트그레이) */
+  --text-dim: #83769c;      /* 3차 텍스트/힌트/비활성(라벤더) */
+  --accent: #ffa300;        /* 히어로 CTA / 포인트(오렌지) */
+  --accent2: #ffec27;       /* 하이라이트/선택/코드 표시(옐로) */
+  --on-accent: #000000;     /* accent 위 잉크 */
+  --p1: #29adff;           /* P1(왼쪽) 블루 — 인게임 불변 */
+  --p1-dim: #1d2b53;       /* P1 영역 채움(다크블루 톤) */
+  --p2: #ff004d;           /* P2(오른쪽) 레드 — 인게임 불변 */
+  --p2-dim: #7e2553;       /* P2 영역 채움(다크퍼플 톤) */
+  --error: #ff004d;
+  --win: #00e436;
+  --ok: #00e436;
+  --hairline: #000000;      /* 1px 금지 → 블랙 아웃라인으로 통일 */
+  --border-col: #000000;
+  --border-w: 2px;
+  --scanline-color: transparent; /* 스캔라인 금지 → 도트 질감으로 대체 */
+  --vignette-color: transparent;
+  --bezel-color: #000000;
+  --bezel-w: 4px;           /* 콘솔 스크린 4px 블랙 프레임 */
+  --radius: 0px;            /* 전면 각짐 — "라운드"는 픽셀 노치로만 */
+  --radius-sm: 0px;
+  --radius-lg: 0px;
+  --radius-pill: 0px;       /* 필도 픽셀(각짐) — 진짜 라운드 금지 */
+  --shadow-sm: 2px 2px 0 #000000;   /* blur-0 하드 블랙 오프셋 */
+  --shadow-md: 4px 4px 0 #000000;
+  --shadow-lg: 6px 6px 0 #000000;
+  --ease: steps(2, end);   /* 저프레임 칩튠 — 촙촙한 스텝 */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 300ms;
+  --font-arcade: 'Press Start 2P', monospace;               /* 대문자 영문/숫자 전용 */
+  --font-display: 'Do Hyeon', 'Apple SD Gothic Neo', sans-serif;
+  --font-body: 'Do Hyeon', 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+}
+
+/* ─────────────────────────────────────────────────────── (B) 효과 override */
+
+/* 네온 텍스트/박스 글로우 → 픽셀 폰트는 글로우 없음 / 하드 블랙 섀도우 */
+[data-theme='pico8'] .glow-text { text-shadow: none; }
+[data-theme='pico8'] .glow-box { box-shadow: var(--shadow-md); }
+
+/* CRT 스캔라인 → 은은한 4px 도트 그리드(콘솔 스크린 질감) · 신스웨이브 바닥 제거 */
+[data-theme='pico8'] .crt-overlay {
+  background: radial-gradient(rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+  background-size: 4px 4px;
+  pointer-events: none;
+}
+[data-theme='pico8'] .crt-overlay::after { display: none; }
+[data-theme='pico8'] .vanish-grid { display: none; }
+
+/* 버튼: 네온 보더+글로우 → 블랙 아웃라인 + 하드 섀도우 물리버튼 */
+[data-theme='pico8'] .nc-btn {
+  background: var(--surface);
+  border: var(--border-w) solid var(--border-col);
+  border-radius: 0;
+  color: var(--text);
+  box-shadow: var(--shadow-md);
+  text-shadow: none;
+  letter-spacing: 0.02em;
+  image-rendering: pixelated;
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+[data-theme='pico8'] .nc-btn--primary { background: var(--accent); color: var(--on-accent); }
+[data-theme='pico8'] .nc-btn--secondary { background: var(--surface); color: var(--text); }
+[data-theme='pico8'] .nc-btn--danger { background: var(--error); color: var(--text); }
+[data-theme='pico8'] .nc-btn--tertiary {
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+}
+/* 호버 = 박스가 좌상단으로 들림(하드섀도우 커짐) — 네온 플리커 제거 */
+[data-theme='pico8'] .nc-btn:hover:not(:disabled) {
+  animation: none;
+  filter: none;
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--border-col);
+}
+[data-theme='pico8'] .nc-btn--tertiary:hover:not(:disabled) {
+  color: var(--accent);
+  text-shadow: none;
+  transform: none;
+  box-shadow: none;
+}
+/* 프레스 = 물리적으로 눌려 들어감(섀도우 소멸) */
+[data-theme='pico8'] .nc-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+  background: var(--surface);
+  filter: none;
+  transition: none;
+}
+[data-theme='pico8'] .nc-btn--primary:active:not(:disabled) { background: var(--accent); }
+[data-theme='pico8'] .nc-btn__coin { border-color: currentColor; border-radius: 0; }
+
+/* CoinButton(설정 톱니 등) — 글로우 제거, 픽셀 글리프 */
+[data-theme='pico8'] .nc-coinbtn { color: var(--text); text-shadow: none; }
+[data-theme='pico8'] .nc-coinbtn:hover:not(:disabled) {
+  animation: none;
+  filter: none;
+  transform: translate(-1px, -1px);
+}
+[data-theme='pico8'] .nc-coinbtn:active:not(:disabled) { filter: none; transform: translate(1px, 1px); }
+
+/* 모달: 다크 스크림 → 블랙 70% + 2px 체커 도트, 패널 = 2px 아웃라인 + 8px 딥 섀도우 */
+[data-theme='pico8'] .nc-modal-overlay {
+  background-color: rgba(0, 0, 0, 0.7);
+  background-image: repeating-conic-gradient(rgba(0, 0, 0, 0.35) 0% 25%, transparent 0% 50%);
+  background-size: 4px 4px;
+}
+[data-theme='pico8'] .nc-modal {
+  border: var(--border-w) solid var(--border-col);
+  border-radius: 0;
+  box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.55);
+}
+/* 마퀴 스트립 = 다크블루 타이틀 바 + 픽셀폰트(간판 시그니처) */
+[data-theme='pico8'] .marquee-strip {
+  background: var(--bg);
+  border-bottom: var(--border-w) solid var(--border-col);
+  color: var(--text);
+}
+[data-theme='pico8'] .marquee-strip .marquee-title {
+  text-shadow: none;
+  color: var(--text);
+  font-family: var(--font-arcade);
+}
+
+/* 코너 브래킷 제거(2px 블랙 아웃라인으로 대체) */
+[data-theme='pico8'] .corner-brackets::before,
+[data-theme='pico8'] .corner-brackets::after,
+[data-theme='pico8'] .corner-brackets > .cb2::before,
+[data-theme='pico8'] .corner-brackets > .cb2::after { display: none; }
+
+/* 램프 → 블랙 아웃라인 사각 칩(글로우 없음, 픽셀) */
+[data-theme='pico8'] .lamp { border-radius: 0; border: 2px solid var(--border-col); background: var(--surface); image-rendering: pixelated; }
+[data-theme='pico8'] .lamp.lit { box-shadow: none; background: var(--lamp-color, var(--accent)); border-color: var(--border-col); }
+
+/* 터미널 입력 → 블랙 바탕 + 라벤더 보더, 포커스 오렌지 보더 + 하드 섀도우 */
+[data-theme='pico8'] .neon-input {
+  background: var(--surface-deep);
+  border: var(--border-w) solid var(--text-dim);
+  border-bottom-width: var(--border-w);
+}
+[data-theme='pico8'] .neon-input:focus-within { box-shadow: var(--shadow-sm); border-color: var(--accent); }
+[data-theme='pico8'] .neon-input .prompt,
+[data-theme='pico8'] .neon-input input { color: var(--text); caret-color: var(--accent2); }
+
+/* 단위 칩 → 블랙 아웃라인 사각 칩(픽셀) */
+[data-theme='pico8'] .unit-chip { border: 2px solid var(--border-col); border-radius: 0; color: var(--text); }
+
+/* 게임 스테이지 베젤: 토큰(블랙 4px)로 이미 적용. 라운드 제거 + 하드 섀도우 + 픽셀 렌더 */
+[data-theme='pico8'] .crt-bezel { border-radius: 0; box-shadow: var(--shadow-md); image-rendering: pixelated; }
+[data-theme='pico8'] .crt-bezel.urgent { box-shadow: var(--shadow-md); }
+
+/* ── 시그니처 유틸(게임/결과 연출용, 컴포넌트가 opt-in) ── */
+/* PICO-8 디더링 — 2색 교차 2px 체커(그라디언트 금지 관례 대체) */
+[data-theme='pico8'] .dither,
+[data-theme='pico8'] .px-dither {
+  background-image: repeating-conic-gradient(var(--accent2) 0% 25%, transparent 0% 50%);
+  background-size: 4px 4px;
+}

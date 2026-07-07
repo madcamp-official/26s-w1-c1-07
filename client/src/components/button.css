@@ -17,7 +17,7 @@
     0 0 6px var(--btn-color),
     0 0 20px color-mix(in srgb, var(--btn-color) 45%, transparent),
     inset 0 0 8px color-mix(in srgb, var(--btn-color) 25%, transparent);
-  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  text-shadow: var(--text-glow);
 }
 
 .nc-btn--block {
@@ -55,7 +55,7 @@
 
 .nc-btn--tertiary:hover:not(:disabled) {
   color: var(--p1);
-  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  text-shadow: var(--text-glow);
   animation: none;
   filter: none;
 }

@@ -48,7 +48,7 @@
     transform: translateX(-2px);
   }
   100% {
-    text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+    text-shadow: var(--text-glow);
     transform: none;
   }
 }
@@ -57,7 +57,7 @@
   font-size: clamp(28px, 5vw, 44px);
   line-height: 1.2;
   color: var(--rov-color);
-  text-shadow: 0 0 4px currentColor, 0 0 18px currentColor;
+  text-shadow: var(--text-glow);
 }
 
 .rov__text--glitch {

@@ -45,6 +45,9 @@ import ResultOverlay from './ResultOverlay';
 import RoundIntro from './RoundIntro';
 import { isRoundIntroActive } from '../../state/roundIntroGate';
 import { sfx } from '@/audio';
+import { getTheme } from '../../state/theme';
+import { game6Draw } from './render/game6';
+import type { Geom } from './render/game6/types';
 import './game6.css';
 
 // ---------------------------------------------------------------------------
@@ -562,6 +565,26 @@ function drawScene(
 }
 
 // ---------------------------------------------------------------------------
+// Per-theme render dispatch — pick the current theme's bespoke drawScene (falls back to the neon default).
+// Coordinates/scale are passed fixed via GEOM → the same coordinate system for any theme combo (crossplay-invariant).
+// getTheme() is read every frame, so a theme switch takes effect on the very next frame.
+// ---------------------------------------------------------------------------
+const GEOM: Geom = { CW, CH, SC, X, Y, STARS };
+
+function renderScene(
+  ctx: CanvasRenderingContext2D,
+  s: Game6State,
+  fx: readonly Fx[],
+  now: number,
+  p1IsYou: boolean,
+  p2IsYou: boolean,
+): void {
+  const draw = game6Draw[getTheme()];
+  if (draw) draw(ctx, s, fx, now, p1IsYou, p2IsYou, GEOM);
+  else drawScene(ctx, s, fx, now, p1IsYou, p2IsYou); // neon-coinop = default (local)
+}
+
+// ---------------------------------------------------------------------------
 // Between-snapshot interpolation(extrapolation) — builds a display-only state by advancing the
 // server snapshot dt seconds forward with each object's 'own velocity'. The snapshot already has
 // vy·grounded·obstacles, so no ID matching is needed and added latency is 0. Only the landing/
@@ -751,7 +774,7 @@ export default function Game6() {
           // On end(result), do not extrapolate(keep the shards/rush effect exactly at the server's final state).
           const extraDt = Math.min(0.05, Math.max(0, (now - snapAtRef.current) / 1000));
           const view = extraDt > 0 && s.result === null ? extrapolate(s, extraDt) : s;
-          drawScene(ctx, view, fxRef.current, now, disp.P1.isYou, disp.P2.isYou);
+          renderScene(ctx, view, fxRef.current, now, disp.P1.isYou, disp.P2.isYou);
           endRef.current.update(s.result, now);
           drawEndFlash(ctx, CW, CH, endRef.current.age(now));
         }
@@ -893,7 +916,7 @@ export default function Game6() {
       if (ctx) {
         const disp = getPlayerDisplays(getFlow());
         fxRef.current = fxRef.current.filter((f) => now - f.t < 1200);
-        drawScene(ctx, s, fxRef.current, now, disp.P1.isYou, disp.P2.isYou);
+        renderScene(ctx, s, fxRef.current, now, disp.P1.isYou, disp.P2.isYou);
         endRef.current.update(s.result, now);
         drawEndFlash(ctx, CW, CH, endRef.current.age(now));
       }

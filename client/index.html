@@ -4,11 +4,31 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MADPUMP</title>
-    <!-- Arcade display Press Start 2P + Korean display Gugi -->
+    <!-- Theme FOUC guard: set the saved theme on <html> before the stylesheet parses.
+         The default :root is dark neon, so this prevents a saved light theme (neo-brutal/clay/broadcast)
+         from flashing dark on the first paint. Same key/validation as state/theme.ts. -->
+    <script>
+      (function () {
+        var IDS = ['neon-coinop', 'neo-brutal', 'clay-toy', 'broadcast-arena', 'obsidian', 'pico8'];
+        var id = 'neon-coinop';
+        try {
+          var raw = localStorage.getItem('madpump:theme');
+          var v = raw ? (JSON.parse(raw) || {}).current : null;
+          if (IDS.indexOf(v) >= 0) id = v;
+        } catch (e) {
+          /* ignore — fall back to the default if blocked/corrupt */
+        }
+        document.documentElement.setAttribute('data-theme', id);
+      })();
+    </script>
+    <!-- Per-theme display/mono fonts (6 design-lab concepts).
+         neon: Press Start 2P + Gugi / neo-brutal: Black Han Sans + Space Mono /
+         clay: Jua + Baloo 2 / broadcast: Archivo + IBM Plex Sans KR /
+         obsidian: Orbitron + Noto Sans KR / pico8: Press Start 2P + Do Hyeon -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Gugi&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Gugi&family=Black+Han+Sans&family=Space+Mono:ital,wght@0,400;0,700;1,700&family=Jua&family=Baloo+2:wght@400;600;700;800&family=Archivo:ital,wght@0,400;0,600;0,800;1,600&family=Orbitron:wght@500;700;800;900&family=Do+Hyeon&family=Noto+Sans+KR:wght@400;500;700;900&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
   </head>
