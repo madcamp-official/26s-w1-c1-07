@@ -3,7 +3,7 @@
 # check-standalone.sh — checks that the main workspace does not depend on the
 # experimental folders (design-lab / game-lab), i.e. its standalone-ness.
 #
-# Background: a MADPUMP merge is a vendor-in that "copies" the lab folder code
+# Background: a MADCADE merge is a vendor-in that "copies" the lab folder code
 # into main (client/·server/·shared/) and severs the link to the originals
 # (docs/MERGE_PLAN.md §2-0 invariant A). This script mechanically detects whether
 # that principle has been broken — i.e. whether main has started pointing back at
@@ -26,7 +26,7 @@ CONFIG_FILES=(client/vite.config.ts client/tsconfig.json server/tsconfig.json sh
 
 # Forbidden patterns — all limited to "module specs inside quotes":
 #  (a) a quoted string containing design-lab / game-lab / game-test  (import path·alias value)
-#  (b) an '@shared' spec right after a quote  (the alias the design-lab draft used). '@madpump/shared' is not included.
+#  (b) an '@shared' spec right after a quote  (the alias the design-lab draft used). '@madcade/shared' is not included.
 PATTERN_A="['\"][^'\"]*(design-lab|game-lab|game-test)[^'\"]*['\"]"
 PATTERN_B="['\"]@shared(/|['\"])"
 

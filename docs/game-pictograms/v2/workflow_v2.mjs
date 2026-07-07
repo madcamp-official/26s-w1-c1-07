@@ -10,7 +10,7 @@ const JOBS = [{"game": 5, "key": "g5-3.1", "base": "<g class=\"gp-mag gp-stroke 
 
 const prompt = (j) => `${CONTRACT}
 
-[임무] MADPUMP 오프라인 게임 선택 화면의 게임 ${j.game} 캐비닛 스크린용 네온 픽토그램을 만든다.
+[임무] MADCADE 오프라인 게임 선택 화면의 게임 ${j.game} 캐비닛 스크린용 네온 픽토그램을 만든다.
 ${j.dir}
 ${j.base ? '참고(원본/기준 SVG 내부 마크업 — 이걸 그대로 베끼지 말고 지시대로 변형/개선):\n' + j.base : ''}
 

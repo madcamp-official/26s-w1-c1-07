@@ -1,7 +1,7 @@
 /**
  * Game6 (Dino Run) — theme: BROADCAST ARENA (esports broadcast graphics).
  * Draws the whole scene from scratch as a live-match overlay concept. Coordinates/judging match neon (fairness) —
- * based only on geom.* + @madpump/shared G6 constants. All that lives here is the drawing.
+ * based only on geom.* + @madcade/shared G6 constants. All that lives here is the drawing.
  *
  * Art: CLEAN FLAT VECTOR. Palette = cool light field / navy / team-blue / team-red / gold. Font Archivo.
  *  · Dino (P1 entity) = clean flat mascot runner in team color.
@@ -11,7 +11,7 @@
  *  · Badge = scoreboard 'bug' (navy fill + team color). Effects = clean flat pop.
  * Shadow is a single subtle soft drop-shadow (shadowBlur ~6, low-alpha navy) — not a neon glow.
  */
-import { G6, GAME_DURATION } from '@madpump/shared';
+import { G6, GAME_DURATION } from '@madcade/shared';
 import { functionColors } from '../../../../net/online';
 import type { Game6DrawScene } from './types';
 

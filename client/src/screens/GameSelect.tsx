@@ -17,7 +17,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GAME_ORDER, isLockable, unlockCost, unlockedGameIds } from '@madpump/shared';
+import { GAME_ORDER, isLockable, unlockCost, unlockedGameIds } from '@madcade/shared';
 import type { GameId } from '@/shell';
 import { Button, GamePictogram } from '../components';
 import { useDebugScreen } from '../debug';
@@ -98,9 +98,9 @@ export default function GameSelect() {
         <Button variant="tertiary" onClick={() => navigate('/')}>
           ◀ Back to main
         </Button>
-        <p className="s8-wordmark font-arcade" aria-label="MADPUMP">
+        <p className="s8-wordmark font-arcade" aria-label="MADCADE">
           <span className="c-p2 glow-text">MAD</span>
-          <span className="c-p1 glow-text">PUMP</span>
+          <span className="c-p1 glow-text">CADE</span>
         </p>
         {session.loggedIn ? (
           <span className="s8-coins font-arcade c-accent glow-text" data-testid="coin-balance">

@@ -12,7 +12,7 @@
  * (3 of rounds 5~9) — its game is revealed only when that round begins.
  */
 import { useEffect, useRef, useState } from 'react'
-import type { GameId, PlayerColor } from '@madpump/shared'
+import type { GameId, PlayerColor } from '@madcade/shared'
 import { GamePictogram } from '../components'
 import './match-intro.css'
 

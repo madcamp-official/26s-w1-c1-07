@@ -3,7 +3,7 @@
  * Container testid: scr-game13 / parts: game-stage (CRT bezel), hud-* (HudFrame), btn-exit
  *
  * ── Principles ──────────────────────────────────────────────────────
- *  · All logic/judging driven 100% by @madpump/shared game13 core (create/step).
+ *  · All logic/judging driven 100% by @madcade/shared game13 core (create/step).
  *  · Screen/rendering authored from scratch here as a neon canvas scene.
  *  · design-lab import 0 — colors/fonts are hex constants copied from theme tokens.
  *
@@ -24,8 +24,8 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { game13, G13, GAME_DURATION } from '@madpump/shared';
-import type { Game13State, GameInputEvent } from '@madpump/shared';
+import { game13, G13, GAME_DURATION } from '@madcade/shared';
+import type { Game13State, GameInputEvent } from '@madcade/shared';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { useOnlineRender } from '../../net/useOnlineRender';
 import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';

@@ -1,4 +1,4 @@
-# MADPUMP DB Documentation (implementation · operation · understanding)
+# MADCADE DB Documentation (implementation · operation · understanding)
 
 > This document is **for understanding and working with the actually-built DB**.
 > - The **design rationale / source of truth** is [`ERD.md`](./ERD.md) (why it looks this way, 17 decision notes).
@@ -61,7 +61,7 @@ DATABASE_URL="mysql://madpump:<VM_DB_PASSWORD>@localhost:3306/madpump"
 ssh -N -L 3306:localhost:3306 kaistvm
 # Terminal 2:
 #   .env → DATABASE_URL="mysql://madpump:<VM_DB_PASSWORD>@127.0.0.1:3306/madpump"
-npm --workspace @madpump/server run migrate:deploy
+npm --workspace @madcade/server run migrate:deploy
 ```
 > With the tunnel, the connection looks like `localhost` from the VM's side, matching the `madpump@localhost` privileges. You get remote management without exposing MySQL externally.
 
@@ -69,8 +69,8 @@ npm --workspace @madpump/server run migrate:deploy
 ```bash
 docker compose up -d      # root docker-compose.yml → 127.0.0.1:3307
 # .env → DATABASE_URL="mysql://madpump:devpass@127.0.0.1:3307/madpump"
-npm --workspace @madpump/server run migrate:deploy
-npm --workspace @madpump/server run db:seed
+npm --workspace @madcade/server run migrate:deploy
+npm --workspace @madcade/server run db:seed
 ```
 
 The **VM DB password** is not in the repo. It lives only in `server/.env` (VM) and a separate secure store. If lost, see the reset procedure in §9.
@@ -254,7 +254,7 @@ Each table's Prisma model name ↔ the actual table name (snake_case) is linked 
 
 ## 7. Seed data (`server/prisma/seed.ts`)
 
-Idempotent upsert. Run with `npm --workspace @madpump/server run db:seed`.
+Idempotent upsert. Run with `npm --workspace @madcade/server run db:seed`.
 
 | Table | Seed contents |
 |---|---|
@@ -323,7 +323,7 @@ const matches = await prisma.gameMatch.findMany({
 - **Access control**: keep `bind-address=127.0.0.1` (no external exposure). The app uses only `madpump@localhost`; root is for administration.
 - **Resetting the DB password** (if lost): on the VM,
   `sudo mysql -e "ALTER USER 'madpump'@'localhost' IDENTIFIED BY '<new_password>'; FLUSH PRIVILEGES;"` → update `server/.env`.
-- **Schema reset** (re-init during dev): `npm --workspace @madpump/server run db:reset` (⚠️ deletes all data, then re-migrates + seeds).
+- **Schema reset** (re-init during dev): `npm --workspace @madcade/server run db:reset` (⚠️ deletes all data, then re-migrates + seeds).
 
 ---
 

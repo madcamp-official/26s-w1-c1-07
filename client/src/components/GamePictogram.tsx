@@ -4,7 +4,7 @@
  * Unique art: Number Guess=1 / fencing=2 / missile=4. Everything else uses the SVG scenes from pictograms.ts (FINAL_PICTOS),
  * with the display number (GAME_ORDER position) as a fallback. Class names keep the existing s8- / gp- families.
  */
-import { GAME_ORDER } from '@madpump/shared';
+import { GAME_ORDER } from '@madcade/shared';
 import type { GameId } from '@/shell';
 import { FINAL_PICTOS } from '../screens/pictograms';
 import './game-pictogram.css';

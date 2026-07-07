@@ -17,7 +17,7 @@ import {
   type PlayerColor,
   type Role,
   type SlotResult,
-} from '@madpump/shared'
+} from '@madcade/shared'
 import { createState, projectState, rewriteCodeForRole, stepState } from './game-adapter'
 import { persistMatch, settleCoins, type RoundRecord } from './db'
 import type { Room } from './rooms'

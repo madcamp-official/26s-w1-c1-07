@@ -1,4 +1,4 @@
-# MADPUMP execution plan (v1 full-online launch + 10-game expansion)
+# MADCADE execution plan (v1 full-online launch + 10-game expansion)
 
 > The full set of decisions closed via grilling + a single execution roadmap. Source-of-truth priority: implementation plans under `TECH_STACK.md` / `ERD.md`.
 
@@ -83,7 +83,7 @@ match_edit_history  (result enum also A/B)
 ## 4. Games 4~10 build rules (D13 detail)
 
 Each game = a dedicated subagent + individual instructions. Rules:
-1. **Use as-is** `@madpump/shared`'s `gameN.create/step` + `GN` constants (no reimplementing logic).
+1. **Use as-is** `@madcade/shared`'s `gameN.create/step` + `GN` constants (no reimplementing logic).
 2. **No reusing/copy-pasting/shelling** the game-lab renderer — build the screen·rendering **fully new**.
 3. Design = **read** `design-lab/ideas/02-neon-coinop/PLAN.md` (source of truth)·`theme.css` (tokens) **and copy only the values into main**. **Never import from design-lab paths.**
 4. Reuse the neon system (HudFrame·KeyCap·Button·CRT bezel·theme tokens, already copied into main).

@@ -1,5 +1,5 @@
 /** Minimal match runtime interface (avoids rooms ↔ match circular imports) */
-import type { GameInputEvent } from '@madpump/shared'
+import type { GameInputEvent } from '@madcade/shared'
 
 export interface MatchRuntime {
   matchId: string

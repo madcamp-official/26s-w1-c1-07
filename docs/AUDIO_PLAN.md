@@ -1,4 +1,4 @@
-# MADPUMP — 8-BIT 오디오 킷 (OST 프롬프트 · SFX 소스 · SFX 목록)
+# MADCADE — 8-BIT 오디오 킷 (OST 프롬프트 · SFX 소스 · SFX 목록)
 
 > 정본. 브랜치 `feature/audio`. 레퍼런스=커비류 밝은 메이저 칩튠, 원칙=기승전결 없이 반복 루프.
 > 트랙 9종 · SFX 소스 17곳 · SFX 큐 70개(필수 55).
@@ -9,7 +9,7 @@
 
 공통 스타일 태그: `8-bit chiptune`, `NES / Famicom 2A03 soundchip`, `bright major key`, `Kirby / Nintendo-style happy`, `bouncy staccato arpeggios`, `cheerful square / pulse-wave lead`, `warm triangle-wave bass`, `tight noise-channel percussion`, `catchy melodic hook`, `upbeat competitive retro arcade`, `seamless loopable`, `constant-density ostinato groove`, `no build-up / no drop / no crescendo / no key change / no big finish`, `steady constant energy throughout`, `instrumental only, no vocals`
 
-### MADPUMP Main Theme  ·  title/lobby (must)
+### MADCADE Main Theme  ·  title/lobby (must)
 - **BPM/KEY:** 150 BPM, C major, 4/4  |  **길이:** 60s
 - **루프 노트:** 게임 얼굴 테마 — 오래 머무는 화면이므로 후크가 가장 분명한 take를 선별(정체성 트랙). 가장 평탄한 16마디(16x4x60/150=25.6s)만 트림, 제로크로싱 컷 + 40ms 크로스페이드. C major = 결과 복귀(victory C, countdown C)와 같은 홈 조성.
 

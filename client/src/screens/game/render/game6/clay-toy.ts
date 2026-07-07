@@ -2,9 +2,9 @@
  * Game6 (Dino Run) — theme: CLAY / SOFT TOY.
  * Draws the whole scene from scratch as a clay-toy concept (same elements/coordinates as neon, art swapped only).
  * Soft molded clay figures — round blobs, squishy shadow + top highlight for volume.
- * Never invents coordinates/sizes/speeds → uses only geom.* + @madpump/shared G6 constants.
+ * Never invents coordinates/sizes/speeds → uses only geom.* + @madcade/shared G6 constants.
  */
-import { G6, GAME_DURATION } from '@madpump/shared';
+import { G6, GAME_DURATION } from '@madcade/shared';
 import { functionColors } from '../../../../net/online';
 import type { Game6DrawScene } from './types';
 

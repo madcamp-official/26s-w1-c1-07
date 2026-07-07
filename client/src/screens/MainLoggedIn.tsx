@@ -75,9 +75,9 @@ export default function MainLoggedIn() {
       <div className="s2-body">
         {/* Left logo zone */}
         <section className="s2-logo-zone">
-          <h1 className="s2-logo font-arcade" aria-label="MADPUMP">
+          <h1 className="s2-logo font-arcade" aria-label="MADCADE">
             <span className="s2-logo-mad glow-text">MAD</span>
-            <span className="s2-logo-pump glow-text">PUMP</span>
+            <span className="s2-logo-pump glow-text">CADE</span>
           </h1>
           <p className="s2-tagline font-arcade c-accent2">1v1 PUMPING DUEL</p>
 

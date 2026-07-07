@@ -38,11 +38,11 @@ export default function MainLoggedOut() {
 
       {/* Center: attract-mode neon logo + CTA */}
       <section className="s1-hero">
-        <h1 className="s1-logo font-arcade" aria-label="MADPUMP">
+        <h1 className="s1-logo font-arcade" aria-label="MADCADE">
           <span className="s1-logo-mad anim-sign-on">MAD</span>
           <span className="s1-logo-pump anim-sign-on">
-            PUM
-            <span className="s1-logo-faulty">P</span>
+            CAD
+            <span className="s1-logo-faulty">E</span>
           </span>
         </h1>
         <p className="s1-tagline font-arcade c-accent2 glow-text">1V1 PUMPING DUEL</p>

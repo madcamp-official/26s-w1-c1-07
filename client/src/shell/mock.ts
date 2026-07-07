@@ -1,5 +1,5 @@
 /**
- * Mock data + leaderboard computation logic for the MADPUMP design prototype.
+ * Mock data + leaderboard computation logic for the MADCADE design prototype.
  * The source-of-truth mock shared by the 10 prototypes until the backend is wired up.
  */
 import type { GameId, MatchResult } from './types';

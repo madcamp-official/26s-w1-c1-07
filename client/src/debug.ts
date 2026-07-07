@@ -2,7 +2,7 @@
  * Debug bridge for QA automation (dev only, required).
  * (Owned by the architect — implementation agents may only import, must not modify)
  *
- * window.__MADPUMP__ = {
+ * window.__MADCADE__ = {
  *   screen:  current screen id string (container testid: 'scr-main-out', etc.),
  *   game:    the current game's latest state object (@/shell logic state as-is) or null,
  *   session: { loggedIn, nickname },
@@ -24,7 +24,7 @@ interface MadpumpBridge {
 
 declare global {
   interface Window {
-    __MADPUMP__?: MadpumpBridge;
+    __MADCADE__?: MadpumpBridge;
   }
 }
 
@@ -34,10 +34,10 @@ function isDev(): boolean {
 
 function bridge(): MadpumpBridge | null {
   if (!isDev()) return null;
-  if (!window.__MADPUMP__) {
-    window.__MADPUMP__ = { screen: '', game: null, session: { loggedIn: false, nickname: null } };
+  if (!window.__MADCADE__) {
+    window.__MADCADE__ = { screen: '', game: null, session: { loggedIn: false, nickname: null } };
   }
-  return window.__MADPUMP__;
+  return window.__MADCADE__;
 }
 
 /** Called once from main.tsx — starts automatic session sync */

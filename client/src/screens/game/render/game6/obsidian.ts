@@ -3,11 +3,11 @@
  * DARK MINIMAL HI-TECH: near-black field, thin neon wireframe sprites (1.5px stroke),
  * electric-cyan(P1) / magenta-red(P2) accents, corner-cut HUD panel, receding steel grid.
  *
- * Contract: implements the Game6DrawScene signature from types.ts exactly. Coords/judgment use only geom + @madpump/shared G6 constants.
+ * Contract: implements the Game6DrawScene signature from types.ts exactly. Coords/judgment use only geom + @madcade/shared G6 constants.
  * Color follows the "player", not the "role" → functionColors() swaps the P1/P2 entity colors.
  */
 import type { Game6DrawScene } from './types';
-import { G6, GAME_DURATION } from '@madpump/shared';
+import { G6, GAME_DURATION } from '@madcade/shared';
 import { functionColors } from '../../../../net/online';
 
 // ── OBSIDIAN palette ─────────────────────────────────────────────

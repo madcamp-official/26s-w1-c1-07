@@ -1,11 +1,11 @@
-# AGENTS.md — MADPUMP
+# AGENTS.md — MADCADE
 
 The entry point AI agents read before working in this repo. (Good for humans to read too.)
 **At the start of a session, read the `context/` folder first** — the progress so far, decisions, and who is doing what live there.
 
 ## What this project is
 1v1 two-button (online = U·I) minigame battles. An npm workspaces monorepo.
-- `shared/` — 10 game cores (pure `tick`) + unified input contract + socket events/types (`@madpump/shared`)
+- `shared/` — 10 game cores (pure `tick`) + unified input contract + socket events/types (`@madcade/shared`)
 - `client/` — React18 + Vite SPA. Screens, canvas rendering, online netcode
 - `server/` — Fastify + Socket.IO single process. Session-cookie auth, server-authoritative match runner, Prisma (MySQL)
 - `docs/` — specs (API_SPEC/MERGE_PLAN/BUILD_PLAN/ERD/DEPLOY)
@@ -15,7 +15,7 @@ The entry point AI agents read before working in this repo. (Good for humans to 
 ## Commands
 ```bash
 npm install                              # once at the root (workspaces)
-npm run dev -w @madpump/client           # client dev → localhost:5173
+npm run dev -w @madcade/client           # client dev → localhost:5173
 npm --prefix server run dev              # server dev (tsx watch) → localhost:3000
 npm --prefix client run build            # client production build (client/dist)
 npm --prefix shared run typecheck        # typecheck (shared/server/client each)

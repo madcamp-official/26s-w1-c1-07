@@ -2,7 +2,7 @@
  * S9 Game 1 — Number Guess (NEON COIN-OP). Owner: game1 agent.
  * Container testid: scr-game1 / parts: game-stage(CRT bezel), hud-*(HudFrame built-in), btn-exit
  *
- * The screen (UI, components, CSS classes, effects) is kept 100% intact; only the game logic is driven by the @madpump/shared game1 core.
+ * The screen (UI, components, CSS classes, effects) is kept 100% intact; only the game logic is driven by the @madcade/shared game1 core.
  *
  * PLAN §2-S9 + §3.1 "Three scoreboards, one jackpot":
  *   - Center target scoreboard (#000 box + yellow oversized number + TARGET caption)
@@ -29,8 +29,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { game1, GAME_DURATION, G1 } from '@madpump/shared';
-import type { Game1State, GameInputEvent } from '@madpump/shared';
+import { game1, GAME_DURATION, G1 } from '@madcade/shared';
+import type { Game1State, GameInputEvent } from '@madcade/shared';
 import type { PlayerRole } from '@/shell';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
 import {

@@ -8,7 +8,7 @@
  * Specificity rule: to beat the base component CSS (.nc-btn:hover:not(:disabled) etc., 0,3,0),
  *              always scope with `[data-theme="broadcast-arena"] <same compound as base>` to gain +1 attribute.
  * Shadow model: neon glow fully dropped → use only a single soft elevation (navy 12% drop shadow).
- * This file changes visuals only (color/shape/effect) — it never touches @madpump/shared or game coordinates.
+ * This file changes visuals only (color/shape/effect) — it never touches @madcade/shared or game coordinates.
  */
 
 /* ─────────────────────────────────────────────────────── (A) token contract */

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# MADPUMP deploy script.
+# MADCADE deploy script.
 #   build client → rsync code → restart remote server (tmux) → health check.
 #
 # Secrets are not committed:

@@ -47,6 +47,6 @@
 - ⚠️ The DB's `game` names that were left in the pre-renumber mapping were corrected via a 2-stage seed upsert. **`db:seed` is also needed on the deploy VM.**
 
 ## 6. Deploy checklist
-1. `npm install` (no new dependencies) → `npm --workspace @madpump/server run db:seed` (game 11~13 rows + name correction)
+1. `npm install` (no new dependencies) → `npm --workspace @madcade/server run db:seed` (game 11~13 rows + name correction)
 2. No new migrations (schema unchanged — the game dictionary is managed only by seed)
 3. Rebuild client

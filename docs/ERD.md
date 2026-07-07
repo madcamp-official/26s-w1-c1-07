@@ -1,4 +1,4 @@
-# MADPUMP ERD source of truth (v2, 2026-07-05)
+# MADCADE ERD source of truth (v2, 2026-07-05)
 
 > **Usage**: copy the entire "MySQL DDL" block below and paste it into the ERDCloud **IMPORT** dialog to generate the tables + FK relationships. The implementation (Prisma migration) uses the same DDL as its source.
 > Basis: Figma **ver4** board (16:1263) + the feature spec "madpump v1" tab. For stack assumptions see `TECH_STACK.md`.

@@ -1,8 +1,8 @@
 {
-  "name": "madpump",
+  "name": "madcade",
   "private": true,
   "version": "0.1.0",
-  "description": "MADPUMP — 1:1 head-to-head web mini-game platform (Immersion Camp)",
+  "description": "MADCADE — 1:1 head-to-head web mini-game platform (Immersion Camp)",
   "workspaces": [
     "shared",
     "server",

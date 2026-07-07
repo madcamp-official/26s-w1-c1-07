@@ -18,7 +18,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@madpump/shared": ["../shared/src/index.ts"]
+      "@madcade/shared": ["../shared/src/index.ts"]
     }
   },
   "include": ["src", "vite.config.ts"]

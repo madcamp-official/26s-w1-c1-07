@@ -63,8 +63,8 @@
 ```bash
 # Apply schema + seed (when using the VM DB via SSH tunnel)
 ssh -N -L 3306:localhost:3306 kaistvm &        # tunnel
-npm --workspace @madpump/server run migrate:deploy
-npm --workspace @madpump/server run db:seed
+npm --workspace @madcade/server run migrate:deploy
+npm --workspace @madcade/server run db:seed
 ```
 
 ---

@@ -6,7 +6,7 @@
  *            (B) neon-only effect classes (glow/scanline/synthwave) get overridden under the [data-theme=] scope.
  * Specificity rule: to beat the base component CSS (.nc-btn:hover:not(:disabled) etc., 0,3,0),
  *              always secure +1 attribute via `[data-theme="pico8"] <same compound as the base>`.
- * This file changes visuals only (color/shape/effect) — it never touches @madpump/shared or game coordinates.
+ * This file changes visuals only (color/shape/effect) — it never touches @madcade/shared or game coordinates.
  * No colors outside the palette (16 colors): #000 #1D2B53 #7E2553 #008751 #5F574F #C2C3C7 #FFF1E8 #FF004D
  *                          #FFA300 #FFEC27 #00E436 #29ADFF #83769C #FF77A8 #FFCCAA.
  */

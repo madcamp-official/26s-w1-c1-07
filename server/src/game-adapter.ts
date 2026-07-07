@@ -2,8 +2,8 @@
  * Server-side game core adapter — dispatches create/step by gameId,
  * rewrites the input code to the role's physical key (anti-cheat), projects state (non-transmitted fields like seed).
  */
-import { GAME_CORES, type GameId, type Role } from '@madpump/shared'
-import type { GameInputEvent, GameResult } from '@madpump/shared'
+import { GAME_CORES, type GameId, type Role } from '@madcade/shared'
+import type { GameInputEvent, GameResult } from '@madcade/shared'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type State = { elapsed: number; result: GameResult } & Record<string, any>

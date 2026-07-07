@@ -3,7 +3,7 @@
  * Container testid: scr-game10 / parts: game-stage(CRT bezel), hud-*(HudFrame embedded), btn-exit
  *
  * ── Principles ──────────────────────────────────────────────────────
- *  · Logic/judgment is driven 100% by the @madpump/shared game10 core (create/step) only.
+ *  · Logic/judgment is driven 100% by the @madcade/shared game10 core (create/step) only.
  *  · Screen/rendering is a neon canvas scene written from scratch in this file (does not reference the game-lab renderer).
  *  · 0 lines of design-lab import — colors/fonts are used only as constants copied from theme.css token values.
  *
@@ -24,8 +24,8 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { game10, G10, GAME_DURATION } from '@madpump/shared';
-import type { Game10State, GameInputEvent } from '@madpump/shared';
+import { game10, G10, GAME_DURATION } from '@madcade/shared';
+import type { Game10State, GameInputEvent } from '@madcade/shared';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { useOnlineRender } from '../../net/useOnlineRender';
 import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';

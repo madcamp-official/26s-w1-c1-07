@@ -1,9 +1,9 @@
 /**
  * Game6 (Dino Run) per-theme renderer contract.
  * Each theme draws the whole scene "from scratch" in its own concept (drawScene). It never invents coordinates/verdicts —
- * it goes only by geom (theme-invariant geometry) + the @madpump/shared G6 constants (crossplay invariant). This is 'drawing' only.
+ * it goes only by geom (theme-invariant geometry) + the @madcade/shared G6 constants (crossplay invariant). This is 'drawing' only.
  */
-import type { Game6State } from '@madpump/shared';
+import type { Game6State } from '@madcade/shared';
 
 /** Render-only effects (non-invasive to game logic — Game6.tsx generates them from state changes and passes them in) */
 export type Fx =

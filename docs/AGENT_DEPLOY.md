@@ -1,6 +1,6 @@
 # Agent Deploy Runbook
 
-A self-contained deployment guide so **any teammate's AI agent** can deploy MADPUMP without prior context.
+A self-contained deployment guide so **any teammate's AI agent** can deploy MADCADE without prior context.
 Do the steps top to bottom. Everything here is English-only and reproducible from committed `main`.
 
 > TL;DR — from the repo root: `bash scripts/deploy.sh` → wait for `✅ 4/4 deploy complete` → verify both URLs below.
