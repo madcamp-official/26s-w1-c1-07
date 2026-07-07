@@ -51,8 +51,9 @@ Host: KAIST VM, SSH alias **`kaistvm`** → `172.10.8.242` (user `root`), deploy
    PORT=8080
    CLIENT_ORIGIN=https://madcade.madcamp-kaist.org,http://172.10.8.242
    COOKIE_SECURE=
+   GOOGLE_CLIENT_ID=214115340159-c9n9269uihd9nlkd31269tai176kl05p.apps.googleusercontent.com
    ```
-   `CLIENT_ORIGIN` is comma-separated; the server splits it into an array for CORS + Socket.IO (public HTTPS domain **and** internal HTTP IP served at once). `COOKIE_SECURE` is **empty** so internal HTTP login still works (the public side is HTTPS and works without Secure).
+   `CLIENT_ORIGIN` is comma-separated; the server splits it into an array for CORS + Socket.IO (public HTTPS domain **and** internal HTTP IP served at once). `COOKIE_SECURE` is **empty** so internal HTTP login still works (the public side is HTTPS and works without Secure). **`GOOGLE_CLIENT_ID` is required** — `deploy.sh` passes it to the server to verify Google ID tokens; leaving it empty breaks "Sign in with Google". It is a **public** identifier (also embedded in the client bundle), not a secret, so it is safe to keep in `deploy.env` / the example.
 
 3. **Node 20+** locally (for the client build) and on the VM (already installed).
 
