@@ -6,7 +6,7 @@
  */
 import {
   sfx,
-  playBgm,
+  setBgm,
   stopBgm,
   unlockAudio,
   setMuted,
@@ -15,18 +15,37 @@ import {
 import { flowStore, type FlowState } from '../state/flow';
 import { onlineStore, type OnlineState, type OnlinePhase } from '../net/online';
 import { sessionStore } from '../state/session';
+import lobbyUrl from './assets/magenta-countdown.mp3';
+import overdriveUrl from './assets/magenta-overdrive.mp3';
+import warpUrl from './assets/warp-pipe-parade.mp3';
 
 let inited = false;
 let lastHover = 0;
 
 const BATTLE_ONLINE: ReadonlySet<OnlinePhase> = new Set<OnlinePhase>(['countdown', 'playing', 'round-result']);
 
-function computeBgm(f: FlowState, o: OnlineState): 'battle' | 'lobby' {
+// BGM zones: lobby = Magenta Countdown (full), in-game = Overdrive/Warp Pipe Parade (random, focus volume).
+const LOBBY_VOL = 0.85;
+const GAME_VOL = 0.3; // In-game = dropped low for focus (SFX cut through on top). 0=silent~1=full; tune here.
+const GAME_TRACKS = [overdriveUrl, warpUrl];
+let inGamePrev = false;
+let gameTrackUrl = GAME_TRACKS[0];
+
+function inGame(f: FlowState, o: OnlineState): boolean {
   const onlineActive = o.gameId != null && BATTLE_ONLINE.has(o.phase);
-  if (onlineActive) return 'battle';
-  const offlineBattle =
-    f.mode === 'offline' && f.gameId != null && (f.phase === 'playing' || f.phase === 'round-result');
-  return offlineBattle ? 'battle' : 'lobby';
+  if (onlineActive) return true;
+  return f.mode === 'offline' && f.gameId != null && (f.phase === 'playing' || f.phase === 'round-result');
+}
+
+/** Update BGM track/volume by zone — pick a random in-game track on entry, crossfade to focus volume */
+function updateBgm(f: FlowState, o: OnlineState): void {
+  const g = inGame(f, o);
+  if (g && !inGamePrev) {
+    // Pick a random in-game track only at the moment of entering a game (kept for the rest of the match)
+    gameTrackUrl = GAME_TRACKS[Math.floor(Math.random() * GAME_TRACKS.length)];
+  }
+  inGamePrev = g;
+  setBgm(g ? gameTrackUrl : lobbyUrl, g ? GAME_VOL : LOBBY_VOL);
 }
 
 /** Offline flow transition → modal/flow/result SFX */
@@ -55,7 +74,7 @@ function onFlow(prev: FlowState, cur: FlowState, online: OnlineState): void {
     }
   }
 
-  applyBgm(cur, online);
+  updateBgm(cur, online);
 }
 
 /** Online store transition → matchmaking/countdown/result/coin SFX */
@@ -95,11 +114,7 @@ function onOnline(prev: OnlineState, cur: OnlineState): void {
   // Opponent left/aborted
   if (prev.phase !== 'aborted' && cur.phase === 'aborted') sfx('ui-error-beep');
 
-  applyBgm(flowStore.get(), cur);
-}
-
-function applyBgm(f: FlowState, o: OnlineState): void {
-  playBgm(computeBgm(f, o));
+  updateBgm(flowStore.get(), cur);
 }
 
 // ── Document event delegation (locked Button/Modal not modified) ──
@@ -178,7 +193,7 @@ export function initAudio(): void {
   });
 
   // Schedule initial BGM (lobby) — starts on the first gesture
-  applyBgm(flowStore.get(), onlineStore.get());
+  updateBgm(flowStore.get(), onlineStore.get());
 }
 
 // Re-export mute toggle (for wiring to Settings)

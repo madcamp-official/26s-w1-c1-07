@@ -1,13 +1,14 @@
 # client/src/audio — 8-bit audio (SFX + BGM)
 
-Real-time synthesis via the browser's Web Audio **without** any external audio files/network (sfxr-style SFX + chiptune loop BGM).
+**SFX** are synthesized in the browser via Web Audio (sfxr-style, no external files). **BGM** streams from mp3 files (Suno, `assets/*.mp3`) as lobby / in-game zones with crossfade, and **drops the volume sharply when you enter a game (focus)**.
 Architect-owned files (App/Button/Modal/main/flow/store) are **not modified by a single line** — they attach via global event delegation + store subscriptions.
 
 ## Structure
 - `synth.ts` — pure synthesis core (renderSFX/renderSeq/renderVamp). No AudioContext/DOM dependency.
-- `registry.ts` — cue `id → preset/jingle` mapping (70 cues, matching docs/AUDIO_PLAN.md) + BGM tracks.
-- `engine.ts` — AudioContext lifecycle / playback / mute / volume (localStorage) / gesture unlock / buffer cache.
-- `controller.ts` — global layer: document click/hover delegation (button/modal SFX) + `flowStore`/`onlineStore`/`sessionStore` subscriptions (flow / coin / matchmaking SFX + lobby/battle BGM).
+- `registry.ts` — cue `id → preset/jingle` mapping (70 cues, matching docs/AUDIO_PLAN.md).
+- `assets/*.mp3` — BGM tracks (lobby `magenta-countdown` + in-game `magenta-overdrive`/`warp-pipe-parade`).
+- `engine.ts` — AudioContext lifecycle / playback / mute / volume (localStorage) / gesture unlock. SFX buffer cache + BGM (mp3) HTMLAudioElement streaming with zone crossfade (`setBgm(url, vol)`).
+- `controller.ts` — global layer: document click/hover delegation (button/modal SFX) + `flowStore`/`onlineStore`/`sessionStore` subscriptions (flow / coin / matchmaking SFX + lobby/in-game BGM zone switching · focus volume).
 - `index.ts` — public API. **The controller self-initializes once the moment you import it.**
 
 ## Initialization
@@ -27,7 +28,7 @@ Rules: **once per event only** (only at the transition moment vs the previous va
 - Round/match start & end stingers (win/loss/draw), countdown & GO — flow/online subscriptions
 - Coin settlement (+/−) & bet confirm, matchmaking success & opponent join/leave — online subscription
 - Login success — session subscription
-- Automatic lobby ↔ battle BGM switching
+- Automatic lobby ↔ in-game BGM (mp3) switching + focus volume drop on entering a game
 
 ## Mute/Volume
 `setMuted(bool)` / `toggleMuted()` / `isMuted()` / `setVolume(0..1)` / `getVolume()` (stored in localStorage `madpump:audio`). Can be wired to the Settings modal.
