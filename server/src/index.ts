@@ -49,6 +49,9 @@ import { MatchRunner, type Participant } from './match'
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT ?? 3000)
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173'
+// Allow multiple comma-separated origins — serve the public domain (https) and internal IP (http) at once.
+// e.g. "https://madcade.madcamp-kaist.org,http://172.10.8.242"
+const CLIENT_ORIGINS = CLIENT_ORIGIN.split(',').map((s) => s.trim()).filter(Boolean)
 // Enable the Secure cookie flag only on HTTPS. On an HTTP deployment, turning on Secure makes the browser
 // stop sending the cookie, so session/socket auth fails. Turn it on with COOKIE_SECURE=1 when using HTTPS (cloudflared/domain).
 const secureCookies = process.env.COOKIE_SECURE === '1'
@@ -56,7 +59,7 @@ const secureCookies = process.env.COOKIE_SECURE === '1'
 const app = Fastify({ logger: false })
 await app.register(cookie)
 // Credentialed CORS for dev (5173→3000 cross-origin) REST. No effect in production since it's the same origin.
-await app.register(cors, { origin: CLIENT_ORIGIN, credentials: true })
+await app.register(cors, { origin: CLIENT_ORIGINS, credentials: true })
 
 // prod: serve the built client statically (client/dist)
 const clientDist = path.resolve(dirname, '../../client/dist')
@@ -301,7 +304,7 @@ app.get('/api/health', async () => ({ ok: true, rooms: rooms.size, queue: quickQ
 await app.ready()
 const httpServer = app.server as ReturnType<typeof createServer>
 const io = new IOServer(httpServer, {
-  cors: { origin: CLIENT_ORIGIN, credentials: true },
+  cors: { origin: CLIENT_ORIGINS, credentials: true },
 })
 
 // Handshake auth — same session cookie as REST

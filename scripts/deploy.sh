@@ -45,6 +45,11 @@ tmux kill-session -t madpump 2>/dev/null || true
 sleep 1
 tmux new-session -d -s madpump \
   "cd ${DEPLOY_PATH} && PORT=${PORT} NODE_ENV=production CLIENT_ORIGIN=${CLIENT_ORIGIN} COOKIE_SECURE=${COOKIE_SECURE} npm --prefix server run start 2>&1 | tee ${DEPLOY_PATH}/server.log"
+# Internal :80 → :${PORT} redirect. KCLOUD opens inbound 80 but blocks 8080, so the app runs on
+# 8080 (for the tunnel) and a kernel redirect keeps http://172.10.8.242(:80) direct access working.
+# It's cleared on every reboot/redeploy, so it's part of the deploy step (idempotent: delete, then re-add).
+iptables -t nat -D PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports ${PORT} 2>/dev/null || true
+iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports ${PORT}
 sleep 4
 echo '--- health ---'
 curl -s --max-time 8 "http://localhost:${PORT}/api/health" || echo '(no health response — check server.log)'
