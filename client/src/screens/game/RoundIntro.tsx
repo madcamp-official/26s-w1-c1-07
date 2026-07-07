@@ -166,6 +166,13 @@ export default function RoundIntro() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onlineIntro, o.round]);
 
+  // Online countdown ticks — mirror the offline "2"/"1" ticks. The countdown-start stinger and the
+  // "START!" GO cue are already fired by the audio controller on the online phase transitions
+  // (countdown enter / countdown→playing), so only the per-number ticks are added here (avoids a double GO).
+  useEffect(() => {
+    if (onStep === 'c2' || onStep === 'c1') sfx('flow-countdown-tick');
+  }, [onStep]);
+
   // ── ONLINE render (ROUND banner → guide → 2·1·START) ──
   if (onlineIntro && o.gameId != null && o.role != null) {
     const colorRole: 'P1' | 'P2' = (o.myColor ?? 'blue') === 'blue' ? 'P1' : 'P2';
