@@ -70,6 +70,9 @@ export function HudFrame({
   if (onlineActive) {
     roundCount = o.totalRounds;
     currentRound = Math.max(1, o.round);
+    // Offline flow round-wins stay 0 online, so drive the lamps from the server's per-color scoreboard.
+    // P1 side = blue, P2 side = red (matches getPlayerDisplays + the in-game character colors).
+    roundWins = { P1: o.roundWins.blue, P2: o.roundWins.red };
   }
   const secs = Math.ceil(timeRemainingMs / 1000);
   const urgent = timeRemainingMs <= 5000;

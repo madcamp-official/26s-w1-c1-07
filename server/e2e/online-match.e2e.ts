@@ -2,14 +2,14 @@
  * Online match E2E (manual regression test) — 9-round slots + rematch chain (verifies docs/ONLINE_MATCH.md spec)
  *
  * Precondition: the server must be started with shortened timings —
- *   MATCH_COUNTDOWN_MS=300 MATCH_ROUND_GAP_MS=300 MATCH_INTRO_MS=500 REVENGE_TIMEOUT_MS=3000
+ *   MATCH_COUNTDOWN_MS=300 MATCH_ROUND_GAP_MS=300 MATCH_INTRO_MS=500 MATCH_BANNER_MS=100 MATCH_GUIDE_MS=200 REVENGE_TIMEOUT_MS=3000
  *
  * Chain 1 (basic + item e): code room (Pump-only pool) A bet4 vs B bet3 → rig A win →
  *   B rematch (stake 6) → A offer (stake 8) accepted → match 2 A win → B.revenge=null (no consecutive)
  * Chain 2 (item f + decline/timeout): match 1' A win → B rematch → match 2' B win →
  *   A (original winner).revenge exists (item f) → A requests → B declines (DECLINED) → A re-requests → 3s no response (TIMEOUT)
  * Chain 3 (ALL-IN + slot variety): A bets entire balance → verify allIn flag on match:start,
- *   verify the 3 slotGames are all different in the full pool (leaves immediately after verifying)
+ *   verify the 9 slotGames obey "≤3 rounds per game" + 3 hidden reels among rounds 5~9 (leaves after verifying)
  */
 import { io, type Socket } from 'socket.io-client'
 import { PrismaClient } from '@prisma/client'
@@ -101,7 +101,7 @@ async function runMatch(opts: {
   b: Client
   winner: Client
   matchNo: number
-  expectSlotAll?: number // all 3 slots must be this game (single pool)
+  expectSlotAll?: number // every non-hidden slot must be this game (single pool)
 }) {
   const { a, b, winner, matchNo } = opts
   a.spam = winner === a
@@ -110,19 +110,33 @@ async function runMatch(opts: {
   const msA = await waitEvent(a, 'match:start', matchNo, 20)
   const msB = await waitEvent(b, 'match:start', matchNo, 20)
   check(msA.totalRounds === 9 && msB.totalRounds === 9, `match ${matchNo}: totalRounds=9`)
-  check(Array.isArray(msA.slotGames) && msA.slotGames.length === 3, `match ${matchNo}: slotGames 3 slots`)
+  check(Array.isArray(msA.slotGames) && msA.slotGames.length === 9, `match ${matchNo}: slotGames 9 slots (one per round)`)
   check(JSON.stringify(msA.slotGames) === JSON.stringify(msB.slotGames), `match ${matchNo}: both sides same slots`)
+  // 3 hidden ("?") reels, all among rounds 5~9 (0-based indices 4~8)
+  const hiddenIdx = (msA.slotGames as (number | null)[])
+    .map((g, i) => (g === null ? i : -1))
+    .filter((i) => i >= 0)
+  check(hiddenIdx.length === 3, `match ${matchNo}: exactly 3 hidden reels (${hiddenIdx})`)
+  check(hiddenIdx.every((i) => i >= 4 && i <= 8), `match ${matchNo}: hidden reels only in rounds 5~9`)
+  // ≤3 rounds per game
+  const counts: Record<number, number> = {}
+  for (const g of msA.slotGames as (number | null)[]) if (g !== null) counts[g] = (counts[g] ?? 0) + 1
+  check(Object.values(counts).every((n) => n <= 3), `match ${matchNo}: each game fills ≤3 rounds`)
   if (opts.expectSlotAll !== undefined) {
-    check(msA.slotGames.every((g: number) => g === opts.expectSlotAll), `match ${matchNo}: all slots game ${opts.expectSlotAll} (single-pool duplicate)`)
+    check(
+      (msA.slotGames as (number | null)[]).every((g) => g === null || g === opts.expectSlotAll),
+      `match ${matchNo}: all visible slots game ${opts.expectSlotAll} (single-pool)`,
+    )
   }
   check(msA.yourBet === msB.oppBet && msA.oppBet === msB.yourBet, `match ${matchNo}: bets cross-match (A ${msA.yourBet} / B ${msB.yourBet})`)
 
-  // 9 rounds: whether round:start's gameId matches the slot schedule
+  // 9 rounds: round:start's gameId matches the (revealed) slot schedule
   const base = (matchNo - 1) * 9
   for (let r = 1; r <= 9; r++) {
     const rs = await waitEvent(a, 'round:start', base + r, 60)
     check(rs.round === r, `match ${matchNo} R${r}: round number`)
-    check(rs.gameId === msA.slotGames[(r - 1) % 3], `match ${matchNo} R${r}: game=slot[(r-1)%3]`)
+    const slot = (msA.slotGames as (number | null)[])[r - 1]
+    check(slot === null || rs.gameId === slot, `match ${matchNo} R${r}: game matches slot (or revealed hidden)`)
   }
 
   const meA = await waitEvent(a, 'match:end', matchNo, 60)
@@ -242,8 +256,11 @@ async function main() {
   const msF = await waitEvent(F, 'match:start', 1, 10)
   check(msE.yourAllIn === true && msF.oppAllIn === true, 'ALL-IN: entire-balance bet flag (self/opponent view)')
   check(msF.yourAllIn === false, 'non-full bet is not ALL-IN')
-  const uniq = new Set(msE.slotGames)
-  check(uniq.size === 3, `slot variety: 3 slots all different in full pool (${msE.slotGames})`)
+  const counts3: Record<number, number> = {}
+  for (const g of msE.slotGames as (number | null)[]) if (g !== null) counts3[g] = (counts3[g] ?? 0) + 1
+  check(Object.values(counts3).every((n) => n <= 3), `slot rule: each game ≤3 of 9 rounds in full pool (${msE.slotGames})`)
+  const hidden3 = (msE.slotGames as (number | null)[]).filter((g) => g === null).length
+  check(hidden3 === 3, `slot hidden: 3 concealed reels among rounds 5~9 (${msE.slotGames})`)
   E.socket.disconnect() // verification done — server cleans up the match on its own
   F.socket.disconnect()
 

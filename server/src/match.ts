@@ -1,7 +1,7 @@
 /**
  * Server-authoritative match runner (BUILD_PLAN D3·D4·D7·D8).
- *  · Match = 3 rounds; each round has a random game (prefer distinct ones) + random roles.
- *  · Automatic round countdown → server fixed-tick loop (create/step) → game:state broadcast.
+ *  · Match = 9 rounds; one slot-reel game per round (round r = slotGames[r-1]) + random roles each round.
+ *  · Per-round pre-play window ("ROUND n" → guide → countdown) → server fixed-tick loop (create/step) → game:state broadcast.
  *  · Even if disconnected, the server computes to the end (only input stops). On match end, INSERT game_match+game_round → match:end.
  */
 import { randomInt } from 'node:crypto'
@@ -35,15 +35,49 @@ const DT = TICK_MS / 1000
 const BROADCAST_EVERY = Math.max(1, Math.round(SIM_HZ / BROADCAST_HZ)) // 1 → transmit every tick = 60Hz
 const GAME_DURATION = 10
 // The timing constants below are shortened via env only in E2E tests (production defaults unchanged).
-const COUNTDOWN_MS = Number(process.env.MATCH_COUNTDOWN_MS ?? 3000)
-const ROUND_GAP_MS = Number(process.env.MATCH_ROUND_GAP_MS ?? 2500) // from round:end until the next round
-/** Online matches are always 9 rounds — 3 slot reels × 3 spins (reel k = rounds k, k+3, k+6) */
+// Per-round pre-play window the client fills with "ROUND n" banner → (guide) → "2·1·START" countdown.
+// countdownMs sent on round:start = BANNER + (showGuide ? GUIDE : 0) + COUNTDOWN; the server starts the sim after it.
+const PRE_BANNER_MS = Number(process.env.MATCH_BANNER_MS ?? 1000) // "ROUND n" banner
+const PRE_GUIDE_MS = Number(process.env.MATCH_GUIDE_MS ?? 3000) // how-to-play guide (only on a game's first appearance in the match)
+const PRE_COUNTDOWN_MS = Number(process.env.MATCH_COUNTDOWN_MS ?? 2000) // "2·1·START" numeric countdown
+// Round-result overlay (winner + score) shows for this long, then auto-advances to the next round.
+const ROUND_GAP_MS = Number(process.env.MATCH_ROUND_GAP_MS ?? 3000)
+/** Online matches are always 9 rounds — one slot reel per round (round r = slotGames[r-1]). */
 const TOTAL_ROUNDS = 9
+/** A single game may fill at most this many of the 9 rounds. */
+const MAX_PER_GAME = 3
+/** Of rounds 5~9 (0-based indices 4~8), this many are concealed as a "?" reel on the slot screen. */
+const HIDDEN_ROUND_COUNT = 3
 /**
- * Wait from match:start (reveal of slot results & bets) until round 1's round:start.
- * Client sequence: reels spin → stop in order at 1.2s/1.5s/1.8s (0.3s apart) → from 2.5s, VS (bet reveal) for 2s.
+ * Wait from match:start until round 1's round:start.
+ * Client sequence: VS matchup ~2s → slot spin → 9 reels stop by ≈4.6s (all slots locked) → confirmed board held 3s.
+ * = the 9 slots lock in at ≈4.6s, then Round 1 starts exactly 3.0s later (4.6s + 3.0s = 7.6s). Keep in sync with MatchIntro.tsx.
  */
-const INTRO_MS = Number(process.env.MATCH_INTRO_MS ?? 4700)
+const INTRO_MS = Number(process.env.MATCH_INTRO_MS ?? 7600)
+
+/**
+ * Draw the 9 slot-reel games (one per round) from a candidate pool.
+ * Each game appears in at most MAX_PER_GAME (3) of the 9 rounds. If the pool is too small to honor that
+ * (e.g. a code room with only 1~2 games checked), the cap is relaxed so all 9 rounds still fill.
+ */
+function drawSlotGames(rawPool: GameId[]): GameId[] {
+  const pool = [...new Set(rawPool.filter((g) => ALL_GAME_IDS.includes(g)))]
+  const from = pool.length ? pool : [...ALL_GAME_IDS]
+  const cap = new Map<GameId, number>(from.map((g) => [g, MAX_PER_GAME]))
+  const out: GameId[] = []
+  for (let i = 0; i < TOTAL_ROUNDS; i++) {
+    let cands = from.filter((g) => (cap.get(g) ?? 0) > 0)
+    if (cands.length === 0) {
+      // pool too small to keep ≤3 each — relax the cap and allow more repeats
+      from.forEach((g) => cap.set(g, MAX_PER_GAME))
+      cands = from
+    }
+    const g = cands[randomInt(0, cands.length)]
+    out.push(g)
+    cap.set(g, (cap.get(g) ?? 0) - 1)
+  }
+  return out
+}
 
 interface Participant {
   userId: string
@@ -66,8 +100,12 @@ export class MatchRunner implements MatchRuntime {
   private roundResults: RoundRecord[] = []
   private currentRound = 0
   private totalRounds = TOTAL_ROUNDS // always 9 (independent of settings)
-  /** Slot machine 3-reel result — round r game = slotGames[(r-1) % 3] */
-  private slotGames: [GameId, GameId, GameId]
+  /** Slot machine — one game per round (length 9). Round r game = slotGames[r-1]. */
+  private slotGames: GameId[]
+  /** 0-based round indices (from 4~8 = rounds 5~9) shown as a hidden "?" reel on the slot screen. */
+  private hiddenRounds: Set<number> = new Set()
+  /** Cumulative round wins by player color (for round:end display + HUD lamps). */
+  private colorWins: { blue: number; red: number } = { blue: 0, red: 0 }
   // Color (bound to the player, fixed per match) — independent of role (roleOfA). Rendering paints with this color.
   private colorOfA: PlayerColor = 'blue'
   private colorOfB: PlayerColor = 'red'
@@ -100,27 +138,20 @@ export class MatchRunner implements MatchRuntime {
       this.colorOfA = 'red'
       this.colorOfB = 'blue'
     }
-    // Slot machine 3-reel draw — the room settings checkboxes are the candidate pool. If the pool has 3 or more, pick 3 distinct ones;
-    // if fewer than 3 (host checked only 1~2), allow duplicates within it.
-    const pool = (room.games ?? []).filter((g) => ALL_GAME_IDS.includes(g))
-    const from = pool.length ? pool : [...ALL_GAME_IDS]
-    if (from.length >= 3) {
-      const shuffled = [...from]
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = randomInt(0, i + 1)
-        ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
-      }
-      this.slotGames = [shuffled[0], shuffled[1], shuffled[2]]
-    } else {
-      this.slotGames = [
-        from[randomInt(0, from.length)],
-        from[randomInt(0, from.length)],
-        from[randomInt(0, from.length)],
-      ]
+    // Slot machine draw — one game per round (9 total). Candidate pool = room settings checkboxes (quick start = all games).
+    this.slotGames = drawSlotGames(room.games ?? [])
+    // Conceal 3 of rounds 5~9 (0-based 4~8) as a "?" reel — the game is revealed only when that round starts.
+    const hidCandidates = [4, 5, 6, 7, 8]
+    for (let i = hidCandidates.length - 1; i > 0; i--) {
+      const j = randomInt(0, i + 1)
+      ;[hidCandidates[i], hidCandidates[j]] = [hidCandidates[j], hidCandidates[i]]
     }
+    this.hiddenRounds = new Set(hidCandidates.slice(0, HIDDEN_ROUND_COUNT))
   }
 
   start(): void {
+    // Hidden rounds are masked to null so the slot screen shows "?" (revealed later by round:start).
+    const visibleSlots = this.slotGames.map((g, i) => (this.hiddenRounds.has(i) ? null : g))
     // Individual match:start to each player (opponent info + slot results + bet reveal)
     this.io.to(this.a.socketId).emit(EV.matchStart, {
       matchId: this.matchId,
@@ -129,7 +160,7 @@ export class MatchRunner implements MatchRuntime {
       opponent: { nickname: this.b.nickname, imageUrl: this.b.imageUrl },
       yourColor: this.colorOfA,
       oppColor: this.colorOfB,
-      slotGames: this.slotGames,
+      slotGames: visibleSlots,
       yourBet: this.a.bet,
       oppBet: this.b.bet,
       yourAllIn: this.a.allIn,
@@ -142,7 +173,7 @@ export class MatchRunner implements MatchRuntime {
       opponent: { nickname: this.a.nickname, imageUrl: this.a.imageUrl },
       yourColor: this.colorOfB,
       oppColor: this.colorOfA,
-      slotGames: this.slotGames,
+      slotGames: visibleSlots,
       yourBet: this.b.bet,
       oppBet: this.a.bet,
       yourAllIn: this.b.allIn,
@@ -154,30 +185,35 @@ export class MatchRunner implements MatchRuntime {
 
   private beginRound(): void {
     if (this.stopped) return
-    this.gameId = this.slotGames[this.currentRound % 3]
+    this.gameId = this.slotGames[this.currentRound]
     // Roles (attack/defense) are randomly reassigned each round — in asymmetric games (rocket, dino, etc.) attack/defense
     // swaps every round. Independent of color (which is bound to the player), so you can't tell the role from the color.
     this.roleOfA = randomInt(0, 2) === 0 ? 'P1' : 'P2'
     const roleOfB: Role = this.roleOfA === 'P1' ? 'P2' : 'P1'
     const round = this.currentRound + 1
+    // Guide only on a game's first appearance in the match (repeat games skip straight to the countdown).
+    const showGuide = this.slotGames.slice(0, this.currentRound).indexOf(this.gameId) === -1
+    const countdownMs = PRE_BANNER_MS + (showGuide ? PRE_GUIDE_MS : 0) + PRE_COUNTDOWN_MS
 
     this.io.to(this.a.socketId).emit(EV.roundStart, {
       matchId: this.matchId,
       round,
       gameId: this.gameId,
       role: this.roleOfA,
-      countdownMs: COUNTDOWN_MS,
+      countdownMs,
+      showGuide,
     })
     this.io.to(this.b.socketId).emit(EV.roundStart, {
       matchId: this.matchId,
       round,
       gameId: this.gameId,
       role: roleOfB,
-      countdownMs: COUNTDOWN_MS,
+      countdownMs,
+      showGuide,
     })
 
-    // Start the sim after the countdown
-    setTimeout(() => this.runRound(), COUNTDOWN_MS)
+    // Start the sim after the full pre-play window (banner + guide + countdown)
+    setTimeout(() => this.runRound(), countdownMs)
   }
 
   private runRound(): void {
@@ -226,20 +262,19 @@ export class MatchRunner implements MatchRuntime {
       result: slot,
     })
 
-    const wins = { P1: 0, P2: 0 }
-    // Round win counts for display (role-based) — skipping the slot→role back-calc for simplicity; client display is slot-based
-    this.io.to(this.a.socketId).emit(EV.roundEnd, {
+    // Winner in match-fixed identity (player color) → increment the color scoreboard for the round overlay + HUD.
+    const winnerColor: PlayerColor | null =
+      slot === 'A_WIN' ? this.colorOfA : slot === 'B_WIN' ? this.colorOfB : null
+    if (winnerColor) this.colorWins[winnerColor] += 1
+    const roundEndMsg = {
       matchId: this.matchId,
       round: this.currentRound + 1,
       result: roleResult,
-      wins,
-    })
-    this.io.to(this.b.socketId).emit(EV.roundEnd, {
-      matchId: this.matchId,
-      round: this.currentRound + 1,
-      result: roleResult,
-      wins,
-    })
+      winnerColor,
+      wins: { ...this.colorWins },
+    }
+    this.io.to(this.a.socketId).emit(EV.roundEnd, roundEndMsg)
+    this.io.to(this.b.socketId).emit(EV.roundEnd, roundEndMsg)
 
     this.currentRound += 1
     if (this.currentRound >= this.totalRounds) {

@@ -41,6 +41,8 @@ export interface OnlineState {
   round: number
   gameId: GameId | null
   role: Role | null
+  /** true = show the how-to-play guide this round (the game's first appearance in the match) */
+  showGuide: boolean
   opponent: OpponentView | null
   /** My color (fixed per match, tied to the player — independent of role). The renderer paints with this color. */
   myColor: PlayerColor | null
@@ -51,15 +53,19 @@ export interface OnlineState {
   serverSeq: number
   countdownUntil: number
   lastRoundResult: GameResult | null
+  /** Winner of the last round in match-fixed identity = player color (null on draw) */
+  lastRoundWinnerColor: PlayerColor | null
+  /** Cumulative round wins by player color (round-result overlay + HUD lamps) */
+  roundWins: { blue: number; red: number }
   matchResult: SlotResult | null
   recordedMatchId: string | null
   /** My coin change from match settlement (on match:end) */
   coinDelta: number | null
   /** My coin balance after settlement */
   coinBalance: number | null
-  /** Slot machine 3-reel result — round r game = slotGames[(r-1) % 3] */
-  slotGames: GameId[] | null
-  /** This match's bets (VS screen / ALL-IN display) */
+  /** Slot machine — one game per round (9). Round r game = slotGames[r-1]; null = a hidden "?" round. */
+  slotGames: (GameId | null)[] | null
+  /** This match's bets (VS matchup screen / ALL-IN display) */
   myBet: number | null
   oppBet: number | null
   myAllIn: boolean
@@ -90,10 +96,11 @@ const INITIAL: OnlineState = {
   room: null,
   matchId: null,
   mySlot: null,
-  totalRounds: 3,
+  totalRounds: 9,
   round: 0,
   gameId: null,
   role: null,
+  showGuide: false,
   opponent: null,
   myColor: null,
   oppColor: null,
@@ -101,6 +108,8 @@ const INITIAL: OnlineState = {
   serverSeq: -1,
   countdownUntil: 0,
   lastRoundResult: null,
+  lastRoundWinnerColor: null,
+  roundWins: { blue: 0, red: 0 },
   matchResult: null,
   recordedMatchId: null,
   coinDelta: null,
@@ -215,7 +224,7 @@ function wire(s: Socket) {
       opponent: OpponentView
       yourColor: PlayerColor
       oppColor: PlayerColor
-      slotGames?: GameId[]
+      slotGames?: (GameId | null)[]
       yourBet?: number
       oppBet?: number
       yourAllIn?: boolean
@@ -233,6 +242,8 @@ function wire(s: Socket) {
         oppBet: m.oppBet ?? null,
         myAllIn: m.yourAllIn ?? false,
         oppAllIn: m.oppAllIn ?? false,
+        roundWins: { blue: 0, red: 0 },
+        lastRoundWinnerColor: null,
         matchResult: null,
         recordedMatchId: null,
         revenge: null,
@@ -249,28 +260,40 @@ function wire(s: Socket) {
     const p = getOnline().phase
     return p === 'aborted' || p === 'match-end'
   }
-  s.on(EV.roundStart, (m: { matchId: string; round: number; gameId: GameId; role: Role; countdownMs: number }) => {
-    if (isTerminal()) return
-    onlineStore.set({
-      round: m.round,
-      gameId: m.gameId,
-      role: m.role,
-      phase: 'countdown',
-      serverState: null,
-      serverSeq: -1,
-      lastRoundResult: null,
-      countdownUntil: performance.now() + m.countdownMs,
-    })
-  })
+  s.on(
+    EV.roundStart,
+    (m: { matchId: string; round: number; gameId: GameId; role: Role; countdownMs: number; showGuide?: boolean }) => {
+      if (isTerminal()) return
+      onlineStore.set({
+        round: m.round,
+        gameId: m.gameId,
+        role: m.role,
+        showGuide: m.showGuide ?? true,
+        phase: 'countdown',
+        serverState: null,
+        serverSeq: -1,
+        lastRoundResult: null,
+        countdownUntil: performance.now() + m.countdownMs,
+      })
+    },
+  )
   s.on(EV.gameState, (m: { seq: number; state: unknown }) => {
     if (isTerminal()) return
     if (m.seq <= getOnline().serverSeq) return // ignore out-of-order
     onlineStore.set({ serverState: m.state, serverSeq: m.seq, phase: 'playing' })
   })
-  s.on(EV.roundEnd, (m: { result: GameResult }) => {
-    if (isTerminal()) return
-    onlineStore.set({ phase: 'round-result', lastRoundResult: m.result })
-  })
+  s.on(
+    EV.roundEnd,
+    (m: { result: GameResult; winnerColor?: PlayerColor | null; wins?: { blue: number; red: number } }) => {
+      if (isTerminal()) return
+      onlineStore.set({
+        phase: 'round-result',
+        lastRoundResult: m.result,
+        lastRoundWinnerColor: m.winnerColor ?? null,
+        roundWins: m.wins ?? getOnline().roundWins,
+      })
+    },
+  )
   s.on(
     EV.matchEnd,
     (m: {

@@ -3,23 +3,40 @@
 > Canonical source for the match structure of online matches (common to quick-start·code-room) and the rematch system.
 > The coin-settlement rules themselves are in `docs/COINS.md`; the protocol types are in `shared/src/net/events.ts`.
 
-## 1. Match structure: 9 rounds + slot machine
+## 1. Match structure: 9 rounds + slot machine (updated — branch online-round)
 
 - An online match is **always 9 rounds** (the round-count UI in Settings is removed — only the game checkboxes remain).
-- When a match is made, the server draws **3 slot reels** = 3 games and sends them down as `slotGames` in `match:start`.
-  - **The game for round r = `slotGames[(r-1) % 3]`** → reel1 = rounds 1·4·7, reel2 = 2·5·8, reel3 = 3·6·9.
-  - Candidate pool = the room's game checkboxes (quick-start = all 10). **If pool ≥ 3, three distinct games**;
-    if the pool is 1~2, duplicates are allowed within it.
-- **Intro timeline** (the server delays round 1's start for `INTRO_MS`=4.7s):
+- When a match is made, the server draws **9 slot reels = one game per round** and sends them as `slotGames` in `match:start`.
+  - **The game for round r = `slotGames[r-1]`** (one reel per round, shown in a single row).
+  - A single game fills **at most 3 of the 9 rounds**. Candidate pool = the room's game checkboxes (quick-start = all 13).
+    If the pool is too small to honor "≤3 each" (host checked only 1~2), the cap is relaxed so 9 rounds still fill.
+  - **Hidden rounds**: **3 of rounds 5~9** are concealed as a **"?" reel** — sent as `null` in `slotGames` (never leaked),
+    and revealed by `round:start` only when that round begins.
+- **Intro timeline** (the server delays round 1's start for `INTRO_MS`=7.6s):
   | Time | Presentation (client `MatchIntro.tsx`) |
   |---|---|
-  | 0s | 3 slot reels start spinning (game-pictogram strip rotates) |
-  | 1.2s / 1.5s / 1.8s | reels 1→2→3 stop sequentially at **0.3s intervals** |
-  | 2.5s | **VS screen**: both sides' nickname·color·bet coins revealed for 2 seconds |
-  | 4.7s | server `round:start` → 3-second countdown → round 1 |
+  | 0s → 2.0s | **VS matchup screen**: both sides' nickname·color·bet coins (+ALL-IN badge) revealed |
+  | 2.0s | slot machine appears and starts spinning (9 reels in a row) |
+  | 3.0s → 4.6s | reels stop left-to-right at **0.2s intervals** (reel r = round r; "?" for hidden rounds) — **all 9 slots confirmed at 4.6s** |
+  | 4.6s → 7.6s | **confirmed 9-slot board held for exactly 3s** (players dwell on the locked-in lineup) |
+  | 7.6s | server `round:start` → per-round intro (see §1b) → round 1 (**exactly 3.0s after the slots lock in**) |
 - **ALL-IN display**: if the bet = the full holdings at join time, `match:start`'s `yourAllIn/oppAllIn` are true →
-  red ALL-IN badge on the VS screen. (Applies to every match regardless of whether it's a rematch.)
+  red ALL-IN badge on the VS matchup screen (shown for the first 2s of the intro). Applies to every match.
 - The coin-settlement rule for match:end is the same as before (quick: ±own bet / code: winner absorbs loser's bet).
+
+### 1b. Per-round intro + round result + color identity (branch online-round)
+
+Each round's pre-play window (server `round:start.countdownMs`; the sim starts exactly after it) is filled client-side by `RoundIntro.tsx`:
+- **"ROUND n" banner** (1s) — announces the round + my color (YOU · BLUE/RED).
+- **How-to-play guide** (3s) — **only on a game's first appearance in the match** (`round:start.showGuide`); repeat games skip it.
+- **"2 · 1 · START!" countdown** (2s) — identical to offline Play.
+- So `countdownMs` = 1000 + (showGuide ? 3000 : 0) + 2000 = **6000** (first appearance) / **3000** (repeat).
+
+On `round:end` the server sends the **winner as a player color** (`winnerColor`) + **cumulative wins by color** (`wins:{blue,red}`).
+`ResultOverlay.tsx` shows **"P1 WIN / P2 WIN / DRAW" + running score** for `ROUND_GAP_MS` (3s) then auto-advances (no button).
+
+**Color identity (fixed per match)**: display **P1 = blue player, P2 = red player** everywhere (top HUD, round result, in-game
+characters) so each player keeps one color for the whole match, even though the attack/defense role is re-randomized each round.
 
 ## 2. Rematch
 
@@ -58,13 +75,13 @@ match:end ─ enclose revenge:{stake, allIn} eligibility to the loser (null if n
 | Server | `server/src/rooms.ts` | `Member.allIn`, `Room.postMatch` (rematch window)·`revengeRequesterUserId` |
 | Server | `server/src/index.ts` | `revenge:request/respond/cancel` handlers, `takeRevengePending` (double-processing guard), leaveRoom integration |
 | Client | `client/src/net/online.ts` | phase `'slot'`, revengePhase/offer/closed state, 3 actions |
-| Client | `client/src/net/MatchIntro.tsx` | slot presentation + VS screen (reduce-motion support) |
+| Client | `client/src/net/MatchIntro.tsx` | VS matchup (2s) → 9-reel slot presentation → confirmed board held 3s (reduce-motion support) |
 | Client | `client/src/net/OnlineController.tsx` | REVENGE button/wait/accept dialog, return to main on cancellation |
 | Client | `client/src/components/HudFrame.tsx` | round notation (n/9) correction during an online match |
 
 ### Test knobs (E2E-only — production defaults unchanged)
-Server timing can be shortened via the `MATCH_COUNTDOWN_MS` `MATCH_ROUND_GAP_MS` `MATCH_INTRO_MS` `REVENGE_TIMEOUT_MS`
-environment variables (`server/src/match.ts`, `index.ts`).
+Server timing can be shortened via the `MATCH_COUNTDOWN_MS` `MATCH_BANNER_MS` `MATCH_GUIDE_MS` `MATCH_ROUND_GAP_MS`
+`MATCH_INTRO_MS` `REVENGE_TIMEOUT_MS` environment variables (`server/src/match.ts`, `index.ts`).
 
 ## 3. Decision record (user-finalized)
 - 9 rounds fixed → round-count UI removed from the settings modal (2026-07-06)
