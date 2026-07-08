@@ -2,7 +2,7 @@
  * S12 Game 3 — Fencing (scr-game2). Owner: game2 agent.
  *
  * The screen (UI/components/CSS classes/effects) is kept exactly as the neon-coinop mockup,
- * and only the game logic is swapped for the game-test tuning core (@madpump/shared `game2`).
+ * and only the game logic is swapped for the game-test tuning core (@madcade/shared `game2`).
  *
  * The new core is not 1-second-tick rock-paper-scissors but "real-time knockback fencing":
  *   · c(-EDGE..+EDGE) = clash position of the two fencers. + side = P1 advantage (pushed right), - side = P2 advantage.
@@ -20,8 +20,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { game2, G2, GAME_DURATION } from '@madpump/shared';
-import type { GameInputEvent, Game2State, FencerState } from '@madpump/shared';
+import { game2, G2, GAME_DURATION } from '@madcade/shared';
+import type { GameInputEvent, Game2State, FencerState } from '@madcade/shared';
 import type { MatchResult, PlayerRole } from '@/shell';
 import { setDebugGame, useDebugScreen } from '../../debug';
 import {
@@ -44,7 +44,7 @@ import { isRoundIntroActive } from '../../state/roundIntroGate';
 import { sfx } from '@/audio';
 import './game2.css';
 
-// Effect constants (non-invasive to logic — all judging is in the @madpump/shared core)
+// Effect constants (non-invasive to logic — all judging is in the @madcade/shared core)
 const RINGOUT_FX_MS = 1400; // result overlay after the fall + splash effect
 const TIMEUP_FX_MS = 1000; // result overlay after the TIME UP! caption
 const SAFE_SEGS = 5; // number of safety lamps left until the fall line
@@ -264,7 +264,7 @@ export default function Game2() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Round (re)start — create new @madpump/shared state on every currentRound change
+  // Round (re)start — create new @madcade/shared state on every currentRound change
   useEffect(() => {
     const f = getFlow();
     if (f.gameId !== 2 || f.currentRound < 1) return;

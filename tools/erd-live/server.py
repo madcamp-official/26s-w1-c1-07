@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MADPUMP ERD live viewer.
+"""MADCADE ERD live viewer.
 
 Extracts and serves the first ```mermaid block from docs/ERD.md.
 The browser polls every second and automatically re-renders when the content changes.
@@ -17,7 +17,7 @@ PAGE = """<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>MADPUMP ERD (live)</title>
+<title>MADCADE ERD (live)</title>
 <style>
   body { margin: 0; font-family: system-ui, sans-serif; background: #fff; }
   #bar { position: fixed; top: 0; left: 0; right: 0; padding: 6px 12px;
@@ -31,7 +31,7 @@ PAGE = """<!doctype html>
 </style>
 </head>
 <body>
-<div id="bar"><b>MADPUMP ERD</b><span id="status" class="ok">live</span>
+<div id="bar"><b>MADCADE ERD</b><span id="status" class="ok">live</span>
 <span style="opacity:.6">Auto-refresh on docs/ERD.md save (1s polling)</span></div>
 <div id="err"></div>
 <div id="view"></div>

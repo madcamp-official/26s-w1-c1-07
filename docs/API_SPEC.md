@@ -1,4 +1,4 @@
-# MADPUMP API · JSON · DB Specification (v1 — based on game-lab tuning logic)
+# MADCADE API · JSON · DB Specification (v1 — based on game-lab tuning logic)
 
 > **Source-of-truth ranking (read before anything else).** This document is a **downstream derived document** that synthesizes three drafts (the API surface · per-game JSON · DB I/O). On conflict, the higher source of truth wins.
 > 1. **`docs/TECH_STACK.md`** (source of truth for stack · auth · netcode policy)
@@ -685,7 +685,7 @@ The two notations are **different.** They must be mapped (`types.ts:10` vs `sche
 
 ```ts
 import { MatchResult } from '@prisma/client'
-import type { GameResult } from '@madpump/shared'   // types.ts
+import type { GameResult } from '@madcade/shared'   // types.ts
 
 function toDbResult(r: GameResult): MatchResult {   // the sole mapping point
   switch (r) {

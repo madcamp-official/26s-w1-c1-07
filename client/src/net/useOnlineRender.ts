@@ -18,7 +18,7 @@
  *   // The loop effect deps are only 'stable primitives' like [isOnline, myRole, ...] → no loop re-creation.
  */
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import type { GameId, Role } from '@madpump/shared';
+import type { GameId, Role } from '@madcade/shared';
 import { onlineStore } from './online';
 
 export interface OnlineRender<S> {

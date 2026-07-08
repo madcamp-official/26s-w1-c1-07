@@ -3,7 +3,7 @@
  * Container testid: scr-game5 / parts: game-stage(CRT bezel), hud-*(HudFrame embedded), btn-exit
  *
  * ── Principles ────────────────────────────────────────────────────────────
- *  · Game logic/judgement/constants use 100% @madpump/shared game5 core(create/step) + G5 constants only.
+ *  · Game logic/judgement/constants use 100% @madcade/shared game5 core(create/step) + G5 constants only.
  *  · Screen/rendering is written from scratch in this file (direct canvas drawing). No reference to the game-lab renderer.
  *  · 0 lines of design-lab import. Colors/fonts only copy theme.css tokens(hex).
  *
@@ -23,8 +23,8 @@
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { game5, G5, GAME_DURATION } from '@madpump/shared';
-import type { Game5State, GameInputEvent } from '@madpump/shared';
+import { game5, G5, GAME_DURATION } from '@madcade/shared';
+import type { Game5State, GameInputEvent } from '@madcade/shared';
 import type { MatchResult } from '@/shell';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';

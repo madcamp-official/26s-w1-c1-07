@@ -3,7 +3,7 @@
  * Container testid: scr-game12 / parts: game-stage (CRT bezel), hud-* (HudFrame), btn-exit
  *
  * ── Principles ─────────────────────────────────────────────────────────
- *  · All logic/adjudication is driven 100% by @madpump/shared game12 core (create/step).
+ *  · All logic/adjudication is driven 100% by @madcade/shared game12 core (create/step).
  *  · Rendering is a fresh neon canvas scene authored here (no game-lab renderer).
  *  · Zero design-lab imports — colors/fonts are hex constants copied from theme.css.
  *  · This screen is FULLY ENGLISH (requirement): title, canvas text, KeyCaps, hints.
@@ -25,8 +25,8 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { game12, G12, isRed, isTelegraph, GAME_DURATION } from '@madpump/shared';
-import type { Game12State, GameInputEvent } from '@madpump/shared';
+import { game12, G12, isRed, isTelegraph, GAME_DURATION } from '@madcade/shared';
+import type { Game12State, GameInputEvent } from '@madcade/shared';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { useOnlineRender } from '../../net/useOnlineRender';
 import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';

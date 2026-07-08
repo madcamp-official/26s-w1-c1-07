@@ -4,13 +4,13 @@
     {
       "name": "server",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--workspace", "@madpump/server", "run", "dev"],
+      "runtimeArgs": ["--workspace", "@madcade/server", "run", "dev"],
       "port": 3000
     },
     {
       "name": "client",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--workspace", "@madpump/client", "run", "dev"],
+      "runtimeArgs": ["--workspace", "@madcade/client", "run", "dev"],
       "port": 5173
     }
   ]

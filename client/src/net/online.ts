@@ -14,7 +14,7 @@ import {
   type Role,
   type RoomSnapshot,
   type SlotResult,
-} from '@madpump/shared'
+} from '@madcade/shared'
 import { createStore, useStore } from '../state/store'
 import { SERVER_URL } from './config'
 

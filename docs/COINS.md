@@ -1,4 +1,4 @@
-# MADPUMP coin system (v1, 2026-07-05)
+# MADCADE coin system (v1, 2026-07-05)
 
 > The rule source of truth for the "Coin" currency. The code source of truth for constants·helpers is `shared/src/coins.ts` (shared by client/server).
 > The DB schema is `docs/ERD.md` v2 (app_user.coins / unlocked_count).

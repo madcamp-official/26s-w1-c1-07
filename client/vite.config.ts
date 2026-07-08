@@ -7,14 +7,14 @@ const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Self-containment (MERGE_PLAN §2-0): aliases point only inside the main workspace.
 //  '@'            → client/src (own workspace)
-//  '@madpump/shared' → main's shared/src (game-lab vendor-in core, vite transpiles the original source TS)
+//  '@madcade/shared' → main's shared/src (game-lab vendor-in core, vite transpiles the original source TS)
 // Never point at the design-lab / game-lab folders.
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
       '@': path.resolve(dirname, 'src'),
-      '@madpump/shared': path.resolve(dirname, '../shared/src/index.ts'),
+      '@madcade/shared': path.resolve(dirname, '../shared/src/index.ts'),
     },
   },
   server: {

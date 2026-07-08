@@ -1,4 +1,4 @@
-import type { GameInputEvent, KeyCode } from '@madpump/shared'
+import type { GameInputEvent, KeyCode } from '@madcade/shared'
 
 const KEYS: ReadonlySet<string> = new Set(['KeyQ', 'KeyW', 'KeyU', 'KeyI'])
 

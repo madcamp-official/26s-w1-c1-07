@@ -4,7 +4,7 @@
  * In that case the screen doesn't run a local sim/bot; it renders the server state + sends input.
  */
 import { useOnline, sendInput } from './online'
-import type { GameId, GameResult, OpponentView, Role } from '@madpump/shared'
+import type { GameId, GameResult, OpponentView, Role } from '@madcade/shared'
 
 export interface OnlineGame {
   /** Authoritative server state (projection for rendering). null means before the first snapshot (countdown, etc.) */

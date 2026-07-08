@@ -1,7 +1,7 @@
 /**
  * UI types used by the shell (out-of-game UI such as login/lobby/leaderboard).
  *
- * ⚠️ This is separate from the "game core" (@madpump/shared).
+ * ⚠️ This is separate from the "game core" (@madcade/shared).
  *  - The game verdict result is the core's GameResult = 'P1' | 'P2' | 'DRAW' (game-lab).
  *  - The MatchResult here ('P1_WIN'…) is a shell-domain value for displaying the mock leaderboard/records.
  *  - Once the server is wired up, these shell types are replaced by REST response types (currently mock scaffolding).

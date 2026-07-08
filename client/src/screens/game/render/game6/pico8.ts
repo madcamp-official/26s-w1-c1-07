@@ -6,9 +6,9 @@
  *  · The dino, cactus and bird are string bitmaps blitted cell by cell. imageSmoothing off.
  *  · Color follows the "player", not the "role" (functionColors) — swaps identically to neon.
  *
- * Never invent coordinates/sizes/speeds — use only geom.* + the @madpump/shared G6 constants (crossplay fairness).
+ * Never invent coordinates/sizes/speeds — use only geom.* + the @madcade/shared G6 constants (crossplay fairness).
  */
-import { G6, GAME_DURATION } from '@madpump/shared';
+import { G6, GAME_DURATION } from '@madcade/shared';
 import { functionColors } from '../../../../net/online';
 import type { Game6DrawScene } from './types';
 

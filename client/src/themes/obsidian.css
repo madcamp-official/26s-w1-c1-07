@@ -6,7 +6,7 @@
  *            (B) neon-only effect classes (glow/scanline/synthwave) get overridden under the [data-theme=] scope.
  * Specificity rule: to beat the base component CSS (.nc-btn:hover:not(:disabled) etc., 0,3,0),
  *              always secure +1 attribute via `[data-theme="obsidian"] <same compound as the base>`.
- * This file changes visuals only (color/shape/effect) — it never touches @madpump/shared or game coordinates.
+ * This file changes visuals only (color/shape/effect) — it never touches @madcade/shared or game coordinates.
  *
  * Stays dark: unlike the light themes, it keeps a restrained "thin" glow. The scanline lines are removed and
  *            crt-overlay is replaced with an ultra-low-saturation dual radial glow (cyan top-left, magenta bottom-right).

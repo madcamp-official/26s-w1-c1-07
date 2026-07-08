@@ -5,10 +5,10 @@
  *  Each sprite first lays down a +5,+5 offset black silhouette, then a color shape + 3px ink stroke on top.
  *  Never uses glow (shadowBlur). Danger/imminent = 45° yellow/black hazard stripe band.
  *
- * Never invents geometry/judgment — uses only geom.* + @madpump/shared G6 constants (crossplay invariant).
+ * Never invents geometry/judgment — uses only geom.* + @madcade/shared G6 constants (crossplay invariant).
  * Color follows the "player", not the "role" → functionColors() decides the P1/P2 entity colors.
  */
-import { G6, GAME_DURATION } from '@madpump/shared';
+import { G6, GAME_DURATION } from '@madcade/shared';
 import { functionColors } from '@/net/online';
 import type { Game6DrawScene, Fx, Geom } from './types';
 

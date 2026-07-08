@@ -3,7 +3,7 @@
  * Container testid: scr-game6 / parts: game-stage(CRT bezel), hud-*(HudFrame built-in), btn-exit
  *
  * ── Principles ────────────────────────────────────────────────────────
- *  · Logic/decisions use only the @madpump/shared game6 core(create/step) + G6 constants — no reimplementation.
+ *  · Logic/decisions use only the @madcade/shared game6 core(create/step) + G6 constants — no reimplementation.
  *  · The screen is built fresh from scratch on the neon-coinop concept(direct canvas render). No reference to the experimental folder.
  *
  * Game rules(core-comment summary):
@@ -23,8 +23,8 @@
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { game6, G6, GAME_DURATION } from '@madpump/shared';
-import type { Game6State, Obstacle, GameInputEvent } from '@madpump/shared';
+import { game6, G6, GAME_DURATION } from '@madcade/shared';
+import type { Game6State, Obstacle, GameInputEvent } from '@madcade/shared';
 import type { MatchResult } from '@/shell';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { useOnlineRender } from '../../net/useOnlineRender';

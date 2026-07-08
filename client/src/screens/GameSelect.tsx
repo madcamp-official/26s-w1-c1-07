@@ -17,11 +17,11 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GAME_ORDER, isLockable, unlockCost, unlockedGameIds } from '@madpump/shared';
+import { GAME_ORDER, isLockable, unlockCost, unlockedGameIds } from '@madcade/shared';
 import type { GameId } from '@/shell';
 import { Button, GamePictogram } from '../components';
 import { useDebugScreen } from '../debug';
-import { startOfflineGame } from '../state/flow';
+import { startBotGame, startOfflineGame } from '../state/flow';
 import { restoreSession, unlockGame, useSession } from '../state/session';
 import { openLoginModal } from '../modals/Login';
 import { GAME_NAMES } from '../game/gameNames';
@@ -56,6 +56,8 @@ export default function GameSelect() {
   const [armed, setArmed] = useState<GameId | null>(null);
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
+  /** opponent for the picked game: false = local 2-player (Q/W vs U/I), true = solo vs the built-in bot */
+  const [vsBot, setVsBot] = useState(false);
 
   // Coins may have changed from a match/unlock, so refresh the wallet on entry
   useEffect(() => {
@@ -69,7 +71,9 @@ export default function GameSelect() {
 
   const pick = (id: GameId) => {
     if (unlocked.has(id)) {
-      startOfflineGame(id); // straight into the game, no matchmaking step (comment 16:1665)
+      // Bot = solo vs the built-in AI (you are P1 Q/W); Local = two players on one keyboard (Q/W vs U/I)
+      if (vsBot) startBotGame(id);
+      else startOfflineGame(id);
       navigate(`/game/${id}`);
       return;
     }
@@ -98,9 +102,9 @@ export default function GameSelect() {
         <Button variant="tertiary" onClick={() => navigate('/')}>
           ◀ Back to main
         </Button>
-        <p className="s8-wordmark font-arcade" aria-label="MADPUMP">
+        <p className="s8-wordmark font-arcade" aria-label="MADCADE">
           <span className="c-p2 glow-text">MAD</span>
-          <span className="c-p1 glow-text">PUMP</span>
+          <span className="c-p1 glow-text">CADE</span>
         </p>
         {session.loggedIn ? (
           <span className="s8-coins font-arcade c-accent glow-text" data-testid="coin-balance">
@@ -112,6 +116,28 @@ export default function GameSelect() {
       </header>
 
       <p className="s8-caption font-arcade c-accent2">SELECT YOUR GAME</p>
+
+      {/* Opponent toggle — local 2-player vs solo-vs-bot (applies to the next game you pick) */}
+      <div className="s8-oppo" role="group" aria-label="Opponent">
+        <button
+          type="button"
+          className={`s8-oppo-btn font-arcade${!vsBot ? ' is-active' : ''}`}
+          data-testid="oppo-local"
+          aria-pressed={!vsBot}
+          onClick={() => setVsBot(false)}
+        >
+          👥 2P LOCAL
+        </button>
+        <button
+          type="button"
+          className={`s8-oppo-btn font-arcade${vsBot ? ' is-active' : ''}`}
+          data-testid="oppo-bot"
+          aria-pressed={vsBot}
+          onClick={() => setVsBot(true)}
+        >
+          🤖 VS BOT
+        </button>
+      </div>
 
       <div className="s8-floor">
         {CABINETS.map((cab) => {

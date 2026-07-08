@@ -96,9 +96,10 @@ export default function RoundIntro() {
     o.role != null &&
     (o.phase === 'countdown' || o.phase === 'playing' || o.phase === 'round-result');
   const onlineIntro = onlineActive && o.phase === 'countdown';
+  // Any LOCAL sim game (offline 2-player OR solo-vs-bot). Real server online is excluded by !onlineActive
+  // (bot mode sets flow.mode='online' but never activates the online store, so it belongs here, not there).
   const offlineActive =
     !onlineActive &&
-    flow.mode === 'offline' &&
     flow.phase === 'playing' &&
     flow.currentRound > 0 &&
     flow.gameId != null;
@@ -165,6 +166,13 @@ export default function RoundIntro() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onlineIntro, o.round]);
+
+  // Online countdown ticks — mirror the offline "2"/"1" ticks. The countdown-start stinger and the
+  // "START!" GO cue are already fired by the audio controller on the online phase transitions
+  // (countdown enter / countdown→playing), so only the per-number ticks are added here (avoids a double GO).
+  useEffect(() => {
+    if (onStep === 'c2' || onStep === 'c1') sfx('flow-countdown-tick');
+  }, [onStep]);
 
   // ── ONLINE render (ROUND banner → guide → 2·1·START) ──
   if (onlineIntro && o.gameId != null && o.role != null) {

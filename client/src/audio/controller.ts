@@ -32,9 +32,10 @@ let inGamePrev = false;
 let gameTrackUrl = GAME_TRACKS[0];
 
 function inGame(f: FlowState, o: OnlineState): boolean {
-  const onlineActive = o.gameId != null && BATTLE_ONLINE.has(o.phase);
-  if (onlineActive) return true;
-  return f.mode === 'offline' && f.gameId != null && (f.phase === 'playing' || f.phase === 'round-result');
+  // Real server online
+  if (o.gameId != null && BATTLE_ONLINE.has(o.phase)) return true;
+  // Local sim — offline 2-player OR solo-vs-bot (flow.mode 'offline'|'online' with no real-online store active)
+  return o.gameId == null && f.gameId != null && (f.phase === 'playing' || f.phase === 'round-result');
 }
 
 /** Update BGM track/volume by zone — pick a random in-game track on entry, crossfade to focus volume */

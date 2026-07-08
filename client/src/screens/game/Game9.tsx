@@ -3,7 +3,7 @@
  * Container testid: scr-game9 / parts: game-stage(CRT bezel), hud-*(HudFrame embedded), btn-exit
  *
  * ── Principles of this screen ──────────────────────────────────────────────
- *  · Logic/decision is 100% @madpump/shared game9 core(create/step) + G9 constants + maxRun helper reuse only.
+ *  · Logic/decision is 100% @madcade/shared game9 core(create/step) + G9 constants + maxRun helper reuse only.
  *  · Rendering (canvas neon art) is written fresh from scratch — does not reference the game-lab renderer. design-lab import 0 lines.
  *  · Colors/fonts copy the theme.css token values (canvas can't read CSS variables, so hex is hardcoded).
  *
@@ -30,8 +30,8 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { game9, G9, GAME_DURATION, maxRun } from '@madpump/shared';
-import type { Game9State, GameInputEvent, PlayerColor } from '@madpump/shared';
+import { game9, G9, GAME_DURATION, maxRun } from '@madcade/shared';
+import type { Game9State, GameInputEvent, PlayerColor } from '@madcade/shared';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';
 import {

@@ -29,8 +29,8 @@
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { game3, G3, SEQ_LEN, GAME_DURATION } from '@madpump/shared';
-import type { Game3State, GameInputEvent, PlayerColor } from '@madpump/shared';
+import { game3, G3, SEQ_LEN, GAME_DURATION } from '@madcade/shared';
+import type { Game3State, GameInputEvent, PlayerColor } from '@madcade/shared';
 import type { MatchResult, PlayerRole } from '@/shell';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';

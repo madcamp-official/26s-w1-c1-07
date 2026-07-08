@@ -1,5 +1,5 @@
 /**
- * MADPUMP server — Fastify(REST) + Socket.IO(real-time) single process.
+ * MADCADE server — Fastify(REST) + Socket.IO(real-time) single process.
  * Google OAuth login (GIS ID-token, docs/AUTH.md) + socket handshake + lobby (code room · quick start)
  * + server-authoritative match runner + global leaderboard.
  */
@@ -26,7 +26,7 @@ import {
   type GameId,
   type GameInputMsg,
   type RoomSnapshot,
-} from '@madpump/shared'
+} from '@madcade/shared'
 import { prisma } from './db'
 import {
   SESSION_COOKIE,
@@ -635,4 +635,4 @@ io.on('connection', (socket) => {
 })
 
 await app.listen({ port: PORT, host: '0.0.0.0' })
-console.log(`✅ MADPUMP server http://localhost:${PORT} (client origin: ${CLIENT_ORIGIN})`)
+console.log(`✅ MADCADE server http://localhost:${PORT} (client origin: ${CLIENT_ORIGIN})`)

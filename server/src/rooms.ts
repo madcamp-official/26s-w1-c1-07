@@ -3,7 +3,7 @@
  * Rooms/queue are tied to the socket connection: cleaned up when the connection drops.
  */
 import { randomInt } from 'node:crypto'
-import type { GameId, Role, RoomSnapshot, RoomStatus } from '@madpump/shared'
+import type { GameId, Role, RoomSnapshot, RoomStatus } from '@madcade/shared'
 import type { MatchRuntime } from './match-types'
 
 export interface Member {

@@ -63,8 +63,8 @@
 ```bash
 # 스키마 적용 + 시드 (SSH 터널로 VM DB 사용 시)
 ssh -N -L 3306:localhost:3306 kaistvm &        # 터널
-npm --workspace @madpump/server run migrate:deploy
-npm --workspace @madpump/server run db:seed
+npm --workspace @madcade/server run migrate:deploy
+npm --workspace @madcade/server run db:seed
 ```
 
 ---

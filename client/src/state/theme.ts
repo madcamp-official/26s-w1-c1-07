@@ -5,7 +5,7 @@
  * Behavior: setting the data-theme attribute on <html> makes the themes/<id>.css
  *       `:root[data-theme="<id>"]` block wholesale re-define theme.css's token contract (:root),
  *       so the entire screen is instantly reskinned (color/font/shape/effects). Games run on the pure
- *       @madpump/shared core, so even when two people on different themes play together, judgment/coordinates are identical.
+ *       @madcade/shared core, so even when two people on different themes play together, judgment/coordinates are identical.
  *
  * Usage:
  *   initTheme();                 // once at main.tsx boot — instantly apply the saved theme to <html> (prevents FOUC)

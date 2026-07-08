@@ -1,10 +1,10 @@
-# MADPUMP Merge Methodology — game-lab logic + design-lab design → main
+# MADCADE Merge Methodology — game-lab logic + design-lab design → main
 
 ## TL;DR (5 lines)
 
 1. **The "heart" of logic/render/input is ported wholesale from game-lab** → promote the 3 core modules `game-lab/shared/src/games/*` into main's empty `shared/`, and move `game-lab/client`'s canvas renderers, unified input, and game-loop skeleton into main `client/`.
 2. **The "face" of the out-of-game screens is ported from design-lab** → move the winning mockup's (1st choice `05-obsidian`) `screens/modals/components/theme.css` into main `client/`. **Discard the in-game screens (Game1~3.tsx), the old core, and mock authority.**
-3. **Win/loss authority belongs to the new `server`** → a single Fastify + Socket.IO process runs `@madpump/shared`'s `core.create/step` on the server; queue/room/live state are in-memory, and only the final result (1 row) is written to `game_match`.
+3. **Win/loss authority belongs to the new `server`** → a single Fastify + Socket.IO process runs `@madcade/shared`'s `core.create/step` on the server; queue/room/live state are in-memory, and only the final result (1 row) is written to `game_match`.
 4. **The only place the three sources actually overlap is a single cross-cutting task** — "in-game canvas palette injection" (the canvas cannot read CSS variables, so the winner's `theme.css` hex values are mirrored once into a JS `RenderPalette`). Everything else is file-level porting, so there are no conflicts.
 5. **The online switch replaces only "input source + state owner"** — the local loop (`create→step→render`) stays as-is; the client starts as a dumb client that emits key inputs to the server and only renders the server's view-snapshots (prediction is optional).
 
@@ -16,11 +16,11 @@ This repo has **3 coexisting game APIs that share the same names but differ in s
 
 | API | Location (identifier) | State shape | Result notation | Verdict |
 |---|---|---|---|---|
-| **game-lab (adopted as canonical)** | `game-lab/shared/src/games/*` — package name `@madpump/shared` | `Game1State.p1/p1Gauge/p1Hold`, `Game2State.rockets/hp/seed`, `Game3State.c/feed/seed/waterLevel` | `GameResult = 'P1'\|'P2'\|'DRAW'\|null` | `GameCore.create/step` (pure & deterministic) |
-| **design-lab old core (retired)** | `design-lab/shared/src/games/*` — **package name is also `@madpump/shared` (identical)**, referenced by screens via the path alias `@shared` | `Game1State.players.P1.value / derived / elapsedMs` | `MatchResult = 'P1_WIN'\|'P2_WIN'\|'DRAW'` | `createGame1State / tick / game1ActionFromKey` |
+| **game-lab (adopted as canonical)** | `game-lab/shared/src/games/*` — package name `@madcade/shared` | `Game1State.p1/p1Gauge/p1Hold`, `Game2State.rockets/hp/seed`, `Game3State.c/feed/seed/waterLevel` | `GameResult = 'P1'\|'P2'\|'DRAW'\|null` | `GameCore.create/step` (pure & deterministic) |
+| **design-lab old core (retired)** | `design-lab/shared/src/games/*` — **package name is also `@madcade/shared` (identical)**, referenced by screens via the path alias `@shared` | `Game1State.players.P1.value / derived / elapsedMs` | `MatchResult = 'P1_WIN'\|'P2_WIN'\|'DRAW'` | `createGame1State / tick / game1ActionFromKey` |
 | **DB enum (separate domain)** | `server/prisma/schema.prisma` | — | `enum MatchResult { P1_WIN, P2_WIN, DRAW }` | for storage |
 
-> **Correction (verification-reflected):** all three `shared/` packages **have the exact same npm name `@madpump/shared`** (confirmed across 3 `package.json` files). The `@shared` that the design-lab screens use is **not a package name but a tsconfig/vite path alias** — `05-obsidian/tsconfig.json`'s `"@shared": ["../../shared/src/index.ts"]`, and `vite.config.ts`'s `'@shared' → design-lab/shared/src` (comment: "directly references the `@madpump/shared` source"). So the reason design-lab's imports disappear is not "because the name is different" but **because we delete the `@shared` alias and replace `shared/` with the game-lab version**. Because the three packages share the same name, **name-collision must actually be considered** — but if design-lab's `shared/` is completely excluded from porting, only one remains at runtime and no collision occurs.
+> **Correction (verification-reflected):** all three `shared/` packages **have the exact same npm name `@madcade/shared`** (confirmed across 3 `package.json` files). The `@shared` that the design-lab screens use is **not a package name but a tsconfig/vite path alias** — `05-obsidian/tsconfig.json`'s `"@shared": ["../../shared/src/index.ts"]`, and `vite.config.ts`'s `'@shared' → design-lab/shared/src` (comment: "directly references the `@madcade/shared` source"). So the reason design-lab's imports disappear is not "because the name is different" but **because we delete the `@shared` alias and replace `shared/` with the game-lab version**. Because the three packages share the same name, **name-collision must actually be considered** — but if design-lab's `shared/` is completely excluded from porting, only one remains at runtime and no collision occurs.
 
 ### 1-1. KEEP / DROP table
 
@@ -28,7 +28,7 @@ This repo has **3 coexisting game APIs that share the same names but differ in s
 |---|---|---|---|
 | **game-lab** | ① 3 core modules `shared/src/games/{types, game1/logic, game2/logic, game3/core+logic}.ts` ② canvas renderers `client/src/games/{render1,render2,render3,fencerPose,registry}.ts` ③ unified input `client/src/input/keyboard.ts` ④ local game-loop skeleton `client/src/ui/GameScreen.tsx` ⑤ core tests (97 tests) | minimal UI (`MainScreen.tsx`, `index.css`) — replaced by design-lab screens | `shared/src/index.ts`, `client/src/games/registry.ts` |
 | **design-lab** | ① out-of-game screen shells `screens/{MainLoggedOut,MainLoggedIn,Onboarding,GameSelect}.tsx` ② modals `modals/{LoginRequired,Online,Matching,Settings}.tsx` ③ primitives `components/{Button,Card,Modal,Avatar,LeaderboardTable,PlayerBadge,KeyCap…}.tsx` ④ theme `theme.css` (palette/font/clip·frame tokens) ⑤ result overlay `screens/game/ResultOverlay.tsx` | **all in-game game logic and game render**: `screens/game/{Game1,Game2,Game3}.tsx`, old core `shared/src/games/*`, old input `attachKeyboardAdapter`, mock authority (`state/{flow,session}.ts`'s bots, `reportRoundResult`, fake login) | `ideas/05-obsidian/src/**`, `theme.css`, `Game1.tsx`, `Game2.tsx:45` |
-| **main** | place the above two into the 3 workspace slots (`shared`/`client`/`server`, all `@madpump/*`) + **write the new `server`** | current empty stubs (`client/`·`shared/` are just `package.json`, `server/` is just Prisma) | root `package.json` (workspaces), `server/prisma/` |
+| **main** | place the above two into the 3 workspace slots (`shared`/`client`/`server`, all `@madcade/*`) + **write the new `server`** | current empty stubs (`client/`·`shared/` are just `package.json`, `server/` is just Prisma) | root `package.json` (workspaces), `server/prisma/` |
 
 **The nature of the third tension (code-confirmed):** design-lab's in-game screens aren't even unified in render approach — `Game1.tsx`/`Game3.tsx` draw with **React DOM** (div·span·CSS), while `Game2.tsx` draws with **canvas**. On top of that, all three are **nailed to the old API (`players.P1.value`·`derived.timeRemainingMs`)**, so they cannot draw the new state (`Game1State.p1`, `Game2State.rockets/hp`, `Game3State.c/feed`). → **design-lab's in-game render is unreusable.** game-lab's 3 canvas renderers all support the new state with a consistent signature (`render(ctx, state, w, h)`), so we unify the port on these.
 
@@ -36,7 +36,7 @@ This repo has **3 coexisting game APIs that share the same names but differ in s
 
 ## 2. Target monorepo layout (file mapping)
 
-main is already an npm-workspaces monorepo (`shared`/`server`/`client`, all `@madpump/*`). game-lab uses the same convention, so the layout is close to a path copy.
+main is already an npm-workspaces monorepo (`shared`/`server`/`client`, all `@madcade/*`). game-lab uses the same convention, so the layout is close to a path copy.
 
 ### 2-0. Self-containment & contract first principles (★this section is the constitution of the layout)
 
@@ -53,13 +53,13 @@ Why this matters: the `design-lab` mockups currently point to `../../shared/src`
 | Rule | Forbidden | Allowed |
 |---|---|---|
 | **Workspace scope** | Adding `design-lab`/`game-lab`/`ideas/*` to the root `package.json`'s `workspaces` | Keep only the 3 slots `["shared","server","client"]` (as-is currently) |
-| **Path alias** | `client`'s tsconfig/vite `paths` pointing at `../../design-lab`·`../../game-lab`·`../../shared` (inside a lab) | Alias only **within its own workspace** (`@/…`=client/src). Core only via `@madpump/shared` (main's shared) |
-| **Relative-path import** | `import … from '../../design-lab/...'` / `'../../game-lab/...'` | Relative paths inside main's 3 workspaces + `@madpump/shared` |
+| **Path alias** | `client`'s tsconfig/vite `paths` pointing at `../../design-lab`·`../../game-lab`·`../../shared` (inside a lab) | Alias only **within its own workspace** (`@/…`=client/src). Core only via `@madcade/shared` (main's shared) |
+| **Relative-path import** | `import … from '../../design-lab/...'` / `'../../game-lab/...'` | Relative paths inside main's 3 workspaces + `@madcade/shared` |
 | **Symlink/glob** | symlink into a lab folder, `file:../design-lab` dependency | none |
 
 **Git import method (because the originals live in different places):**
 - `game-lab` (different branch): use `git checkout experiment/game-test -- game-lab/` to pull just the files → move what you need into `shared/`·`client/` → commit to main. Afterwards, discard the game-lab tree from main.
-- `design-lab` (currently in the main tree): copy the winning mockup's `screens/modals/components/theme.css` into `client/src` → clean up imports to local components + `@madpump/shared` → **delete all of `design-lab/` from main (or, after confirming 0 references, it's fine to leave it)**.
+- `design-lab` (currently in the main tree): copy the winning mockup's `screens/modals/components/theme.css` into `client/src` → clean up imports to local components + `@madcade/shared` → **delete all of `design-lab/` from main (or, after confirming 0 references, it's fine to leave it)**.
 
 #### Invariant B — Contract fixed: the API envelope is game-agnostic & immutable, per-game JSON is split per folder
 
@@ -90,7 +90,7 @@ Why this matters: the `design-lab` mockups currently point to `../../shared/src`
 
 | Original | → main target | Handling |
 |---|---|---|
-| design-lab `screens/*`, `modals/*`, `components/*`, `theme.css` | `client/src/{screens,modals,components}/`, `client/src/theme.css` | **Port as-is.** Only clean up import paths (remove `@shared` alias → local component/`@madpump/shared`). Replace mock authority (`flow.ts` bots·`reportRoundResult`, `session.ts` fake login) with socket/REST |
+| design-lab `screens/*`, `modals/*`, `components/*`, `theme.css` | `client/src/{screens,modals,components}/`, `client/src/theme.css` | **Port as-is.** Only clean up import paths (remove `@shared` alias → local component/`@madcade/shared`). Replace mock authority (`flow.ts` bots·`reportRoundResult`, `session.ts` fake login) with socket/REST |
 | game-lab `client/src/games/render{1,2,3}.ts`, `fencerPose.ts`, `registry.ts` | `client/src/game/render*.ts`, `registry.ts` | **Port as-is** + palette parameterization (§3) |
 | game-lab `client/src/input/keyboard.ts` | `client/src/game/input/keyboard.ts` | keep `attachLocalKeyboard` → behind an `InputSource` interface (§5) |
 | game-lab `client/src/ui/GameScreen.tsx` | `client/src/screens/game/GameHost.tsx` | **rework the local loop into a socket loop** (§5). Attach design-lab `ResultOverlay.tsx` for result display |
@@ -102,7 +102,7 @@ Why this matters: the `design-lab` mockups currently point to `../../shared/src`
 |---|---|---|
 | HTTP | `server/src/http/{auth,match,leaderboard}.ts` | Google OAuth callback (auth code + session cookie, no JWT), match record query, leaderboard (REST) |
 | Socket | `server/src/socket/index.ts` | queue·room·live state = **in-memory** (no room/queue table in DB) |
-| Authority loop | `server/src/game/loop.ts` | runs `@madpump/shared`'s `core.create/step` **on the server**. **The original state (including seed) exists only inside this file** (§5·§7) |
+| Authority loop | `server/src/game/loop.ts` | runs `@madcade/shared`'s `core.create/step` **on the server**. **The original state (including seed) exists only inside this file** (§5·§7) |
 | DB | `server/prisma/*` (existing) | writes 1 row to `game_match` on match end. `GameResult→MatchResult` mapping |
 
 ---
@@ -221,7 +221,7 @@ The client is **done by just feeding the received view-snapshot to the renderer*
 
 | # | Step | Verify (acceptance criteria) |
 |---|---|---|
-| **1** | **Core promotion**: game-lab `shared/src/games/*` → main `shared/`. Port the core tests (97 tests) too. Create `viewState.ts`/`palette.ts`/`net/*` stubs | `--filter @madpump/shared test` all pass + `import {G1,G2,makeGame3} from '@madpump/shared'` typechecks OK |
+| **1** | **Core promotion**: game-lab `shared/src/games/*` → main `shared/`. Port the core tests (97 tests) too. Create `viewState.ts`/`palette.ts`/`net/*` stubs | `--filter @madcade/shared test` all pass + `import {G1,G2,makeGame3} from '@madcade/shared'` typechecks OK |
 | **2** | **Client shell port (offline first)**: port the winning mockup's `screens/modals/components/theme.css` + game-lab renderers/input/`GameHost`, wire `InputSource=LocalKeyboard`. Palette injection (§3) | In the browser, login (mock)→lobby→game-select→**games 1·2·3 run as local 2-player** and win/loss appears. Render is drawn with the winner theme palette |
 | **3** | **Server socket round-trip**: bring up Fastify+Socket.IO, in-memory queue/room, `queue:join→match:found→match:start`. Server owns `core.create`, client `InputSource=RemoteSocket`. **Apply view-snapshot projection (seed removed)** | Two tabs connect → matched → both clients render the server-sent `state:tick(view)`. Confirm `input:key` round-trip. **No `seed` field in the payload dump** |
 | **4** | **Per-game online judging**: server-authority `step` loop (**fixed ~16ms**) + `match:over`. Finalize game3's `e.t` stamping policy | **Replaying the same `(event + dt)` frame trace makes server `result` == offline local-sim `result`** (game1 deterministic, game2/3 reproduced via shared seed). ※ determinism assumes "identical dt sequence" — replaying a 60fps trace on a 20Hz server mismatching is normal. ResultOverlay OK |
@@ -239,7 +239,7 @@ Each step proceeds to the next **only after the previous one works observably**.
 > # residual-reference scanner (any hit = failure):
 > grep -rn "design-lab\|game-lab\|@shared\b\|\.\./\.\./\(shared\|game-lab\|design-lab\)" client/src server/src shared/src
 > ```
-> If the build breaks or grep catches something, **the umbilical isn't cut yet** — change that import to a local copy or `@madpump/shared` and retry. Once it passes, restore the lab folders (or delete permanently) and move to the next step.
+> If the build breaks or grep catches something, **the umbilical isn't cut yet** — change that import to a local copy or `@madcade/shared` and retry. Once it passes, restore the lab folders (or delete permanently) and move to the next step.
 
 ---
 
@@ -247,10 +247,10 @@ Each step proceeds to the next **only after the previous one works observably**.
 
 | Risk | Detail | Mitigation |
 |---|---|---|
-| **Residual reference to original folders (self-containment collapse)** | Doing the port as *path wiring* rather than *copy* (`@shared` alias·`../../design-lab`·`../../game-lab`·adding labs to workspaces) makes main un-buildable when the `design-lab`/`game-lab` folders are later deleted | **Invariant A (2-0)** — vendor-in copy + umbilical cut. Workspaces fixed at 3, alias only within its own workspace, core only via `@madpump/shared`. **Enforce §6's "umbilical-cut test" as a step-2 and final gate** (move lab folders aside and pass `npm run -ws build` + 0 reference greps) |
+| **Residual reference to original folders (self-containment collapse)** | Doing the port as *path wiring* rather than *copy* (`@shared` alias·`../../design-lab`·`../../game-lab`·adding labs to workspaces) makes main un-buildable when the `design-lab`/`game-lab` folders are later deleted | **Invariant A (2-0)** — vendor-in copy + umbilical cut. Workspaces fixed at 3, alias only within its own workspace, core only via `@madcade/shared`. **Enforce §6's "umbilical-cut test" as a step-2 and final gate** (move lab folders aside and pass `npm run -ws build` + 0 reference greps) |
 | **seed client exposure (cheat vector)** | The original `Game2State`/`Game3State` include the PRNG `seed`. Sending the state wholesale lets a tampered client predict game3's windup delay·dodge and game2's rocket randomness → frame-perfect cheat | **View-snapshot projection**: send only the fields the renderer reads (seed removed), original stays internal to server `loop.ts`. Hand off `seed non-exposure` to the API-spec part. Only when enabling a prediction client, explicitly document the seed-exposure tradeoff |
 | **Determinism = dt-sequence-dependent (not dt-independent)** | Running the server at 20Hz (50ms) misaligns game1 integration·game3 knockback·game2 collision granularity from the 60fps tuning. `0.05` is a dt cap, not the tick interval | Run the server physics loop at a **fixed ~16ms (≈60Hz)**. Separate the network snapshot period (e.g. 20~30Hz). Step4 verify is defined as "matches when replaying the same `(event+dt)` trace" |
-| **Old/new state confusion** | design-lab `Game1State` (`players.P1.value`, `derived`, `elapsedMs`) and game-lab `Game1State` (`p1`, `p1Gauge`, `p1Hold`, `elapsed`) are **same-name-different-shape**. A wrong import breaks silently | Only the game-lab version exists in main `shared`. design-lab `shared` is **completely excluded from porting**, and the `@shared` alias is deleted. Because the three packages share the same npm name (`@madpump/shared`), a folder swap leaves only the single canonical one |
+| **Old/new state confusion** | design-lab `Game1State` (`players.P1.value`, `derived`, `elapsedMs`) and game-lab `Game1State` (`p1`, `p1Gauge`, `p1Hold`, `elapsed`) are **same-name-different-shape**. A wrong import breaks silently | Only the game-lab version exists in main `shared`. design-lab `shared` is **completely excluded from porting**, and the `@shared` alias is deleted. Because the three packages share the same npm name (`@madcade/shared`), a folder swap leaves only the single canonical one |
 | **3 result notations** | `GameResult('P1'/'P2'/'DRAW')` ↔ design-lab `MatchResult('P1_WIN'…)` ↔ DB enum (`P1_WIN`…) | Single mapping in `shared/src/net/result.ts`: `'P1'→'P1_WIN'`, `'P2'→'P2_WIN'`, `'DRAW'→'DRAW'`. Convert only at the store·display boundaries |
 | **Divergence if the client calls create** | game2/3 are deterministic if they share `create`'s `seed`, and game1 if it shares `create`'s randomness (target·start value·rate) | `core.create` is called **only by the server**. The client starts only from the view-snapshot received via `match:start` |
 | **game3 `e.t` timing** | Only game3 judges via subframe `e.t`. Trusting the client stamp online risks tampering·non-determinism | **(unconfirmed)** Finalize server-restamp vs trust policy before step 4. game1/2 are unaffected (don't use `e.t`) |

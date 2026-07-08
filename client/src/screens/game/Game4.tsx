@@ -4,7 +4,7 @@
  *
  * ── Principles of this swap ─────────────────────────────────────────────
  *  · UI · components · CSS classes · canvas effects stay 100% as-is.
- *  · Only game state/judgement is driven by the @madpump/shared game4 core (create/step).
+ *  · Only game state/judgement is driven by the @madcade/shared game4 core (create/step).
  *  · New mechanic HP(3) → an element the existing screen lacked, so add 3 neon HP cells (--p2 color).
  *
  * Wiring:
@@ -17,8 +17,8 @@
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { game4, G4, GAME_DURATION } from '@madpump/shared';
-import type { Game4State, GameInputEvent, PlayerColor, Role } from '@madpump/shared';
+import { game4, G4, GAME_DURATION } from '@madcade/shared';
+import type { Game4State, GameInputEvent, PlayerColor, Role } from '@madcade/shared';
 import type { MatchResult } from '@/shell';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';

@@ -3,7 +3,7 @@
  * Container testid: scr-game8 / parts: game-stage(CRT bezel), hud-*(HudFrame embedded), btn-exit
  *
  * ── Principles ────────────────────────────────────────────────────────────────
- *  · Logic/judging is 100% the @madpump/shared game8 core (create/step). No re-implementation or duplication.
+ *  · Logic/judging is 100% the @madcade/shared game8 core (create/step). No re-implementation or duplication.
  *  · The screen (canvas render/effects) is written fresh in the neon-coinop tone. No reference to game-lab/design-lab.
  *  · For colors/fonts, only theme.css token values (PLAN §1) are copied as hex into the canvas.
  *
@@ -26,8 +26,8 @@
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { game8, G8, GAME_DURATION } from '@madpump/shared';
-import type { Game8State, Monster, GameInputEvent } from '@madpump/shared';
+import { game8, G8, GAME_DURATION } from '@madcade/shared';
+import type { Game8State, Monster, GameInputEvent } from '@madcade/shared';
 import type { MatchResult } from '@/shell';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { Button, HudFrame, KeyCap, useKeyLamp } from '../../components';

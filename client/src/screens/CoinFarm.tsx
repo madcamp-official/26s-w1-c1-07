@@ -15,8 +15,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FARM_CLAIM_COOLDOWN_MS, FARM_DURATION, FARM_TARGET } from '@madpump/shared';
-import type { GameInputEvent } from '@madpump/shared';
+import { FARM_CLAIM_COOLDOWN_MS, FARM_DURATION, FARM_TARGET } from '@madcade/shared';
+import type { GameInputEvent } from '@madcade/shared';
 import { attachLocalKeyboard } from '../game/input/keyboard';
 import { Button, KeyCap, useKeyLamp } from '../components';
 import { claimFarmReward, restoreSession, useSession } from '../state/session';

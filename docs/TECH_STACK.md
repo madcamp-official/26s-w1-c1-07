@@ -1,6 +1,6 @@
-# MADPUMP Tech Stack Decision Record
+# MADCADE Tech Stack Decision Record
 
-> **Document purpose**: a single reference document so that every person/AI agent involved in MADPUMP's implementation works on the same technical premises.
+> **Document purpose**: a single reference document so that every person/AI agent involved in MADCADE's implementation works on the same technical premises.
 > **Status**: finalized (2026-07-03) · **Deciders**: Jonghyeok + PA session design discussion
 > **To AI agents**: do not make stack choices that conflict with this document (e.g. introducing Next.js, using NoSQL). If a change is needed, do not implement it — propose it to the decider with rationale.
 
@@ -8,7 +8,7 @@
 
 ## 1. Project summary
 
-**MADPUMP** — a 1:1 versus web mini-game platform. Immersion-camp class-unit groups, Google login, online matchmaking (quick start / code room) + offline (2 players on one computer), score·class leaderboards, admin console (group/roster/match-result management).
+**MADCADE** — a 1:1 versus web mini-game platform. Immersion-camp class-unit groups, Google login, online matchmaking (quick start / code room) + offline (2 players on one computer), score·class leaderboards, admin console (group/roster/match-result management).
 
 ### Canonical documents (this priority order on conflict)
 1. **Screen design doc**: Figma `2aG8r8fE4uEE5ALmETw2GG` — **only the root node 16:1263 "ver4" board is canonical** (ignore other version boards)

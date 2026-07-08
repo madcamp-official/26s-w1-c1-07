@@ -3,7 +3,7 @@
  * The DB only records the match final result (game_match) + per-round (game_round) — live state is not stored.
  */
 import { PrismaClient, type MatchResult } from '@prisma/client'
-import type { SlotResult } from '@madpump/shared'
+import type { SlotResult } from '@madcade/shared'
 
 export const prisma = new PrismaClient()
 

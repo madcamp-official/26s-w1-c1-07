@@ -1,4 +1,4 @@
-// MADPUMP DB schema
+// MADCADE DB schema
 // source of truth (canonical): docs/ERD.md (v1, 2026-07-03)
 // This file faithfully ports the "MySQL DDL" block of ERD.md into Prisma.
 // When changing the schema → update docs/ERD.md first, then reflect it here.

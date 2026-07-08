@@ -26,8 +26,8 @@
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { game7, G7, GAME_DURATION, magmaSurfaceY } from '@madpump/shared';
-import type { Game7State, GameInputEvent } from '@madpump/shared';
+import { game7, G7, GAME_DURATION, magmaSurfaceY } from '@madcade/shared';
+import type { Game7State, GameInputEvent } from '@madcade/shared';
 import type { MatchResult } from '@/shell';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { useOnlineRender } from '../../net/useOnlineRender';

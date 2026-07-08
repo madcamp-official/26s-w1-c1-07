@@ -1,4 +1,4 @@
-# MADPUMP login design — roster login (v2, 2026-07-05)
+# MADCADE login design — roster login (v2, 2026-07-05)
 
 > This document is **the source of truth for why login changed from Google OAuth to roster login, and for the current design**.
 > Collaborators and AI agents must read this document first before any auth-related work.
@@ -53,14 +53,14 @@ Removed dependency: `google-auth-library`.
 
 ```bash
 npm install                                            # reflect removal of google-auth-library
-npm --workspace @madpump/server run migrate:deploy     # apply the roster migration
-npm --workspace @madpump/server run db:seed            # seed 3 classes + 55 members
-npm --workspace @madpump/server run db:cleanup-groups  # (optional) delete junk groups other than Class 1/2/3
+npm --workspace @madcade/server run migrate:deploy     # apply the roster migration
+npm --workspace @madcade/server run db:seed            # seed 3 classes + 55 members
+npm --workspace @madcade/server run db:cleanup-groups  # (optional) delete junk groups other than Class 1/2/3
 ```
 
 ⚠️ The migration's `CREATE UNIQUE INDEX uq_user_group_nick` fails if there are existing duplicate (class, nickname)
 rows. All existing data is test data, so if it fails the simplest fix is to
-reset and reseed: `npm --workspace @madpump/server run db:reset` (migrate reset + seed run automatically).
+reset and reseed: `npm --workspace @madcade/server run db:reset` (migrate reset + seed run automatically).
 
 ## 5. Roster by class (source of truth: `server/prisma/seed.ts`)
 

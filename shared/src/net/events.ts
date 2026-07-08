@@ -1,5 +1,5 @@
 /**
- * MADPUMP socket unified envelope — client/server shared contract (BUILD_PLAN D7·D8·D9).
+ * MADCADE socket unified envelope — client/server shared contract (BUILD_PLAN D7·D8·D9).
  *
  * Principle: input is a single game-agnostic event (game:input), state is a per-game projection (game:state).
  * Adding a new game does not change this file.

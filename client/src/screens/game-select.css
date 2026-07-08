@@ -35,6 +35,39 @@
   z-index: 1;
 }
 
+/* ---- opponent toggle (2P local vs bot) ---- */
+.s8-oppo {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  position: relative;
+  z-index: 1;
+}
+.s8-oppo-btn {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  padding: 7px 14px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--surface, #241640) 70%, transparent);
+  border: 1px solid var(--hairline, rgba(211, 0, 197, 0.35));
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  transition:
+    color 120ms,
+    border-color 120ms,
+    box-shadow 120ms;
+}
+.s8-oppo-btn:hover {
+  color: var(--text);
+}
+.s8-oppo-btn.is-active {
+  color: var(--bg, #0d0221);
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
 /* ---- cabinet row ---- */
 .s8-floor {
   flex: 1;

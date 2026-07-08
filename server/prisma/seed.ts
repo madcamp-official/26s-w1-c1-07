@@ -1,12 +1,12 @@
 /**
- * MADPUMP seed data — game dictionary + scoring settings only.
+ * MADCADE seed data — game dictionary + scoring settings only.
  * Canonical: docs/ERD.md note #15 (game dictionary) / note #17 (single-row scoring settings).
  *
  * Classes/roster removed (docs/AUTH.md v3): users are created on Google login, so there is
  * no pre-seeded member list anymore.
  *
  * Idempotent: uses upsert so it is safe to run multiple times.
- * Run: npm --workspace @madpump/server run db:seed  (or npx prisma db seed)
+ * Run: npm --workspace @madcade/server run db:seed  (or npx prisma db seed)
  */
 import { PrismaClient } from "@prisma/client";
 

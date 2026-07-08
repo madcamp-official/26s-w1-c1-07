@@ -13,7 +13,7 @@
  *   const started = endRef.current.update(state.result, now); // true if it just ended (trigger explosion spawn, etc.)
  *   drawEndFlash(ctx, CW, CH, endRef.current.age(now));       // the default effect (flash)
  */
-import type { GameResult } from '@madpump/shared';
+import type { GameResult } from '@madcade/shared';
 
 /** Default flash duration (ms) — at the decisive moment a white flash fades out quickly */
 export const FLASH_MS = 320;

@@ -1,6 +1,6 @@
 # Adding SFX to a new game — Playbook
 
-MADPUMP **SFX** are synthesized in real time with browser Web Audio (sfxr-style); **BGM** streams from mp3 files (Suno) as lobby / in-game zones (volume drops sharply on game entry = focus).
+MADCADE **SFX** are synthesized in real time with browser Web Audio (sfxr-style); **BGM** streams from mp3 files (Suno) as lobby / in-game zones (volume drops sharply on game entry = focus).
 The code source of truth is `client/src/audio/` (overview in [`client/src/audio/README.md`](../client/src/audio/README.md)). This document covers only **how to wire up sound when you add a new game**.
 
 ---
@@ -105,7 +105,7 @@ if (next.result !== null && reportedRef.current === false) {
 ### Step 3. Give it a listen
 
 ```bash
-npm run dev -w @madpump/client   # localhost:5173
+npm run dev -w @madcade/client   # localhost:5173
 ```
 Due to the browser autoplay policy, sound fires **after the first click/key input**. If you want to pick a preset timbre in advance, audition it in the sound-lab player (`docs/sound-lab.html` on the `feature/audio` branch).
 

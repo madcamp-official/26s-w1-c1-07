@@ -3,7 +3,7 @@
  * Container testid: scr-game11 / parts: game-stage (CRT bezel), hud-* (HudFrame built in), btn-exit
  *
  * ── Principles (follows the Game10.tsx standard exactly) ────────────────────────────
- *  · Logic/judging is driven 100% by the @madpump/shared game11 core (create/step).
+ *  · Logic/judging is driven 100% by the @madcade/shared game11 core (create/step).
  *  · The screen/rendering is a neon canvas scene newly written in this file.
  *  · Zero design-lab imports — colors/fonts are used only as constants copied from theme.css token values.
  *  · All text on this game screen is English (requirement).
@@ -22,8 +22,8 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { game11, G11, GAME_DURATION } from '@madpump/shared';
-import type { Game11State, GameInputEvent } from '@madpump/shared';
+import { game11, G11, GAME_DURATION } from '@madcade/shared';
+import type { Game11State, GameInputEvent } from '@madcade/shared';
 import { attachLocalKeyboard } from '../../game/input/keyboard';
 import { useOnlineRender } from '../../net/useOnlineRender';
 import { functionColors, onlineStore, sendInput as onlineSendInput } from '../../net/online';
